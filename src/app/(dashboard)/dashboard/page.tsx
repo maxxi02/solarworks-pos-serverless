@@ -15,7 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, Users, Activity, ArrowUpRight } from "lucide-react";
+import { TrendingUp, Users, Activity } from "lucide-react";
 
 const DashboardContent = () => {
   const data = [
