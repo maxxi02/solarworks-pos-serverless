@@ -1,9 +1,9 @@
 import React from 'react'
 
-const ReceiptsettingsPage = () => {
+const ReceiptsettingPage = () => {
   return (
-    <div>ReceiptsettingsPage</div>
+    <div>ReceiptsettingPage</div>
   )
 }
 
-export default ReceiptsettingsPage
+export default ReceiptsettingPage
