@@ -1,7 +1,7 @@
-import React from "react";
+import { CreateAccountForm } from "@/components/forms/create-account-form";
 
 const addstaff = () => {
-  return <div>addstaff</div>;
+  return <CreateAccountForm />;
 };
 
 export default addstaff;
