@@ -85,11 +85,11 @@ const adminNavigation = [
     items: [
       {
         title: "Customer List",
-        url: "/customers/customer-list",
+        url: "/customer/customer-list",
       },
       {
         title: "Analytics",
-        url: "/customers/analytics",
+        url: "/customer/analytics",
       },
     ],
   },
@@ -100,19 +100,19 @@ const adminNavigation = [
     items: [
       {
         title: "Staff List",
-        url: "/staff/staff-list",
+        url: "/staff-management/staff-list",
       },
       {
         title: "Add Staff",
-        url: "/staff/add-staff",
+        url: "/staff-management/add-staff",
       },
       {
         title: "Access Control",
-        url: "/staff/access-control",
+        url: "/staff-management/access-control",
       },
       {
         title: "Performance",
-        url: "/staff/performance",
+        url: "/staff-management/performance",
       },
     ],
   },
@@ -123,15 +123,15 @@ const adminNavigation = [
     items: [
       {
         title: "Financial Reports",
-        url: "/reports/financial-report",
+        url: "/reports-and-analytics/financial-reports",
       },
       {
-        title: "Inventory Reports",
-        url: "/reports/inventory-reports",
+        title: "inventory-reports",
+        url: "/reports-and-analytics/inventory-reports",
       },
       {
         title: "Custom Reports",
-        url: "/reports/custom-reports",
+        url: "/reports-and-analytics/custom-reports",
       },
     ],
   },
