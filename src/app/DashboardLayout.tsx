@@ -1,5 +1,4 @@
 import { AppSidebar } from "@/components/app-sidebar";
-
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
@@ -19,6 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               orientation="vertical"
               className="mr-2 data-[orientation=vertical]:h-4"
             />
+            <h1 className="text-xl font-bold text-foreground">RENDEZVOUS CAFÉ</h1>
           </div>
         </header>
         {children}
