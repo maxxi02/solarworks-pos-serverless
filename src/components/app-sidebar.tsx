@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
 import * as React from "react";
 import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  SquareTerminal,
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  Users,
+  UserCog,
+  BarChart3,
+  Settings,
+  Bell,
+  Receipt,
+  FolderOpen,
 } from "lucide-react";
 
 import {
@@ -23,151 +23,244 @@ import {
 } from "@/components/ui/sidebar";
 import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
-import { NavProjects } from "./nav-projects";
 import { NavUser } from "./nav-user";
 
-// This is sample data.
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+// Admin navigation structure
+const adminNavigation = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+    isActive: true,
   },
-  teams: [
-    {
-      name: "Acme Inc",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
-    },
-  ],
-  navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
+  {
+    title: "Sales",
+    url: "/sales",
+    icon: ShoppingCart,
+    items: [
+      {
+        title: "All Transactions",
+        url: "/sales/transactions",
+      },
+      {
+        title: "Sales Analytics",
+        url: "/sales/analytics",
+      },
+      {
+        title: "Refunds & Returns",
+        url: "/sales/refunds",
+      },
+    ],
+  },
+  {
+    title: "Inventory",
+    url: "/inventory",
+    icon: Package,
+    items: [
+      {
+        title: "Products",
+        url: "/inventory/products",
+      },
+      {
+        title: "Add Product",
+        url: "/inventory/add",
+      },
+      {
+        title: "Categories",
+        url: "/inventory/categories",
+      },
+      {
+        title: "Stock Alerts",
+        url: "/inventory/alerts",
+      },
+      {
+        title: "Reports",
+        url: "/inventory/reports",
+      },
+    ],
+  },
+  {
+    title: "Customers",
+    url: "/customers",
+    icon: Users,
+    items: [
+      {
+        title: "Customer List",
+        url: "/customers/list",
+      },
+      {
+        title: "Add Customer",
+        url: "/customers/add",
+      },
+      {
+        title: "Analytics",
+        url: "/customers/analytics",
+      },
+    ],
+  },
+  {
+    title: "Staff Management",
+    url: "/staff",
+    icon: UserCog,
+    items: [
+      {
+        title: "Staff List",
+        url: "/staff/list",
+      },
+      {
+        title: "Add Staff",
+        url: "/staff/add",
+      },
+      {
+        title: "Access Control",
+        url: "/staff/access",
+      },
+      {
+        title: "Performance",
+        url: "/staff/performance",
+      },
+    ],
+  },
+  {
+    title: "Reports & Analytics",
+    url: "/reports",
+    icon: BarChart3,
+    items: [
+      {
+        title: "Financial Reports",
+        url: "/reports/financial",
+      },
+      {
+        title: "Inventory Reports",
+        url: "/reports/inventory",
+      },
+      {
+        title: "Custom Reports",
+        url: "/reports/custom",
+      },
+    ],
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings,
+    items: [
+      {
+        title: "Store Settings",
+        url: "/settings/store",
+      },
+      {
+        title: "Receipt Settings",
+        url: "/settings/receipt",
+      },
+      {
+        title: "Payment Methods",
+        url: "/settings/payment",
+      },
+      {
+        title: "Notifications",
+        url: "/settings/notifications",
+      },
+      {
+        title: "Profile",
+        url: "/settings/profile",
+      },
+    ],
+  },
+  {
+    title: "Notifications",
+    url: "/notifications",
+    icon: Bell,
+  },
+];
+
+// Staff navigation structure
+const staffNavigation = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+    isActive: true,
+  },
+  {
+    title: "Point of Sale",
+    url: "/pos",
+    icon: ShoppingCart,
+  },
+  {
+    title: "My Sales",
+    url: "/my-sales",
+    icon: Receipt,
+    items: [
+      {
+        title: "Transaction History",
+        url: "/my-sales/history",
+      },
+      {
+        title: "My Performance",
+        url: "/my-sales/performance",
+      },
+    ],
+  },
+  {
+    title: "Inventory",
+    url: "/inventory",
+    icon: Package,
+    items: [
+      {
+        title: "View Products",
+        url: "/inventory/products",
+      },
+      {
+        title: "Stock Levels",
+        url: "/inventory/stock",
+      },
+    ],
+  },
+  {
+    title: "Profile",
+    url: "/profile",
+    icon: Settings,
+    items: [
+      {
+        title: "Personal Info",
+        url: "/profile/info",
+      },
+      {
+        title: "Change Password",
+        url: "/profile/password",
+      },
+      {
+        title: "Activity Log",
+        url: "/profile/activity",
+      },
+    ],
+  },
+];
+
+// Store/Team data
+const storeData = {
+  name: "SolarWorks POS",
+  logo: FolderOpen,
+  plan: "Business",
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  // For demonstration, using admin navigation
+  // Replace this with your actual role logic if needed
+  const role = "admin"; // or "staff" - you can get this from props or context
+  const navigationItems = role === "admin" ? adminNavigation : staffNavigation;
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <TeamSwitcher teams={[storeData]} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={navigationItems} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
