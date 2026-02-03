@@ -9,7 +9,6 @@ import {
   UserCog,
   BarChart3,
   Settings,
-  Bell,
   Receipt,
   FolderOpen,
 } from "lucide-react";
@@ -40,15 +39,15 @@ const adminNavigation = [
     items: [
       {
         title: "All Transactions",
-        url: "/sales/transactions",
+        url: "/sales/all-transactions",
       },
       {
         title: "Sales Analytics",
-        url: "/sales/analytics",
+        url: "/sales/sales-analytics",
       },
       {
         title: "Refunds & Returns",
-        url: "/sales/refunds",
+        url: "/sales/refund-and-return",
       },
     ],
   },
@@ -59,11 +58,11 @@ const adminNavigation = [
     items: [
       {
         title: "Products",
-        url: "/inventory/products",
+        url: "/inventory/product",
       },
       {
         title: "Add Product",
-        url: "/inventory/add",
+        url: "/inventory/addproduct",
       },
       {
         title: "Categories",
@@ -71,7 +70,7 @@ const adminNavigation = [
       },
       {
         title: "Stock Alerts",
-        url: "/inventory/alerts",
+        url: "/inventory/stockalert",
       },
       {
         title: "Reports",
@@ -86,11 +85,7 @@ const adminNavigation = [
     items: [
       {
         title: "Customer List",
-        url: "/customers/list",
-      },
-      {
-        title: "Add Customer",
-        url: "/customers/add",
+        url: "/customers/customer-list",
       },
       {
         title: "Analytics",
@@ -105,15 +100,15 @@ const adminNavigation = [
     items: [
       {
         title: "Staff List",
-        url: "/staff/list",
+        url: "/staff/staff-list",
       },
       {
         title: "Add Staff",
-        url: "/staff/add",
+        url: "/staff/add-staff",
       },
       {
         title: "Access Control",
-        url: "/staff/access",
+        url: "/staff/access-control",
       },
       {
         title: "Performance",
@@ -128,15 +123,15 @@ const adminNavigation = [
     items: [
       {
         title: "Financial Reports",
-        url: "/reports/financial",
+        url: "/reports/financial-report",
       },
       {
         title: "Inventory Reports",
-        url: "/reports/inventory",
+        url: "/reports/inventory-reports",
       },
       {
         title: "Custom Reports",
-        url: "/reports/custom",
+        url: "/reports/custom-reports",
       },
     ],
   },
@@ -147,30 +142,22 @@ const adminNavigation = [
     items: [
       {
         title: "Store Settings",
-        url: "/settings/store",
+        url: "/settings/store-setting",
       },
       {
         title: "Receipt Settings",
-        url: "/settings/receipt",
+        url: "/settings/receipt-setting",
       },
       {
         title: "Payment Methods",
-        url: "/settings/payment",
+        url: "/settings/payments-methods",
       },
-      {
-        title: "Notifications",
-        url: "/settings/notifications",
-      },
+      
       {
         title: "Profile",
         url: "/settings/profile",
       },
     ],
-  },
-  {
-    title: "Notifications",
-    url: "/notifications",
-    icon: Bell,
   },
 ];
 
@@ -209,7 +196,7 @@ const staffNavigation = [
     items: [
       {
         title: "View Products",
-        url: "/inventory/products",
+        url: "/src/inventory/product",
       },
       {
         title: "Stock Levels",
