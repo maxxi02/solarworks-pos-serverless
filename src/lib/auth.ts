@@ -10,6 +10,19 @@ import { twoFactor } from "better-auth/plugins";
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
-  emailAndPassword: { enabled: true },
-  plugins: [twoFactor()],
+  emailAndPassword: { enabled: true, requireEmailVerification: false },
+  plugins: [
+    twoFactor({
+      issuer: "POS SYSTEM",
+      skipVerificationOnEnable: true,
+    }),
+  ],
+
+  session: {
+    expiresIn: 60 * 60 * 24 * 7, // 7 days
+    updateAge: 60 * 60 * 24, // 1 day
+  },
+  trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
 });
+
+export type Session = typeof auth.$Infer.Session;
