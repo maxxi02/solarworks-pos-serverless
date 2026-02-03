@@ -33,27 +33,12 @@ export function NavMain({
 }) {
   const pathname = usePathname();
 
-  // Helper to check if a route is active
-  const isRouteActive = (url: string, subItems?: { title: string; url: string }[]) => {
-    if (pathname === url) return true;
-    
-    // Check if any sub-item is active
-    if (subItems) {
-      return subItems.some(subItem => pathname === subItem.url || pathname.startsWith(subItem.url + '/'));
-    }
-    
-    return false;
-  };
-
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
-          // Has children → collapsible with arrow
-          // No children → simple link, no arrow, no Collapsible
           const hasChildren = item.items && item.items.length > 0;
-          const isActive = isRouteActive(item.url, item.items);
 
           if (!hasChildren) {
             return (
@@ -61,7 +46,7 @@ export function NavMain({
                 <SidebarMenuButton
                   asChild
                   tooltip={item.title}
-                  isActive={isActive}
+                  isActive={pathname === item.url}
                 >
                   <Link href={item.url}>
                     {item.icon && <item.icon />}
@@ -72,17 +57,16 @@ export function NavMain({
             );
           }
 
-          // Items with children → keep collapsible behavior
           return (
             <Collapsible
               key={item.title}
               asChild
-              defaultOpen={isActive}
+              defaultOpen={item.isActive}
               className="group/collapsible"
             >
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                  <SidebarMenuButton tooltip={item.title}>
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>
                     <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
