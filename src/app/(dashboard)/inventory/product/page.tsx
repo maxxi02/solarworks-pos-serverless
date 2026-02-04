@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Coffee, Utensils, Package } from 'lucide-react';
+import { Coffee, Utensils, } from 'lucide-react';
 
 // Product type
 interface Product {
