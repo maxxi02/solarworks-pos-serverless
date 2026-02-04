@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Search, Filter, Mail, CheckCircle, UserX, Star } from 'lucide-react';
+import { Users, Search,Mail, CheckCircle, UserX, Star } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -148,7 +148,7 @@ export default function CustomerListPage() {
               
               <div className="flex gap-2">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-140px">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,7 +160,7 @@ export default function CustomerListPage() {
                 </Select>
 
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-140px">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>

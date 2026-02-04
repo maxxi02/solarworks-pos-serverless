@@ -110,10 +110,6 @@ const adminNavigation = [
         title: "Access Control",
         url: "/staff-management/access-control",
       },
-      {
-        title: "Performance",
-        url: "/staff-management/performance",
-      },
     ],
   },
   {
