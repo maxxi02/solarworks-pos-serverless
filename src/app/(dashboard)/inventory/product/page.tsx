@@ -1,7 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Coffee, Utensils, } from 'lucide-react';
+import { Coffee, Utensils, Package } from 'lucide-react';
+
+// Raw Material type
+interface RawMaterial {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+}
 
 // Product type
 interface Product {
@@ -10,6 +18,7 @@ interface Product {
   price: number;
   variants?: { name: string; price: number }[];
   description?: string;
+  rawMaterials?: RawMaterial[]; // Add raw materials to product
 }
 
 // Category type
@@ -27,7 +36,21 @@ const categories: Category[] = [
     name: 'Espresso',
     icon: 'coffee',
     products: [
-      { id: 'iced-coffee-jelly', name: 'Iced Coffee Jelly', price: 170 },
+      { 
+        id: 'iced-coffee-jelly', 
+        name: 'Iced Coffee Jelly', 
+        price: 170,
+        rawMaterials: [
+          { id: '1', name: 'Coffee Beans', quantity: 30, unit: 'g' },
+          { id: '2', name: 'Sugar', quantity: 15, unit: 'g' },
+          { id: '3', name: 'Milk', quantity: 200, unit: 'ml' },
+          { id: '4', name: 'Coffee Jelly Cubes', quantity: 50, unit: 'g' },
+          { id: '5', name: 'Ice Cubes', quantity: 150, unit: 'g' },
+          { id: '6', name: 'Paper Cup', quantity: 1, unit: 'pcs' },
+          { id: '7', name: 'Plastic Lid', quantity: 1, unit: 'pcs' },
+          { id: '8', name: 'Straw', quantity: 1, unit: 'pcs' },
+        ]
+      },
       { id: 'oat-latte', name: 'Oat Latte', price: 170 },
       { id: 'sea-salt-brew', name: 'Sea Salt Brew', price: 169 },
       { id: 'rendezvous-speciale', name: 'Rendezvous Speciale', price: 159 },
@@ -131,8 +154,13 @@ const categories: Category[] = [
 
 export default function ProductsPage() {
   const [activeCategory, setActiveCategory] = useState(categories[0].id);
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
 
   const currentCategory = categories.find(cat => cat.id === activeCategory);
+
+  const toggleRawMaterials = (productId: string) => {
+    setExpandedProductId(expandedProductId === productId ? null : productId);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -186,7 +214,20 @@ export default function ProductsPage() {
                   key={product.id}
                   className="rounded-lg border border-border bg-card p-4 transition-all hover:shadow-md"
                 >
-                  <h4 className="font-semibold text-foreground mb-2">{product.name}</h4>
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold text-foreground">{product.name}</h4>
+                    
+                    {/* Show Raw Materials button if product has raw materials */}
+                    {product.rawMaterials && product.rawMaterials.length > 0 && (
+                      <button
+                        onClick={() => toggleRawMaterials(product.id)}
+                        className="flex items-center gap-1 rounded-full border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                      >
+                        <Package className="h-3 w-3" />
+                        <span>Materials</span>
+                      </button>
+                    )}
+                  </div>
 
                   {/* Pricing */}
                   <div className="mb-4">
@@ -206,6 +247,29 @@ export default function ProductsPage() {
 
                   {product.description && (
                     <p className="text-sm text-muted-foreground mb-4">{product.description}</p>
+                  )}
+
+                  {/* Raw Materials Section (Expandable) */}
+                  {product.rawMaterials && product.rawMaterials.length > 0 && expandedProductId === product.id && (
+                    <div className="mt-4 border-t border-border pt-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Package className="h-4 w-4" />
+                        <span>Raw Materials</span>
+                      </div>
+                      <div className="space-y-2">
+                        {product.rawMaterials.map(material => (
+                          <div key={material.id} className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">{material.name}</span>
+                            <span className="font-medium text-foreground">
+                              {material.quantity} {material.unit}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        Total materials: {product.rawMaterials.length} items
+                      </div>
+                    </div>
                   )}
                 </div>
               ))}
@@ -230,6 +294,20 @@ export default function ProductsPage() {
                 <span className="font-medium text-foreground">Extra Shot</span>
                 <span className="font-semibold text-foreground">+₱30</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Raw Materials Info Note */}
+        <div className="mt-8 rounded-lg border border-border bg-secondary/50 p-4">
+          <div className="flex items-start gap-3">
+            <Package className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Raw Materials Tracking</p>
+              <p className="text-sm text-muted-foreground">
+                Click the "Materials" button on product cards to view the raw materials needed to make each item.
+                Currently showing example materials for "Iced Coffee Jelly" in the Espresso category.
+              </p>
             </div>
           </div>
         </div>

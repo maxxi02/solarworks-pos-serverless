@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import {Coffee, Utensils, Plus, X, Upload } from 'lucide-react';
+import {Coffee, Utensils, Plus, X, Upload, Trash2, Package } from 'lucide-react';
 
 interface CategoryOption {
   id: string;
@@ -26,13 +26,28 @@ interface Variant {
   price: number;
 }
 
+interface RawMaterial {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
 const AddProductPage = () => {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [basePrice, setBasePrice] = useState("");
-  const [description, setDescription] = useState("");
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [variants, setVariants] = useState<Variant[]>([{ name: "", price: 0 }]);
   const [hasVariants, setHasVariants] = useState(false);
+  
+  // Modal states
+  const [showRawMaterialModal, setShowRawMaterialModal] = useState(false);
+  const [newRawMaterial, setNewRawMaterial] = useState({
+    name: "",
+    quantity: "",
+    unit: "pcs"
+  });
 
   const handleAddVariant = () => {
     setVariants([...variants, { name: "", price: 0 }]);
@@ -59,6 +74,25 @@ const AddProductPage = () => {
     }
   };
 
+  // Raw Material handlers
+  const handleAddRawMaterial = () => {
+    if (newRawMaterial.name.trim() && newRawMaterial.quantity) {
+      const newMaterial: RawMaterial = {
+        id: Date.now().toString(),
+        name: newRawMaterial.name.trim(),
+        quantity: parseFloat(newRawMaterial.quantity),
+        unit: newRawMaterial.unit
+      };
+      setRawMaterials([...rawMaterials, newMaterial]);
+      setNewRawMaterial({ name: "", quantity: "", unit: "pcs" });
+      setShowRawMaterialModal(false);
+    }
+  };
+
+  const handleRemoveRawMaterial = (id: string) => {
+    setRawMaterials(rawMaterials.filter(material => material.id !== id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Handle form submission here
@@ -66,7 +100,7 @@ const AddProductPage = () => {
       name,
       category,
       basePrice: parseFloat(basePrice),
-      description,
+      rawMaterials,
       variants: hasVariants ? variants : undefined,
     });
   };
@@ -253,22 +287,84 @@ const AddProductPage = () => {
               )}
             </div>
 
-            {/* Description */}
-            <div className="space-y-2">
-              <label
-                htmlFor="description"
-                className="text-sm font-medium text-foreground"
-              >
-                Description (Optional)
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                placeholder="Enter product description..."
-                rows={3}
-              />
+            {/* Raw Materials */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">
+                  Raw Materials
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowRawMaterialModal(true)}
+                  className="flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Raw Material
+                </button>
+              </div>
+
+              {rawMaterials.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-secondary/50 p-6 text-center">
+                  <Package className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    No raw materials added yet
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowRawMaterialModal(true)}
+                    className="mt-3 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                  >
+                    Add Your First Raw Material
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border bg-background">
+                  <div className="overflow-hidden rounded-lg">
+                    <table className="w-full">
+                      <thead className="bg-secondary">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-foreground">
+                            Material
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-foreground">
+                            Quantity
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-foreground">
+                            Unit
+                          </th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-foreground">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {rawMaterials.map((material) => (
+                          <tr key={material.id} className="hover:bg-secondary/50">
+                            <td className="px-4 py-3 text-sm text-foreground">
+                              {material.name}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-foreground">
+                              {material.quantity}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-foreground">
+                              {material.unit}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRawMaterial(material.id)}
+                                className="rounded-md p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Image Upload (Optional) */}
@@ -315,6 +411,98 @@ const AddProductPage = () => {
           </form>
         </div>
       </main>
+
+      {/* Raw Material Modal */}
+      {showRawMaterialModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">
+                Add Raw Material
+              </h3>
+              <button
+                onClick={() => setShowRawMaterialModal(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-secondary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Material Name
+                </label>
+                <input
+                  type="text"
+                  value={newRawMaterial.name}
+                  onChange={(e) => setNewRawMaterial({...newRawMaterial, name: e.target.value})}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="e.g., Coffee Beans, Sugar, Milk"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    value={newRawMaterial.quantity}
+                    onChange={(e) => setNewRawMaterial({...newRawMaterial, quantity: e.target.value})}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="1.5"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+
+                <div className="col-span-2 space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Unit
+                  </label>
+                  <select
+                    value={newRawMaterial.unit}
+                    onChange={(e) => setNewRawMaterial({...newRawMaterial, unit: e.target.value})}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="pcs">pcs</option>
+                    <option value="g">grams (g)</option>
+                    <option value="kg">kilograms (kg)</option>
+                    <option value="ml">milliliters (ml)</option>
+                    <option value="L">liters (L)</option>
+                    <option value="tbsp">tablespoon (tbsp)</option>
+                    <option value="tsp">teaspoon (tsp)</option>
+                    <option value="cup">cup</option>
+                    <option value="oz">ounce (oz)</option>
+                    <option value="lb">pound (lb)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowRawMaterialModal(false)}
+                  className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddRawMaterial}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Add Material
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

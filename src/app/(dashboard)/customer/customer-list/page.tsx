@@ -148,7 +148,7 @@ export default function CustomerListPage() {
               
               <div className="flex gap-2">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-140px">
+                  <SelectTrigger className="w-35">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,7 +160,7 @@ export default function CustomerListPage() {
                 </Select>
 
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-140px">
+                  <SelectTrigger className="w-35">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>

@@ -204,7 +204,7 @@ export default function ReturnsRefundsPage() {
                   value={statusFilter} 
                   onValueChange={(value: StatusFilterType) => setStatusFilter(value)}
                 >
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-35">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -220,7 +220,7 @@ export default function ReturnsRefundsPage() {
                   value={reasonFilter} 
                   onValueChange={(value: ReasonFilterType) => setReasonFilter(value)}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-35">
                     <SelectValue placeholder="Reason" />
                   </SelectTrigger>
                   <SelectContent>

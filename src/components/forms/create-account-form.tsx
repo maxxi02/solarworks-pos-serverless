@@ -222,16 +222,6 @@ export function CreateAccountForm({
                   ? "Success!"
                   : "Create Account"}
             </Button>
-
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <a
-                href="/login"
-                className="underline underline-offset-4 hover:text-primary"
-              >
-                Sign in
-              </a>
-            </p>
           </form>
         </CardContent>
       </Card>
