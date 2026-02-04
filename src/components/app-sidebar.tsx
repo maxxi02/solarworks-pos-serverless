@@ -126,7 +126,7 @@ const adminNavigation = [
         url: "/reports-and-analytics/inventory-reports",
       },
       {
-        title: "Custom Reports",
+        title: "Customer Reports",
         url: "/reports-and-analytics/custom-reports",
       },
     ],
