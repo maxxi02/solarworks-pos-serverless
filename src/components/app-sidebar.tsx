@@ -23,7 +23,15 @@ import {
 } from "@/components/ui/sidebar";
 import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
-import { NavUser } from "./nav-user";
+
+// Import your auth client
+import { 
+  getCurrentUser, 
+  getCurrentUserRole, 
+  getUserInitials, 
+  signOut,
+  useSession // Optional: if you want real-time updates
+} from "@/lib/auth-client";
 
 // Admin navigation structure
 const adminNavigation = [
@@ -223,88 +231,203 @@ const staffNavigation = [
 ];
 
 // Store/Team data
+// Store/Team data
 const storeData = {
   name: "SolarWorks POS",
   logo: FolderOpen,
   plan: "Business",
 };
 
-// Mock user data
-const mockUsers = {
-  admin: {
-    name: "Admin User",
-    email: "admin@solarworks.com",
-    role: "admin",
-    avatar: "AU",
-    initials: "AU",
-  },
-  staff: {
-    name: "John Doe",
-    email: "john@solarworks.com",
-    role: "staff",
-    avatar: "JD",
-    initials: "JD",
-  },
-  manager: {
-    name: "Jane Smith",
-    email: "jane@solarworks.com",
-    role: "manager",
-    avatar: "JS",
-    initials: "JS",
-  },
-};
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
-  const [currentUser] = React.useState(mockUsers.admin);
-  const navigationItems = currentUser.role === "admin" ? adminNavigation : staffNavigation;
+  const [currentUser, setCurrentUser] = React.useState<{
+    name: string;
+    email: string;
+    role: 'admin' | 'staff';
+    initials: string;
+    avatar?: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  // Simple logout function that redirects to login page
-  const handleLogout = () => {
-    // Clear any stored authentication data
-    localStorage.removeItem("solarworks_token");
-    localStorage.removeItem("solarworks_user");
-    sessionStorage.clear();
-    
-    // Redirect to login page
-    router.push("/");
+  // Optional: Use Better Auth's useSession for real-time updates
+  const { data: session } = useSession();
+
+  // Sync session with local state
+  React.useEffect(() => {
+    if (session?.user) {
+      const role = getCurrentUserRole();
+      setCurrentUser({
+        name: session.user.name || "User",
+        email: session.user.email || "",
+        role: role,
+        initials: getUserInitials(session.user.name),
+        avatar: session.user.image || undefined,
+      });
+      setIsLoading(false);
+    } else if (session === null) {
+      // Session is explicitly null (not loading)
+      setCurrentUser(null);
+      setIsLoading(false);
+    }
+  }, [session]);
+
+  // Initial load on component mount
+  React.useEffect(() => {
+    const fetchUser = () => {
+      try {
+        const user = getCurrentUser();
+        
+        if (user) {
+          const role = getCurrentUserRole();
+          setCurrentUser({
+            name: user.name || user.fullName || user.username || "User",
+            email: user.email || "user@example.com",
+            role: role,
+            initials: getUserInitials(user.name || user.fullName || user.username),
+            avatar: user.image || user.avatar || user.profileImage,
+          });
+        } else if (!session) {
+          // Only redirect if we don't have a session and no user in storage
+          router.push('/');
+        }
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [router, session]);
+
+  // Logout function using Better Auth's signOut
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      
+      await signOut({
+        fetchOptions: {
+          onSuccess: () => {
+            // Clear local storage as backup
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Redirect to login
+            router.push("/");
+          },
+          onError: (error) => {
+            console.error("Logout error:", error);
+            
+            // Fallback: clear all storage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Redirect to login
+            router.push("/");
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+      
+      // Fallback
+      localStorage.clear();
+      sessionStorage.clear();
+      router.push("/");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
-  // Update NavUser component to include logout functionality
-  const UpdatedNavUser = () => {
+  // User profile component for sidebar footer
+  const UserProfileFooter = () => {
+    if (!currentUser) return null;
+
     return (
-      <div className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-accent">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-          {currentUser.initials}
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium">{currentUser.name}</span>
-          <span className="text-xs text-muted-foreground">{currentUser.email}</span>
-          <span className="text-xs text-primary capitalize">{currentUser.role}</span>
+      <div className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-accent transition-colors">
+        {currentUser.avatar ? (
+          <img 
+            src={currentUser.avatar} 
+            alt={currentUser.name}
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+            {currentUser.initials}
+          </div>
+        )}
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-sm font-medium truncate">{currentUser.name}</span>
+          <span className="text-xs text-muted-foreground truncate">{currentUser.email}</span>
+          <span className="text-xs text-primary capitalize">
+            {currentUser.role === 'admin' ? 'Administrator' : 'Staff'}
+          </span>
         </div>
         <button
           onClick={handleLogout}
-          className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+          disabled={isLoggingOut}
+          className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Logout"
+          aria-label="Logout"
         >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
+          {isLoggingOut ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+          ) : (
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              />
+            </svg>
+          )}
         </button>
       </div>
     );
   };
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <Sidebar collapsible="icon" {...props}>
+        <SidebarHeader>
+          <TeamSwitcher teams={[storeData]} />
+        </SidebarHeader>
+        <SidebarContent>
+          <div className="space-y-2 px-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-8 rounded-md bg-muted animate-pulse"></div>
+            ))}
+          </div>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="flex w-full items-center gap-3 rounded-lg p-2">
+            <div className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
+            <div className="flex flex-col flex-1 space-y-2">
+              <div className="h-4 w-3/4 bg-muted rounded animate-pulse"></div>
+              <div className="h-3 w-full bg-muted rounded animate-pulse"></div>
+            </div>
+          </div>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    );
+  }
+
+  if (!currentUser) {
+    return null;
+  }
+
+  // Determine which navigation to show based on role
+  const navigationItems = currentUser.role === 'admin' ? adminNavigation : staffNavigation;
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -315,7 +438,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={navigationItems} />
       </SidebarContent>
       <SidebarFooter>
-        <UpdatedNavUser />
+        <UserProfileFooter />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
