@@ -35,35 +35,28 @@ export function LoginForm({
     setError(null);
 
     try {
-      const { error } = await authClient.signIn.email({
-        email,
-        password,
-      });
-
-      if (error) {
-        setError((error as unknown as Error).message);
-        setLoading(false);
-        return;
-      }
-
-      // Check if user has 2FA enabled
-      const { data } = await authClient.getSession();
-
-      if (!data?.user) {
-        setError("Session error. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      // If 2FA is not enabled, redirect to setup
-      if (!data.user.twoFactorEnabled) {
-        router.replace("/setup-2fa");
-        return;
-      }
-
-      // If 2FA is enabled, show verification step
-      setStep("verify-2fa");
-      setLoading(false);
+      const { error } = await authClient.signIn.email(
+        {
+          email,
+          password,
+        },
+        {
+          async onSuccess(context) {
+            if (context.data?.twoFactorRedirect) {
+              setStep("verify-2fa");
+              setLoading(false);
+              return;
+            } else {
+              router.replace("/setup-2fa");
+            }
+          },
+          async onError(context) {
+            setError(context.error.message ?? "Invalid email or password.");
+            setLoading(false);
+            return;
+          },
+        },
+      );
     } catch (err) {
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
