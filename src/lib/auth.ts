@@ -6,6 +6,7 @@ import { MONGODB } from "@/config/db";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { admin, twoFactor } from "better-auth/plugins";
+import { nextCookies } from "better-auth/next-js";
 
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
@@ -14,6 +15,9 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true, requireEmailVerification: false },
 
   session: {
+    cookieCache: {
+      enabled: false,
+    },
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // 1 day
   },
@@ -23,6 +27,7 @@ export const auth = betterAuth({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,
     }),
+    nextCookies(),
   ],
 });
 
