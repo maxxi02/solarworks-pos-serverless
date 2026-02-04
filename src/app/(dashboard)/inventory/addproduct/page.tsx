@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Package, Coffee, Utensils, Plus, X, Upload } from 'lucide-react';
+import { useState } from "react";
+import { Package, Coffee, Utensils, Plus, X, Upload } from "lucide-react";
 
 interface CategoryOption {
   id: string;
   name: string;
-  icon: 'coffee' | 'utensils';
+  icon: "coffee" | "utensils";
 }
 
 const categories: CategoryOption[] = [
-  { id: 'espresso', name: 'Espresso', icon: 'coffee' },
-  { id: 'refreshers', name: 'Refreshers', icon: 'coffee' },
-  { id: 'specials', name: 'Specials', icon: 'coffee' },
-  { id: 'frappe', name: 'Frappe', icon: 'coffee' },
-  { id: 'breakfast', name: 'All Day Breakfast', icon: 'utensils' },
-  { id: 'snacks', name: 'Snack Attack', icon: 'utensils' },
-  { id: 'pasta', name: 'Pasta', icon: 'utensils' },
-  { id: 'breads-pastries', name: 'Breads + Pastries', icon: 'utensils' },
-  { id: 'sweet-tooth', name: 'Sweet Tooth', icon: 'utensils' },
+  { id: "espresso", name: "Espresso", icon: "coffee" },
+  { id: "refreshers", name: "Refreshers", icon: "coffee" },
+  { id: "specials", name: "Specials", icon: "coffee" },
+  { id: "frappe", name: "Frappe", icon: "coffee" },
+  { id: "breakfast", name: "All Day Breakfast", icon: "utensils" },
+  { id: "snacks", name: "Snack Attack", icon: "utensils" },
+  { id: "pasta", name: "Pasta", icon: "utensils" },
+  { id: "breads-pastries", name: "Breads + Pastries", icon: "utensils" },
+  { id: "sweet-tooth", name: "Sweet Tooth", icon: "utensils" },
 ];
 
 interface Variant {
@@ -27,20 +27,24 @@ interface Variant {
 }
 
 const AddProductPage = () => {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
-  const [basePrice, setBasePrice] = useState('');
-  const [description, setDescription] = useState('');
-  const [variants, setVariants] = useState<Variant[]>([{ name: '', price: 0 }]);
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [basePrice, setBasePrice] = useState("");
+  const [description, setDescription] = useState("");
+  const [variants, setVariants] = useState<Variant[]>([{ name: "", price: 0 }]);
   const [hasVariants, setHasVariants] = useState(false);
 
   const handleAddVariant = () => {
-    setVariants([...variants, { name: '', price: 0 }]);
+    setVariants([...variants, { name: "", price: 0 }]);
   };
 
-  const handleVariantChange = (index: number, field: keyof Variant, value: string) => {
+  const handleVariantChange = (
+    index: number,
+    field: keyof Variant,
+    value: string,
+  ) => {
     const updatedVariants = [...variants];
-    if (field === 'price') {
+    if (field === "price") {
       updatedVariants[index][field] = parseFloat(value) || 0;
     } else {
       updatedVariants[index][field] = value;
@@ -86,7 +90,10 @@ const AddProductPage = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Product Name */}
             <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="name"
+                className="text-sm font-medium text-foreground"
+              >
                 Product Name
               </label>
               <input
@@ -113,11 +120,11 @@ const AddProductPage = () => {
                     onClick={() => setCategory(cat.id)}
                     className={`flex items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm font-medium transition-all duration-200 ${
                       category === cat.id
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-background text-foreground hover:bg-secondary'
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-foreground hover:bg-secondary"
                     }`}
                   >
-                    {cat.icon === 'coffee' ? (
+                    {cat.icon === "coffee" ? (
                       <Coffee className="h-4 w-4" />
                     ) : (
                       <Utensils className="h-4 w-4" />
@@ -138,19 +145,25 @@ const AddProductPage = () => {
                   onChange={(e) => {
                     setHasVariants(e.target.checked);
                     if (!e.target.checked) {
-                      setVariants([{ name: '', price: 0 }]);
+                      setVariants([{ name: "", price: 0 }]);
                     }
                   }}
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 />
-                <label htmlFor="hasVariants" className="text-sm font-medium text-foreground">
+                <label
+                  htmlFor="hasVariants"
+                  className="text-sm font-medium text-foreground"
+                >
                   This product has multiple variants (e.g., Solo, Barkada)
                 </label>
               </div>
 
               {!hasVariants ? (
                 <div className="space-y-2">
-                  <label htmlFor="basePrice" className="text-sm font-medium text-foreground">
+                  <label
+                    htmlFor="basePrice"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Price
                   </label>
                   <div className="relative">
@@ -185,7 +198,7 @@ const AddProductPage = () => {
                       Add Variant
                     </button>
                   </div>
-                  
+
                   <div className="space-y-3">
                     {variants.map((variant, index) => (
                       <div key={index} className="flex items-center gap-3">
@@ -193,7 +206,9 @@ const AddProductPage = () => {
                           <input
                             type="text"
                             value={variant.name}
-                            onChange={(e) => handleVariantChange(index, 'name', e.target.value)}
+                            onChange={(e) =>
+                              handleVariantChange(index, "name", e.target.value)
+                            }
                             className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                             placeholder="Variant name (e.g., Solo)"
                             required
@@ -206,8 +221,14 @@ const AddProductPage = () => {
                             </span>
                             <input
                               type="number"
-                              value={variant.price || ''}
-                              onChange={(e) => handleVariantChange(index, 'price', e.target.value)}
+                              value={variant.price || ""}
+                              onChange={(e) =>
+                                handleVariantChange(
+                                  index,
+                                  "price",
+                                  e.target.value,
+                                )
+                              }
                               className="w-full rounded-md border border-border bg-background pl-8 pr-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                               placeholder="0.00"
                               min="0"
@@ -234,14 +255,17 @@ const AddProductPage = () => {
 
             {/* Description */}
             <div className="space-y-2">
-              <label htmlFor="description" className="text-sm font-medium text-foreground">
+              <label
+                htmlFor="description"
+                className="text-sm font-medium text-foreground"
+              >
                 Description (Optional)
               </label>
               <textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[100px]"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-25"
                 placeholder="Enter product description..."
                 rows={3}
               />
@@ -265,7 +289,7 @@ const AddProductPage = () => {
                 />
                 <button
                   type="button"
-                  onClick={() => document.getElementById('image')?.click()}
+                  onClick={() => document.getElementById("image")?.click()}
                   className="mt-3 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
                 >
                   Browse Files
