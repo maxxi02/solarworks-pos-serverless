@@ -30,7 +30,7 @@ import {
   getCurrentUserRole, 
   getUserInitials, 
   signOut,
-  useSession // Optional: if you want real-time updates
+  useSession,
 } from "@/lib/auth-client";
 
 // Admin navigation structure
@@ -231,7 +231,6 @@ const staffNavigation = [
 ];
 
 // Store/Team data
-// Store/Team data
 const storeData = {
   name: "SolarWorks POS",
   logo: FolderOpen,
@@ -250,13 +249,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  // Optional: Use Better Auth's useSession for real-time updates
+  // Use Better Auth's useSession hook - this is the recommended way
   const { data: session } = useSession();
 
-  // Sync session with local state
+  // Update user state when session changes
   React.useEffect(() => {
     if (session?.user) {
-      const role = getCurrentUserRole();
+      const role = getCurrentUserRole(session.user);
+      
       setCurrentUser({
         name: session.user.name || "User",
         email: session.user.email || "",
@@ -266,40 +266,47 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       });
       setIsLoading(false);
     } else if (session === null) {
-      // Session is explicitly null (not loading)
+      // No session - redirect to login
       setCurrentUser(null);
       setIsLoading(false);
+      router.push('/');
     }
-  }, [session]);
+  }, [session, router]);
 
-  // Initial load on component mount
+  // Alternative: Fetch user directly if useSession doesn't work
   React.useEffect(() => {
-    const fetchUser = () => {
+    const fetchUser = async () => {
       try {
-        const user = getCurrentUser();
+        setIsLoading(true);
+        const user = await getCurrentUser();
         
         if (user) {
-          const role = getCurrentUserRole();
+          const role = getCurrentUserRole(user);
+          
           setCurrentUser({
-            name: user.name || user.fullName || user.username || "User",
-            email: user.email || "user@example.com",
+            name: user.name || "User",
+            email: user.email || "",
             role: role,
-            initials: getUserInitials(user.name || user.fullName || user.username),
-            avatar: user.image || user.avatar || user.profileImage,
+            initials: getUserInitials(user.name),
+            avatar: user.image || undefined,
           });
-        } else if (!session) {
-          // Only redirect if we don't have a session and no user in storage
+        } else {
+          // No user found - redirect to login
           router.push('/');
         }
-        setIsLoading(false);
       } catch (error) {
         console.error("Error fetching user:", error);
+        router.push('/');
+      } finally {
         setIsLoading(false);
       }
     };
 
-    fetchUser();
-  }, [router, session]);
+    // Only fetch if useSession didn't provide a user
+    if (!session && !currentUser) {
+      fetchUser();
+    }
+  }, [session, currentUser, router]);
 
   // Logout function using Better Auth's signOut
   const handleLogout = async () => {
@@ -309,31 +316,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       await signOut({
         fetchOptions: {
           onSuccess: () => {
-            // Clear local storage as backup
-            localStorage.clear();
-            sessionStorage.clear();
-            
-            // Redirect to login
+            setCurrentUser(null);
             router.push("/");
           },
           onError: (error) => {
             console.error("Logout error:", error);
-            
-            // Fallback: clear all storage
-            localStorage.clear();
-            sessionStorage.clear();
-            
-            // Redirect to login
+            setCurrentUser(null);
             router.push("/");
           }
         }
       });
     } catch (error) {
       console.error("Logout error:", error);
-      
-      // Fallback
-      localStorage.clear();
-      sessionStorage.clear();
+      setCurrentUser(null);
       router.push("/");
     } finally {
       setIsLoggingOut(false);
