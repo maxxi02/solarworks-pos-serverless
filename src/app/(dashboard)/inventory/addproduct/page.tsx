@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Package, Coffee, Utensils, Plus, X, Upload } from 'lucide-react';
+import {Coffee, Utensils, Plus, X, Upload } from 'lucide-react';
 
 interface CategoryOption {
   id: string;
@@ -241,7 +241,7 @@ const AddProductPage = () => {
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[100px]"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 placeholder="Enter product description..."
                 rows={3}
               />

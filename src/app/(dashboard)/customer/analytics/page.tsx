@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { 
   Utensils, Pizza, Coffee, ShoppingBag, Star, Gift, 
   TrendingUp, Clock, Filter, Search, CheckCircle,
-  ChevronRight, MoreVertical, Award, Tag, Percent,
+  Award, Tag, Percent,
   Flame, Calendar, Repeat, Target, Zap, Users
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,13 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Progress } from "@/components/ui/progress";
+
 
 interface CustomerFoodAnalytics {
   customerId: string;
@@ -349,7 +343,7 @@ const FoodAnalyticsDashboard = () => {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <select
                     value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value as any)}
+                    onChange={(e) => setCategoryFilter(e.target.value as 'all' | 'pizza' | 'burger' | 'salad' | 'dessert' | 'drink')}
                     className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
                   >
                     <option value="all">All Categories</option>
@@ -362,7 +356,7 @@ const FoodAnalyticsDashboard = () => {
                 </div>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
+                  onChange={(e) => setSortBy(e.target.value as 'recent' | 'frequent' | 'spent')}
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
                 >
                   <option value="recent">Recent Orders</option>
@@ -632,7 +626,7 @@ const FoodAnalyticsDashboard = () => {
                         <div>
                           <h4 className="font-medium text-foreground">Generate New Coupon</h4>
                           <p className="text-sm text-muted-foreground">
-                            Create personalized offer based on {currentCustomer.name}'s preferences
+                            Create personalized offer based on {currentCustomer.name}&apos;s preferences
                           </p>
                         </div>
                         <Button className="gap-2">

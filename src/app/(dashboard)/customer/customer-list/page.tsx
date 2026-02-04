@@ -318,7 +318,7 @@ const CustomerListPage = () => {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'new')}
                     className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
                   >
                     <option value="all">All Status</option>
@@ -329,7 +329,7 @@ const CustomerListPage = () => {
                 </div>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
+                  onChange={(e) => setSortBy(e.target.value as 'newest' | 'name' | 'login')}
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
                 >
                   <option value="newest">Newest First</option>
