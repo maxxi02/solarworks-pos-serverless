@@ -12,6 +12,7 @@ import {
   Receipt,
   FolderOpen,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import {
   Sidebar,
@@ -228,11 +229,82 @@ const storeData = {
   plan: "Business",
 };
 
+// Mock user data
+const mockUsers = {
+  admin: {
+    name: "Admin User",
+    email: "admin@solarworks.com",
+    role: "admin",
+    avatar: "AU",
+    initials: "AU",
+  },
+  staff: {
+    name: "John Doe",
+    email: "john@solarworks.com",
+    role: "staff",
+    avatar: "JD",
+    initials: "JD",
+  },
+  manager: {
+    name: "Jane Smith",
+    email: "jane@solarworks.com",
+    role: "manager",
+    avatar: "JS",
+    initials: "JS",
+  },
+};
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  // For demonstration, using admin navigation
-  // Replace this with your actual role logic if needed
-  const role = "admin"; // or "staff" - you can get this from props or context
-  const navigationItems = role === "admin" ? adminNavigation : staffNavigation;
+  const router = useRouter();
+  const [currentUser] = React.useState(mockUsers.admin);
+  const navigationItems = currentUser.role === "admin" ? adminNavigation : staffNavigation;
+
+  // Simple logout function that redirects to login page
+  const handleLogout = () => {
+    // Clear any stored authentication data
+    localStorage.removeItem("solarworks_token");
+    localStorage.removeItem("solarworks_user");
+    sessionStorage.clear();
+    
+    // Redirect to login page
+    router.push("/");
+  };
+
+  // Update NavUser component to include logout functionality
+  const UpdatedNavUser = () => {
+    return (
+      <div className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-accent">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+          {currentUser.initials}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-sm font-medium">{currentUser.name}</span>
+          <span className="text-xs text-muted-foreground">{currentUser.email}</span>
+          <span className="text-xs text-primary capitalize">{currentUser.role}</span>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+          title="Logout"
+        >
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+            />
+          </svg>
+        </button>
+      </div>
+    );
+  };
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -243,7 +315,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={navigationItems} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <UpdatedNavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

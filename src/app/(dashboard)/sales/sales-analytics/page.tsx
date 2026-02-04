@@ -85,7 +85,7 @@ export default function SalesAnalyticsPage() {
                 value={timeRange} 
                 onValueChange={(value: TimeRangeType) => setTimeRange(value)}
               >
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-35">
                   <SelectValue placeholder="Select range" />
                 </SelectTrigger>
                 <SelectContent>
