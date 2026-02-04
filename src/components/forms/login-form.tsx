@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { Eye, EyeOff } from "lucide-react"; // Import eye icons
 
 export function LoginForm({
   className,
@@ -28,6 +29,7 @@ export function LoginForm({
   const [otpCode, setOtpCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false); // State for password visibility
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,13 +125,29 @@ export function LoginForm({
                     Forgot password?
                   </a>
                 </div>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-10" // Add padding for the icon
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    tabIndex={-1} // Prevent tab focus on this button
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {error && (
@@ -142,13 +160,6 @@ export function LoginForm({
                 {loading ? "Logging in..." : "Login"}
               </Button>
             </form>
-
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              Don&#39;t have an account?{" "}
-              <a href="/signup" className="underline">
-                Sign up
-              </a>
-            </p>
           </CardContent>
         </Card>
       ) : (
