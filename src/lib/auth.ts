@@ -22,7 +22,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
-    admin(),
+    admin({ bannedUserMessage: "bawal ka na rito tado" }),
     twoFactor({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,

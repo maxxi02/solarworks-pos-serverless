@@ -6,7 +6,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  // Add other fields your User type actually has
+
   createdAt?: Date;
   role?: string;
 }
