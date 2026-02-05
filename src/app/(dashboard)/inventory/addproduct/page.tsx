@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from 'react';
-import {Coffee, Utensils, Plus, X, Upload, Trash2, Package } from 'lucide-react';
+import { Coffee, Utensils, Plus, X, Trash2, Package } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface CategoryOption {
   id: string;
@@ -34,12 +36,15 @@ interface RawMaterial {
 }
 
 const AddProductPage = () => {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryName, setCategoryName] = useState("");
   const [basePrice, setBasePrice] = useState("");
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [variants, setVariants] = useState<Variant[]>([{ name: "", price: 0 }]);
   const [hasVariants, setHasVariants] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Modal states
   const [showRawMaterialModal, setShowRawMaterialModal] = useState(false);
@@ -71,6 +76,7 @@ const AddProductPage = () => {
     if (variants.length > 1) {
       const updatedVariants = variants.filter((_, i) => i !== index);
       setVariants(updatedVariants);
+      toast.info('Variant removed');
     }
   };
 
@@ -86,30 +92,125 @@ const AddProductPage = () => {
       setRawMaterials([...rawMaterials, newMaterial]);
       setNewRawMaterial({ name: "", quantity: "", unit: "pcs" });
       setShowRawMaterialModal(false);
+      toast.success('Raw material added successfully!');
+    } else {
+      toast.error('Please fill in all required fields');
     }
   };
 
   const handleRemoveRawMaterial = (id: string) => {
     setRawMaterials(rawMaterials.filter(material => material.id !== id));
+    toast.info('Raw material removed');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCategorySelect = (catId: string, catName: string) => {
+    setCategory(catId);
+    setCategoryName(catName);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log({
-      name,
-      category,
-      basePrice: parseFloat(basePrice),
-      rawMaterials,
-      variants: hasVariants ? variants : undefined,
-    });
+    
+    // Validate form
+    if (!name.trim()) {
+      toast.error('Product name is required');
+      return;
+    }
+    
+    if (!category) {
+      toast.error('Please select a category');
+      return;
+    }
+    
+    if (!hasVariants && (!basePrice || parseFloat(basePrice) <= 0)) {
+      toast.error('Price is required for products without variants');
+      return;
+    }
+    
+    if (hasVariants) {
+      const validVariants = variants.filter(v => v.name.trim() && v.price > 0);
+      if (validVariants.length === 0) {
+        toast.error('At least one valid variant is required (name and price > 0)');
+        return;
+      }
+    }
+
+    setIsLoading(true);
+
+    // Show loading toast
+    const loadingToast = toast.loading('Adding product...');
+
+    try {
+      const productData = {
+        name: name.trim(),
+        category,
+        categoryName,
+        basePrice: hasVariants ? 0 : parseFloat(basePrice),
+        rawMaterials,
+        variants: hasVariants ? variants.filter(v => v.name.trim() && v.price > 0) : [],
+        hasVariants
+      };
+
+      const response = await fetch('/api/addproducts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to add product');
+      }
+
+      // Dismiss loading toast and show success
+      toast.dismiss(loadingToast);
+      toast.success(data.message || 'Product added successfully!', {
+        duration: 3000,
+      });
+
+      // Reset form
+      setName("");
+      setCategory("");
+      setCategoryName("");
+      setBasePrice("");
+      setRawMaterials([]);
+      setVariants([{ name: "", price: 0 }]);
+      setHasVariants(false);
+      
+      // Redirect to products page after 2 seconds
+      setTimeout(() => {
+        router.push('/inventory/product');
+      }, 2000);
+
+    } catch (err: any) {
+      // Dismiss loading toast and show error
+      toast.dismiss(loadingToast);
+      toast.error(err.message || 'An error occurred while adding the product', {
+        duration: 4000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (name || category || basePrice || rawMaterials.length > 0) {
+      if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
+        router.push('/inventory/product');
+      }
+    } else {
+      router.push('/inventory/product');
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Page Title - Matched to ProductsPage style */}
+        {/* Page Title */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
             Add New Product
@@ -128,7 +229,7 @@ const AddProductPage = () => {
                 htmlFor="name"
                 className="text-sm font-medium text-foreground"
               >
-                Product Name
+                Product Name *
               </label>
               <input
                 type="text"
@@ -138,24 +239,26 @@ const AddProductPage = () => {
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 placeholder="e.g., Iced Coffee Jelly"
                 required
+                disabled={isLoading}
               />
             </div>
 
             {/* Category */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                Category
+                Category *
               </label>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {categories.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => setCategory(cat.id)}
+                    onClick={() => handleCategorySelect(cat.id, cat.name)}
+                    disabled={isLoading}
                     className={`flex items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm font-medium transition-all duration-200 ${
                       category === cat.id
                         ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-foreground hover:bg-secondary"
+                        : "border-border bg-background text-foreground hover:bg-secondary disabled:hover:bg-background"
                     }`}
                   >
                     {cat.icon === "coffee" ? (
@@ -183,6 +286,7 @@ const AddProductPage = () => {
                     }
                   }}
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  disabled={isLoading}
                 />
                 <label
                   htmlFor="hasVariants"
@@ -198,7 +302,7 @@ const AddProductPage = () => {
                     htmlFor="basePrice"
                     className="text-sm font-medium text-foreground"
                   >
-                    Price
+                    Price *
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground">
@@ -213,7 +317,8 @@ const AddProductPage = () => {
                       placeholder="0.00"
                       min="0"
                       step="0.01"
-                      required
+                      required={!hasVariants}
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -221,12 +326,13 @@ const AddProductPage = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-foreground">
-                      Variants
+                      Variants *
                     </label>
                     <button
                       type="button"
                       onClick={handleAddVariant}
-                      className="flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary"
+                      disabled={isLoading}
+                      className="flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary disabled:hover:bg-background"
                     >
                       <Plus className="h-4 w-4" />
                       Add Variant
@@ -245,7 +351,8 @@ const AddProductPage = () => {
                             }
                             className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                             placeholder="Variant name (e.g., Solo)"
-                            required
+                            required={hasVariants}
+                            disabled={isLoading}
                           />
                         </div>
                         <div className="flex-1 space-y-2">
@@ -267,7 +374,8 @@ const AddProductPage = () => {
                               placeholder="0.00"
                               min="0"
                               step="0.01"
-                              required
+                              required={hasVariants}
+                              disabled={isLoading}
                             />
                           </div>
                         </div>
@@ -275,7 +383,8 @@ const AddProductPage = () => {
                           <button
                             type="button"
                             onClick={() => handleRemoveVariant(index)}
-                            className="rounded-md p-2 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                            disabled={isLoading}
+                            className="rounded-md p-2 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground disabled:hover:bg-transparent"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -296,7 +405,8 @@ const AddProductPage = () => {
                 <button
                   type="button"
                   onClick={() => setShowRawMaterialModal(true)}
-                  className="flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary"
+                  disabled={isLoading}
+                  className="flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary disabled:hover:bg-background"
                 >
                   <Plus className="h-4 w-4" />
                   Add Raw Material
@@ -312,7 +422,8 @@ const AddProductPage = () => {
                   <button
                     type="button"
                     onClick={() => setShowRawMaterialModal(true)}
-                    className="mt-3 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                    disabled={isLoading}
+                    className="mt-3 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary disabled:hover:bg-background"
                   >
                     Add Your First Raw Material
                   </button>
@@ -353,7 +464,8 @@ const AddProductPage = () => {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveRawMaterial(material.id)}
-                                className="rounded-md p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                                disabled={isLoading}
+                                className="rounded-md p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground disabled:hover:bg-transparent"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -367,7 +479,8 @@ const AddProductPage = () => {
               )}
             </div>
 
-            {/* Image Upload (Optional) */}
+            {/* Image Upload (Optional) - Commented out for now */}
+            {/* 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Product Image (Optional)
@@ -382,30 +495,43 @@ const AddProductPage = () => {
                   id="image"
                   className="hidden"
                   accept="image/*"
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => document.getElementById("image")?.click()}
-                  className="mt-3 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                  disabled={isLoading}
+                  className="mt-3 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary disabled:hover:bg-background"
                 >
                   Browse Files
                 </button>
               </div>
             </div>
+            */}
 
             {/* Form Actions */}
             <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
-                className="rounded-md border border-border bg-background px-6 py-2.5 text-sm font-medium text-foreground hover:bg-secondary"
+                onClick={handleCancel}
+                disabled={isLoading}
+                className="rounded-md border border-border bg-background px-6 py-2.5 text-sm font-medium text-foreground hover:bg-secondary disabled:hover:bg-background"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                disabled={isLoading}
+                className="rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Add Product
+                {isLoading ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Product'
+                )}
               </button>
             </div>
           </form>
@@ -431,7 +557,7 @@ const AddProductPage = () => {
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">
-                  Material Name
+                  Material Name *
                 </label>
                 <input
                   type="text"
@@ -446,7 +572,7 @@ const AddProductPage = () => {
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">
-                    Quantity
+                    Quantity *
                   </label>
                   <input
                     type="number"

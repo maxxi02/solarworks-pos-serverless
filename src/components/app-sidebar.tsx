@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import * as React from "react";
 import {
@@ -11,6 +11,7 @@ import {
   Settings,
   Receipt,
   FolderOpen,
+  LogOut,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -24,16 +25,17 @@ import {
 import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
 
-// Import your auth client
-import {
-  getCurrentUser,
-  getCurrentUserRole,
-  getUserInitials,
-  signOut,
-  useSession,
-} from "@/lib/auth-client";
+// Import Better Auth hooks
+import { useSession, signOut, getCurrentUserRole, getUserInitials } from "@/lib/auth-client";
 
-// Admin navigation structure
+// Store/Team data
+const storeData = {
+  name: "SolarWorks POS",
+  logo: FolderOpen,
+  plan: "Business",
+};
+
+// Navigation structures (keep the same arrays from your original code)
 const adminNavigation = [
   {
     title: "Dashboard",
@@ -157,7 +159,6 @@ const adminNavigation = [
         title: "Payment Methods",
         url: "/settings/payments-methods",
       },
-
       {
         title: "Profile",
         url: "/settings/profile",
@@ -166,7 +167,6 @@ const adminNavigation = [
   },
 ];
 
-// Staff navigation structure
 const staffNavigation = [
   {
     title: "Dashboard",
@@ -230,105 +230,44 @@ const staffNavigation = [
   },
 ];
 
-// Store/Team data
-const storeData = {
-  name: "SolarWorks POS",
-  logo: FolderOpen,
-  plan: "Business",
-};
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = React.useState<{
-    name: string;
-    email: string;
-    role: "admin" | "staff";
-    initials: string;
-    avatar?: string;
-  } | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  // Use Better Auth's useSession hook - this is the recommended way
-  const { data: session } = useSession();
+  // Use Better Auth's useSession hook - this is the main way to get user data
+  const { data: session, isPending } = useSession();
 
-  // Update user state when session changes
-  React.useEffect(() => {
-    if (session?.user) {
-      const role = getCurrentUserRole(session.user);
+  // Determine which navigation to show based on role
+  const getUserRole = () => {
+    if (!session?.user) return "staff";
+    return getCurrentUserRole(session.user);
+  };
 
-      setCurrentUser({
-        name: session.user.name || "User",
-        email: session.user.email || "",
-        role: role,
-        initials: getUserInitials(session.user.name),
-        avatar: session.user.image || undefined,
-      });
-      setIsLoading(false);
-    } else if (session === null) {
-      // No session - redirect to login
-      setCurrentUser(null);
-      setIsLoading(false);
-      // router.push('/');
-    }
-  }, [session, router]);
-
-  // Alternative: Fetch user directly if useSession doesn't work
-  React.useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        setIsLoading(true);
-        const user = await getCurrentUser();
-
-        if (user) {
-          const role = getCurrentUserRole(user);
-
-          setCurrentUser({
-            name: user.name || "User",
-            email: user.email || "",
-            role: role,
-            initials: getUserInitials(user.name),
-            avatar: user.image || undefined,
-          });
-        } else {
-          // No user found - redirect to login
-          router.push("/");
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-        router.push("/");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    // Only fetch if useSession didn't provide a user
-    if (!session && !currentUser) {
-      fetchUser();
-    }
-  }, [session, currentUser, router]);
+  const navigationItems = getUserRole() === 'admin' ? adminNavigation : staffNavigation;
 
   // Logout function using Better Auth's signOut
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-
+      
+      // Sign out using Better Auth - this will clear the session cookie
       await signOut({
         fetchOptions: {
           onSuccess: () => {
-            setCurrentUser(null);
+            console.log("Logged out successfully");
+            // Redirect to home/login page
             router.push("/");
           },
           onError: (error) => {
             console.error("Logout error:", error);
-            setCurrentUser(null);
+            // Even if there's an error, redirect to home
             router.push("/");
           },
         },
       });
     } catch (error) {
       console.error("Logout error:", error);
-      setCurrentUser(null);
+      // Redirect to home even on error
       router.push("/");
     } finally {
       setIsLoggingOut(false);
@@ -337,30 +276,48 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // User profile component for sidebar footer
   const UserProfileFooter = () => {
-    if (!currentUser) return null;
+    if (isPending) {
+      return (
+        <div className="flex w-full items-center gap-3 rounded-lg p-2">
+          <div className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
+          <div className="flex flex-col flex-1 space-y-2">
+            <div className="h-4 w-3/4 bg-muted rounded animate-pulse"></div>
+            <div className="h-3 w-full bg-muted rounded animate-pulse"></div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!session?.user) {
+      return null;
+    }
+
+    const user = session.user;
+    const userRole = getCurrentUserRole(user);
+    const userInitials = getUserInitials(user.name || undefined);
 
     return (
       <div className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-accent transition-colors">
-        {currentUser.avatar ? (
-          <img
-            src={currentUser.avatar}
-            alt={currentUser.name}
+        {user.image ? (
+          <img 
+            src={user.image} 
+            alt={user.name || "User"}
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-            {currentUser.initials}
+            {userInitials}
           </div>
         )}
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-sm font-medium truncate">
-            {currentUser.name}
+            {user.name || user.email?.split('@')[0] || "User"}
           </span>
           <span className="text-xs text-muted-foreground truncate">
-            {currentUser.email}
+            {user.email || ""}
           </span>
           <span className="text-xs text-primary capitalize">
-            {currentUser.role === "admin" ? "Administrator" : "Staff"}
+            {userRole === 'admin' ? 'Administrator' : 'Staff'}
           </span>
         </div>
         <button
@@ -373,28 +330,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           {isLoggingOut ? (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
           ) : (
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
+            <LogOut className="h-4 w-4" />
           )}
         </button>
       </div>
     );
   };
 
-  // Loading skeleton
-  if (isLoading) {
+  // Loading state
+  if (isPending) {
     return (
       <Sidebar collapsible="icon" {...props}>
         <SidebarHeader>
@@ -403,34 +347,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarContent>
           <div className="space-y-2 px-2">
             {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-8 rounded-md bg-muted animate-pulse"
-              ></div>
+              <div key={i} className="h-8 rounded-md bg-muted animate-pulse"></div>
             ))}
           </div>
         </SidebarContent>
         <SidebarFooter>
-          <div className="flex w-full items-center gap-3 rounded-lg p-2">
-            <div className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
-            <div className="flex flex-col flex-1 space-y-2">
-              <div className="h-4 w-3/4 bg-muted rounded animate-pulse"></div>
-              <div className="h-3 w-full bg-muted rounded animate-pulse"></div>
-            </div>
-          </div>
+          <UserProfileFooter />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
     );
   }
 
-  if (!currentUser) {
+  // If no session but not loading, don't show sidebar
+  if (!session) {
     return null;
   }
-
-  // Determine which navigation to show based on role
-  const navigationItems =
-    currentUser.role === "admin" ? adminNavigation : staffNavigation;
 
   return (
     <Sidebar collapsible="icon" {...props}>

@@ -60,11 +60,14 @@ export default function Setup2FA() {
 
         setUserEmail(data.user.email || "");
 
+        // If user already has 2FA enabled, redirect to dashboard
         if (data.user.twoFactorEnabled) {
           router.push("/dashboard");
           return;
         }
 
+        // If user is already authenticated, they can choose to setup 2FA or skip
+        // Don't force them to setup 2FA
         setStep("password");
       } catch (err) {
         router.push("/login");
@@ -168,6 +171,29 @@ export default function Setup2FA() {
     }
   };
 
+  const handleSkip = async () => {
+    // IMPORTANT: If user started 2FA setup but wants to skip,
+    // we should disable the 2FA that was partially enabled
+    try {
+      // Only disable if 2FA was enabled in this session
+      if (step === "setup" || step === "verify") {
+        // User started setup process, clean it up
+        await authClient.twoFactor.disable({
+          password, // Use the password they entered
+        }).catch((err) => {
+          // If disable fails (maybe password wrong), still allow skip
+          console.warn("Failed to cleanup 2FA setup:", err);
+        });
+      }
+    } catch (error) {
+      console.warn("Error cleaning up 2FA:", error);
+      // Continue with skip even if cleanup fails
+    }
+
+    // Simply redirect to dashboard - session should already be established
+    router.push("/dashboard");
+  };
+
   const copyBackupKey = () => {
     if (backupKey) {
       navigator.clipboard.writeText(backupKey);
@@ -200,7 +226,7 @@ export default function Setup2FA() {
                 Enable Two-Factor Authentication
               </CardTitle>
               <CardDescription>
-                Confirm your password to set up 2FA for {userEmail}
+                Optional: Add an extra layer of security to your account
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -217,7 +243,7 @@ export default function Setup2FA() {
                     autoFocus
                   />
                   <p className="text-xs text-muted-foreground">
-                    Enter the password you use to log in
+                    Enter your password to start 2FA setup
                   </p>
                 </div>
 
@@ -228,18 +254,27 @@ export default function Setup2FA() {
                   </Alert>
                 )}
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Setting up 2FA..." : "Continue"}
-                </Button>
+                <div className="space-y-3">
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Setting up 2FA..." : "Set Up 2FA"}
+                  </Button>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => router.push("/dashboard")}
-                >
-                  Skip for now
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleSkip}
+                    disabled={loading}
+                  >
+                    Skip for Now
+                  </Button>
+                </div>
+                
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">
+                    You can always set up 2FA later from your account settings
+                  </p>
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -299,9 +334,23 @@ export default function Setup2FA() {
                 </div>
               )}
 
-              <Button onClick={() => setStep("verify")} className="w-full">
-                I've Scanned the QR Code
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  onClick={() => setStep("verify")} 
+                  className="w-full"
+                >
+                  I've Scanned the QR Code
+                </Button>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleSkip}
+                >
+                  Skip 2FA Setup
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -343,7 +392,7 @@ export default function Setup2FA() {
                   </Alert>
                 )}
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Button
                     type="submit"
                     className="w-full"
@@ -352,18 +401,30 @@ export default function Setup2FA() {
                     {loading ? "Verifying..." : "Verify & Complete Setup"}
                   </Button>
 
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => {
-                      setStep("setup");
-                      setOtp("");
-                      setError(null);
-                    }}
-                  >
-                    Back to QR Code
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setStep("setup");
+                        setOtp("");
+                        setError(null);
+                      }}
+                    >
+                      Back to QR Code
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleSkip}
+                      disabled={loading}
+                    >
+                      Skip Setup
+                    </Button>
+                  </div>
                 </div>
               </form>
             </CardContent>

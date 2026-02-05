@@ -9,35 +9,7 @@ export const authClient = createAuthClient({
 // Export commonly used methods
 export const { signIn, signUp, useSession, signOut } = authClient;
 
-// Helper function to get current user - using Better Auth's API
-export const getCurrentUser = async () => {
-  try {
-    // Better Auth provides a way to get the current session
-    // Use their API endpoint to get the current user
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3000"}/api/auth/get-session`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // Important for cookies
-      },
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      return data.user || null;
-    }
-
-    return null;
-  } catch (error) {
-    console.error("Error fetching user session:", error);
-    return null;
-  }
-};
-
-// Helper function to get user role
+// Helper function to get user role from session
 export const getCurrentUserRole = (user: any): "admin" | "staff" => {
   if (!user) return "staff";
 
@@ -64,4 +36,9 @@ export const getUserInitials = (name?: string): string => {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+};
+
+// Simple wrapper to get user data from session (if needed elsewhere)
+export const getUserFromSession = (session: any) => {
+  return session?.user || null;
 };
