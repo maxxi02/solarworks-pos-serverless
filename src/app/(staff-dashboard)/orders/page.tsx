@@ -27,7 +27,7 @@ import {
   Soup,
   UtensilsCrossed,
 } from "lucide-react";
-import { Cookie } from "next/font/google";
+import { Cookie } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 // ── Types ───────────────────────────────────────────────────
