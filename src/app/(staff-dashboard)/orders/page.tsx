@@ -111,7 +111,7 @@ function CartDropZone({ isOver }: { isOver: boolean }) {
     <div
       ref={setNodeRef}
       className={`
-        relative min-h-[200px] transition-all duration-200
+        relative min-h-50 transition-all duration-200
         ${isOver ? "border-2 border-dashed border-blue-400 bg-blue-50" : "border-2 border-dashed border-transparent"}
       `}
     >
