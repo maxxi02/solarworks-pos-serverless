@@ -18,11 +18,18 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Beef, Drumstick, Filter, Fish, Search, Soup, UtensilsCrossed} from "lucide-react";
+import {
+  Beef,
+  Drumstick,
+  Filter,
+  Fish,
+  Search,
+  Soup,
+  UtensilsCrossed,
+} from "lucide-react";
 import { Cookie } from "next/font/google";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "radix-ui";
-
+import { ScrollArea } from "@/components/ui/scroll-area";
 // ── Types ───────────────────────────────────────────────────
 
 interface MenuItem {
@@ -205,7 +212,7 @@ function DraggableMenuItem({ item }: { item: MenuItem }) {
         <h3 className="font-medium leading-tight line-clamp-2 min-h-[2.8rem]">
           {item.name}
         </h3>
-        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 min-h-[3rem]">
+        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 min-h-12">
           {item.desc}
         </p>
         <div className="mt-3 flex items-baseline gap-1.5">
@@ -375,7 +382,7 @@ export default function POSPage() {
         </div>
 
         {/* RIGHT – ORDER PANEL */}
-        <div className="w-full lg:w-[380px] xl:w-[420px] bg-slate-950 text-white flex flex-col border-l border-slate-800">
+        <div className="w-full lg:w-95 xl:w-105 bg-slate-950 text-white flex flex-col border-l border-slate-800">
           <div className="p-5 border-b border-slate-800">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Detail Order</h2>
@@ -467,9 +474,9 @@ export default function POSPage() {
                 alt={activeDrag.name}
                 className="w-full h-40 object-cover rounded-t-lg"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
             </div>
-            <div className="p-4 bg-gradient-to-b from-transparent to-black/80 rounded-b-lg">
+            <div className="p-4 bg-linear-to-b from-transparent to-black/80 rounded-b-lg">
               <h3 className="font-semibold text-white truncate">
                 {activeDrag.name}
               </h3>

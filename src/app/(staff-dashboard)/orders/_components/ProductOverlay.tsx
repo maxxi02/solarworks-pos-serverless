@@ -14,7 +14,7 @@ type ProductOverlayProps = {
 export default function ProductOverlay({ product }: ProductOverlayProps) {
   return (
     <Card className="overflow-hidden shadow-2xl scale-105 opacity-90">
-      <div className="aspect-square relative bg-gradient-to-b from-blue-50 to-white">
+      <div className="aspect-square relative bg-linear-to-b from-blue-50 to-white">
         {product.imageUrl ? (
           <img
             src={product.imageUrl}

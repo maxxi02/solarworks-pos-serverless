@@ -17,6 +17,23 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield, Copy, Check, AlertCircle } from "lucide-react";
 
+// ── Simple sound player ────────────────────────────────────────────────
+const playSound = (fileName: string) => {
+  try {
+    const audio = new Audio(`/audio/${fileName}`);
+    audio.volume = 0.5; // comfortable notification level
+    audio.play().catch((err) => {
+      console.warn("Sound playback prevented:", err);
+      // Browser may block if no user interaction yet — common on page load
+    });
+  } catch (err) {
+    console.warn("Audio init failed:", err);
+  }
+};
+
+const playSuccess = () => playSound("success-notification.mp3");
+const playError = () => playSound("error-notification.mp3");
+
 export default function Setup2FA() {
   const router = useRouter();
   const [step, setStep] = useState<"loading" | "password" | "setup" | "verify">(
@@ -31,31 +48,25 @@ export default function Setup2FA() {
   const [copied, setCopied] = useState(false);
   const [userEmail, setUserEmail] = useState<string>("");
 
-  // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const { data, error } = await authClient.getSession();
 
         if (error || !data?.user) {
-          console.error("No session found:", error);
           router.push("/login");
           return;
         }
 
         setUserEmail(data.user.email || "");
 
-        // Check if 2FA is already enabled
         if (data.user.twoFactorEnabled) {
-          console.log("2FA already enabled, redirecting to dashboard");
           router.push("/dashboard");
           return;
         }
 
-        // User is authenticated and 2FA is not enabled
         setStep("password");
       } catch (err) {
-        console.error("Auth check failed:", err);
         router.push("/login");
       }
     };
@@ -63,69 +74,49 @@ export default function Setup2FA() {
     checkAuth();
   }, [router]);
 
-  // CORRECTED FLOW: Enable TOTP first, then get URI
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    if (!password || password.length < 1) {
+    if (!password) {
       setError("Please enter your password");
+      playError();
       setLoading(false);
       return;
     }
 
     try {
-      console.log("Step 1: Enabling TOTP...");
-
-      // FIRST: Enable 2FA - this generates the secret
+      // Enable 2FA (generates secret)
       const { error: enableError } = await authClient.twoFactor.enable({
         password,
       });
 
       if (enableError) {
-        console.error("Enable error:", enableError);
-
-        if (enableError.message?.includes("password")) {
-          setError("Incorrect password. Please try again.");
-        } else if (enableError.message?.includes("session")) {
-          setError("Session expired. Please log in again.");
-          setTimeout(() => router.push("/login"), 2000);
-        } else {
-          setError(
-            enableError.message || "Failed to enable 2FA. Please try again.",
-          );
-        }
+        setError(
+          enableError.message?.includes("password")
+            ? "Incorrect password. Please try again."
+            : enableError.message || "Failed to enable 2FA.",
+        );
+        playError();
         setLoading(false);
         return;
       }
 
-      console.log("Step 2: Getting TOTP URI...");
-
-      // SECOND: Get the TOTP URI (now that it's enabled)
+      // Get QR URI
       const { data, error: uriError } = await authClient.twoFactor.getTotpUri({
         password,
       });
 
-      if (uriError) {
-        console.error("getTotpUri error:", uriError);
-        setError(
-          uriError.message || "Failed to generate QR code. Please try again.",
-        );
+      if (uriError || !data?.totpURI) {
+        setError(uriError?.message || "Failed to generate QR code.");
+        playError();
         setLoading(false);
         return;
       }
 
-      if (!data?.totpURI) {
-        setError("Failed to generate QR code. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      console.log("TOTP URI received successfully");
       setQrUri(data.totpURI);
 
-      // Extract the secret from the URI for backup
       const secretMatch = data.totpURI.match(/secret=([^&]+)/);
       if (secretMatch) {
         setBackupKey(secretMatch[1]);
@@ -133,14 +124,13 @@ export default function Setup2FA() {
 
       setStep("setup");
     } catch (err) {
-      console.error("Unexpected error:", err);
-      setError("An unexpected error occurred. Please try again.");
+      setError("An unexpected error occurred.");
+      playError();
     } finally {
       setLoading(false);
     }
   };
 
-  // Verify the OTP code
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -148,34 +138,32 @@ export default function Setup2FA() {
 
     if (otp.length !== 6) {
       setError("Please enter a 6-digit code");
+      playError();
       setLoading(false);
       return;
     }
 
     try {
-      console.log("Verifying OTP...");
-
       const { error: verifyError } = await authClient.twoFactor.verifyTotp({
         code: otp,
       });
 
       if (verifyError) {
-        console.error("Verify error:", verifyError);
-        setError(
-          "Invalid code. Please check your authenticator app and try again.",
-        );
+        setError("Invalid code. Please check your authenticator app.");
         setOtp("");
+        playError();
         setLoading(false);
         return;
       }
 
-      console.log("2FA verified successfully!");
-
-      // Success! Redirect to dashboard
-      router.push("/dashboard");
+      playSuccess();
+      // Small delay → let sound play before redirect
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 800);
     } catch (err) {
-      console.error("Unexpected error during verification:", err);
       setError("Verification failed. Please try again.");
+      playError();
       setLoading(false);
     }
   };
@@ -188,7 +176,6 @@ export default function Setup2FA() {
     }
   };
 
-  // Loading state
   if (step === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
@@ -267,12 +254,10 @@ export default function Setup2FA() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* QR Code */}
               <div className="flex justify-center bg-white p-6 rounded-lg border">
                 <QRCode value={qrUri} size={200} />
               </div>
 
-              {/* Instructions */}
               <Alert>
                 <AlertDescription className="text-sm space-y-2">
                   <p className="font-semibold">How to scan:</p>
@@ -285,7 +270,6 @@ export default function Setup2FA() {
                 </AlertDescription>
               </Alert>
 
-              {/* Backup Key */}
               {backupKey && (
                 <div className="space-y-2">
                   <Label>Backup Key (Save this!)</Label>
@@ -309,9 +293,8 @@ export default function Setup2FA() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    ⚠️ Save this key in a secure place. You'll need it to
-                    recover your account if you lose access to your
-                    authenticator app.
+                    ⚠️ Save this key in a secure place. You'll need it if you
+                    lose your authenticator app.
                   </p>
                 </div>
               )}

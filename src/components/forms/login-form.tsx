@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Eye, EyeOff } from "lucide-react"; // Import eye icons
+import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner"; // ← import this
+import { useNotificationSound } from "@/lib/use-notification-sound";
 
 export function LoginForm({
   className,
@@ -28,13 +29,12 @@ export function LoginForm({
   const [password, setPassword] = React.useState("");
   const [otpCode, setOtpCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [showPassword, setShowPassword] = React.useState(false); // State for password visibility
+  const [showPassword, setShowPassword] = React.useState(false);
+  const { playError, playSuccess } = useNotificationSound();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
       const { error } = await authClient.signIn.email(
@@ -49,18 +49,21 @@ export function LoginForm({
               setLoading(false);
               return;
             } else {
+              toast.success("Login successful! Setting up 2FA...");
               router.replace("/setup-2fa");
             }
           },
           async onError(context) {
-            setError(context.error.message ?? "Invalid email or password.");
+            toast.error(context.error.message ?? "Invalid email or password.");
+            playError();
             setLoading(false);
             return;
           },
         },
       );
     } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
+      toast.error("An unexpected error occurred. Please try again.");
+      playError();
       setLoading(false);
     }
   };
@@ -68,7 +71,6 @@ export function LoginForm({
   const handleVerify2FA = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
       const { error } = await authClient.twoFactor.verifyTotp({
@@ -76,7 +78,7 @@ export function LoginForm({
       });
 
       if (error) {
-        setError(
+        toast.error(
           "Invalid code. Please check your authenticator app and try again.",
         );
         setOtpCode("");
@@ -84,10 +86,10 @@ export function LoginForm({
         return;
       }
 
-      // Success! Redirect to dashboard
+      toast.success("2FA verified! Welcome back.");
       router.replace("/dashboard");
     } catch (err) {
-      setError("Verification failed. Please try again.");
+      toast.error("Verification failed. Please try again.");
       setLoading(false);
     }
   };
@@ -127,19 +129,22 @@ export function LoginForm({
                 </div>
                 <div className="relative">
                   <Input
+                    placeholder="•••••••••••"
                     id="password"
                     type={showPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pr-10" // Add padding for the icon
+                    className="pr-10"
                   />
                   <button
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                     onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    tabIndex={-1} // Prevent tab focus on this button
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    tabIndex={-1}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -149,12 +154,6 @@ export function LoginForm({
                   </button>
                 </div>
               </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
 
               <Button type="submit" disabled={loading}>
                 {loading ? "Logging in..." : "Login"}
@@ -195,12 +194,6 @@ export function LoginForm({
                 </p>
               </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
               <div className="space-y-2">
                 <Button
                   type="submit"
@@ -217,7 +210,6 @@ export function LoginForm({
                   onClick={() => {
                     setStep("login");
                     setOtpCode("");
-                    setError(null);
                   }}
                 >
                   Back to Login

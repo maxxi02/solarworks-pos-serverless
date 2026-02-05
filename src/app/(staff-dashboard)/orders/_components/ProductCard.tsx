@@ -17,7 +17,7 @@ type ProductCardProps = {
 export default function ProductCard({ product, onAdd }: ProductCardProps) {
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow group">
-      <div className="aspect-square relative bg-gradient-to-b from-slate-100 to-white">
+      <div className="aspect-square relative bg-linear-to-b from-slate-100 to-white">
         {product.imageUrl ? (
           <img
             src={product.imageUrl}
