@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner"; // ← import this
+import { Eye, EyeOff, Mail, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 import { useNotificationSound } from "@/lib/use-notification-sound";
 
 export function LoginForm({
@@ -24,7 +24,9 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
 
-  const [step, setStep] = React.useState<"login" | "verify-2fa">("login");
+  const [step, setStep] = React.useState<"login" | "verify-2fa" | "email-sent">(
+    "login",
+  );
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [otpCode, setOtpCode] = React.useState("");
@@ -32,6 +34,25 @@ export function LoginForm({
   const [showPassword, setShowPassword] = React.useState(false);
   const { playError, playSuccess } = useNotificationSound();
 
+  // Automatically send verification email
+  const autoSendVerificationEmail = async (userEmail: string) => {
+    try {
+      await authClient.sendVerificationEmail({
+        email: userEmail,
+        callbackURL: "/login?verified=true", // Redirect back to login after verification
+      });
+
+      toast.success("Verification email sent! Please check your inbox.");
+      playSuccess();
+      setStep("email-sent");
+    } catch (error: any) {
+      console.error("Auto-send verification error:", error);
+      toast.error("Failed to send verification email. Please try again.");
+      playError();
+    }
+  };
+
+  // Regular password login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -50,24 +71,73 @@ export function LoginForm({
               return;
             } else {
               toast.success("Login successful! Setting up 2FA...");
+              playSuccess();
               router.replace("/setup-2fa");
             }
           },
           async onError(context) {
-            toast.error(context.error.message ?? "Invalid email or password.");
+            const errorMessage = context.error.message ?? "Login failed";
+
+            // Check if error is due to unverified email
+            if (
+              errorMessage.toLowerCase().includes("verify") ||
+              errorMessage.toLowerCase().includes("not verified") ||
+              errorMessage.toLowerCase().includes("email verification") ||
+              context.error.status === 400
+            ) {
+              toast.info("Email not verified. Sending verification link...");
+              setLoading(false);
+
+              // Automatically send verification email
+              await autoSendVerificationEmail(email);
+              return;
+            }
+
+            // Other errors
+            toast.error(errorMessage);
             playError();
             setLoading(false);
-            return;
           },
         },
       );
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Login error:", err);
       toast.error("An unexpected error occurred. Please try again.");
       playError();
       setLoading(false);
     }
   };
 
+  // Manually send verification email
+  const handleSendVerificationEmail = async () => {
+    if (!email) {
+      toast.error("Please enter your email address");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await authClient.sendVerificationEmail({
+        email: email,
+        callbackURL: "/?verified=true",
+      });
+
+      toast.success("Verification email sent! Check your inbox.");
+      playSuccess();
+      setStep("email-sent");
+      setLoading(false);
+    } catch (error: any) {
+      toast.error(
+        error?.message ??
+          "Failed to send verification email. Please try again.",
+      );
+      playError();
+      setLoading(false);
+    }
+  };
+
+  // 2FA verification
   const handleVerify2FA = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -81,18 +151,32 @@ export function LoginForm({
         toast.error(
           "Invalid code. Please check your authenticator app and try again.",
         );
+        playError();
         setOtpCode("");
         setLoading(false);
         return;
       }
 
       toast.success("2FA verified! Welcome back.");
+      playSuccess();
       router.replace("/dashboard");
     } catch (err) {
       toast.error("Verification failed. Please try again.");
+      playError();
       setLoading(false);
     }
   };
+
+  // Check for verification success from URL params
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("verified") === "true") {
+      toast.success("Email verified successfully! You can now log in.");
+      playSuccess();
+      // Clean up URL
+      window.history.replaceState({}, "", "/login");
+    }
+  }, []);
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -159,6 +243,76 @@ export function LoginForm({
                 {loading ? "Logging in..." : "Login"}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+      ) : step === "email-sent" ? (
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">Check your email</CardTitle>
+            <CardDescription>
+              We sent a verification link to <strong>{email}</strong>
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center dark:border-green-800 dark:bg-green-950">
+              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
+              </div>
+              <h3 className="mb-2 font-semibold text-green-900 dark:text-green-100">
+                Verification Email Sent!
+              </h3>
+              <p className="text-sm text-green-800 dark:text-green-200">
+                Please check your inbox and click the verification link to
+                continue.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted p-4">
+                <h4 className="mb-2 text-sm font-medium">What happens next?</h4>
+                <ol className="space-y-1 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">1.</span>
+                    <span>
+                      Check your email inbox for our verification link
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">2.</span>
+                    <span>Click the link to verify your email address</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">3.</span>
+                    <span>You'll be redirected back here to log in</span>
+                  </li>
+                </ol>
+              </div>
+
+              <p className="text-center text-sm text-muted-foreground">
+                Didn't receive the email?
+              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleSendVerificationEmail}
+                disabled={loading}
+              >
+                {loading ? "Sending..." : "Resend verification email"}
+              </Button>
+            </div>
+
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                setStep("login");
+                setEmail("");
+                setPassword("");
+              }}
+            >
+              Back to login
+            </Button>
           </CardContent>
         </Card>
       ) : (
