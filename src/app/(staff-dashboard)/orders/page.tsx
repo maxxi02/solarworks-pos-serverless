@@ -213,7 +213,7 @@ function DraggableMenuItem({ item }: { item: MenuItem }) {
         <h3 className="font-medium leading-tight line-clamp-2 min-h-[2.8rem]">
           {item.name}
         </h3>
-        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 min-h-[3rem]">
+        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 min-h-12">
           {item.desc}
         </p>
         <div className="mt-3 flex items-baseline gap-1.5">
@@ -232,7 +232,7 @@ function DroppableOrderContent({ children }: { children: React.ReactNode }) {
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-[240px] rounded-lg transition-colors duration-200",
+        "min-h-60 rounded-lg transition-colors duration-200",
         isOver && "bg-slate-800/40 border-2 border-dashed border-slate-500/70",
       )}
     >
@@ -385,7 +385,7 @@ export default function POSPage() {
         </div>
 
         {/* RIGHT – ORDER PANEL */}
-        <div className="w-full lg:w-[380px] xl:w-[420px] bg-slate-950 text-white flex flex-col border-l border-slate-800">
+        <div className="w-full lg:w-95 xl:w-105 bg-slate-950 text-white flex flex-col border-l border-slate-800">
           <div className="p-5 border-b border-slate-800">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">Detail Order</h2>
@@ -477,9 +477,9 @@ export default function POSPage() {
                 alt={activeDrag.name}
                 className="w-full h-40 object-cover rounded-t-lg"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
             </div>
-            <div className="p-4 bg-gradient-to-b from-transparent to-black/80 rounded-b-lg">
+            <div className="p-4 bg-linear-to-b from-transparent to-black/80 rounded-b-lg">
               <h3 className="font-semibold text-white truncate">
                 {activeDrag.name}
               </h3>

@@ -6,21 +6,31 @@ import { MONGODB } from "@/config/db";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { admin, twoFactor } from "better-auth/plugins";
+import { sendVerificationEmailBrevo } from "./email";
+import type { BetterAuthOptions } from "better-auth";
+import type { User } from "better-auth/types";
+
+interface EmailVerificationOptions {
+  user: User;
+  url: string;
+}
 
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
   trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
-  emailAndPassword: { enabled: true, requireEmailVerification: false },
-  logger: {
-    disabled: false,
-    disableColors: false,
-    level: "debug", // ← change to "debug" to see everything (most verbose)
-    // or "info" for a good middle ground
-    log: (level, message, ...args) => {
-      console.log(`[${level.toUpperCase()}] ${message}`, ...args);
+  emailAndPassword: { enabled: true, requireEmailVerification: true },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendVerificationEmail: async ({ user, url }: EmailVerificationOptions) => {
+      await sendVerificationEmailBrevo({ user, url });
     },
+    sendResetPassword: async ({ user, url }: EmailVerificationOptions) => {
+      await sendVerificationEmailBrevo({ user, url });
+    },
+    sendOnSignIn: true,
   },
+
   plugins: [
     admin({ bannedUserMessage: "bawal ka na rito tado" }),
     twoFactor({
@@ -28,6 +38,6 @@ export const auth = betterAuth({
       skipVerificationOnEnable: true,
     }),
   ],
-});
+} as BetterAuthOptions);
 
 export type Session = typeof auth.$Infer.Session;
