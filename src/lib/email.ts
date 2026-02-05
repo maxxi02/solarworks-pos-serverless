@@ -5,6 +5,7 @@ brevoApi.setApiKey(
   Brevo.TransactionalEmailsApiApiKeys.apiKey,
   process.env.BREVO_API_KEY!,
 );
+const senderEmail = process.env.SENDER_EMAIL!;
 
 export async function sendVerificationEmailBrevo({
   user,
@@ -14,7 +15,6 @@ export async function sendVerificationEmailBrevo({
   url: string;
 }) {
   const senderName = "POS System";
-  const senderEmail = process.env.SENDER_EMAIL!; // ✅ Use env variable
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.subject = "Verify your email address - POS SYSTEM";
