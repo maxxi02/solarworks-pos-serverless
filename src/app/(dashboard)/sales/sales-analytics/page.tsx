@@ -360,7 +360,7 @@ export default function SalesAnalyticsPage() {
               </div>
               
               {/* Best Seller Highlight */}
-              <div className="mt-6 p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg">
+              <div className="mt-6 p-4 bg-linear-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
