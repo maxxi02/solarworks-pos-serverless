@@ -3,8 +3,10 @@ import { twoFactorClient, adminClient } from "better-auth/client/plugins";
 
 // Create the auth client
 export const authClient = createAuthClient({
-  /** The base URL of the server (optional if you're using the same domain) */
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL:
+    process.env.NODE_ENV === "production"
+      ? process.env.BETTER_AUTH_URL
+      : "http://localhost:3000 ",
   plugins: [twoFactorClient(), adminClient()],
 });
 
