@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Beef, Drumstick, Filter, Fish, Search, Soup, UtensilsCrossed } from "lucide-react";
+import { Beef, Drumstick, Filter, Fish, Search, Soup, UtensilsCrossed} from "lucide-react";
 import { Cookie } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "radix-ui";
@@ -265,8 +265,6 @@ function OrderItemDisplay({ item }: { item: OrderItem }) {
     </div>
   );
 }
-
-// ── Main Page ────────────────────────────────────────────────
 
 export default function POSPage() {
   const [orderType, setOrderType] = useState("dine-in");

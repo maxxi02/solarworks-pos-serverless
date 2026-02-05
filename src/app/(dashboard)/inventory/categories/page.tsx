@@ -30,8 +30,10 @@ const categories = [
     color: 'bg-emerald-600',
     description: 'Sandwiches & pastries',
     menuItems: [
-      { id: '1', name: 'Ham & Cheese Croissant', price: 120, description: 'Flaky croissant with ham and cheese' },
-      { id: '2', name: 'Chocolate Cake', price: 150, description: 'Rich chocolate layer cake' },
+      { id: '1', name: 'JUMBO! HUNGARIAM SAUSILOG', price: 195, description: 'Flaky croissant with ham and cheese' },
+      { id: '2', name: 'SPECIAL TAAL TAPSILOG', price: 195, description: 'Rich chocolate layer cake' },
+      { id: '3', name: 'OLD TIME FAVE SPAMSILOG', price: 175, description: 'Rich chocolate layer cake' },
+      { id: '4', name: 'GOLDEM CROISSANT', price: 99, description: 'Rich chocolate layer cake' },
     ]
   },
   { 
