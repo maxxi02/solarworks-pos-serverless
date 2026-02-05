@@ -5,7 +5,7 @@ import { MONGODB } from "@/config/db";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { admin, twoFactor } from "better-auth/plugins";
-import { sendVerificationEmailGmail } from "./email";
+import { sendVerificationEmail } from "./email";
 
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
@@ -20,7 +20,7 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
       try {
-        await sendVerificationEmailGmail({ user, url });
+        await sendVerificationEmail({ user, url });
         console.log("✅ Verification email sent successfully");
       } catch (error) {
         console.error("❌ Failed to send verification email:", error);
@@ -35,7 +35,7 @@ export const auth = betterAuth({
       url: string;
     }) => {
       try {
-        await sendVerificationEmailGmail({ user, url });
+        await sendVerificationEmail({ user, url });
         console.log("✅ Reset password email sent successfully");
       } catch (error) {
         console.error("❌ Failed to send reset password email:", error);

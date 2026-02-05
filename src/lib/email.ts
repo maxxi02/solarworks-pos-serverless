@@ -1,15 +1,11 @@
-// lib/email-gmail.ts
-import nodemailer from "nodemailer";
+// lib/email.ts  (or lib/email-mailersend.ts)
+import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER, // your gmail
-    pass: process.env.EMAIL_PASSWORD, // app password, not regular password
-  },
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY!,
 });
 
-export async function sendVerificationEmailGmail({
+export async function sendVerificationEmail({
   user,
   url,
 }: {
@@ -17,19 +13,31 @@ export async function sendVerificationEmailGmail({
   url: string;
 }) {
   try {
-    await transporter.sendMail({
-      from: `"POS System" <${process.env.GMAIL_USER}>`,
-      to: user.email,
-      subject: "Verify your email address",
-      html: `
+    const sentFrom = new Sender(
+      "test@test-65qngkdk1oolwr12.mlsender.net",
+      "Rendezvous Café (Test Mode)",
+    );
+
+    const recipients = [new Recipient(user.email, user.name || "User")];
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setSubject("Verify your email address").setHtml(`
         <h2>Hello ${user.name || "there"}!</h2>
         <p>Click the link below to verify your email:</p>
-        <a href="${url}">Verify Email</a>
-      `,
-    });
-    console.log("✅ Email sent via Gmail");
+        <a href="${url}" style="padding: 12px 24px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">Verify Email</a>
+        <p style="margin-top: 24px; color: #666; font-size: 14px;">
+          If you didn't request this, you can safely ignore this email.
+        </p>
+      `);
+
+    await mailerSend.email.send(emailParams);
+
+    console.log(`✅ Verification email sent to ${user.email} via MailerSend`);
   } catch (error) {
-    console.error("Failed to send email:", error);
+    console.error("Failed to send email via MailerSend:", error);
+    // You can log error.body for MailerSend-specific messages
     throw error;
   }
 }
