@@ -18,20 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Beef, Drumstick, Filter, Fish, Search, Soup, UtensilsCrossed } from "lucide-react";
+import { Cookie } from "next/font/google";
 import { cn } from "@/lib/utils";
-import {
-  Soup,
-  Beef,
-  Drumstick,
-  Fish,
-  Cookie,
-  UtensilsCrossed,
-  Search,
-  Filter,
-} from "lucide-react";
+import { ScrollArea } from "radix-ui";
 
-// ── Types ────────────────────────────────────────────────────
+// ── Types ───────────────────────────────────────────────────
 
 interface MenuItem {
   id: number;
@@ -231,10 +223,17 @@ function DroppableOrderContent({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={setNodeRef}
+<<<<<<< HEAD
       className={cn(
         "min-h-60 rounded-lg transition-colors duration-200",
         isOver && "bg-slate-800/40 border-2 border-dashed border-slate-500/70",
       )}
+=======
+      className={`
+        relative min-h-200px transition-all duration-200
+        ${isOver ? "border-2 border-dashed border-blue-400 bg-blue-50" : "border-2 border-dashed border-transparent"}
+      `}
+>>>>>>> cb1f053cdda4a2655dd866e32331cef351ccf27c
     >
       {children}
       {isOver && children === null && (
