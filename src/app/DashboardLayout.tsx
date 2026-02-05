@@ -6,7 +6,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -18,7 +22,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               orientation="vertical"
               className="mr-2 data-[orientation=vertical]:h-4"
             />
-            <h1 className="text-xl font-bold text-foreground">RENDEZVOUS CAFÉ</h1>
+            <h1 className="text-xl font-bold text-foreground">
+              RENDEZVOUS CAFÉ
+            </h1>
           </div>
         </header>
         {children}

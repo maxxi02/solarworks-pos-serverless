@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import * as React from "react";
 import {
@@ -25,10 +25,10 @@ import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
 
 // Import your auth client
-import { 
-  getCurrentUser, 
-  getCurrentUserRole, 
-  getUserInitials, 
+import {
+  getCurrentUser,
+  getCurrentUserRole,
+  getUserInitials,
   signOut,
   useSession,
 } from "@/lib/auth-client";
@@ -157,7 +157,7 @@ const adminNavigation = [
         title: "Payment Methods",
         url: "/settings/payments-methods",
       },
-      
+
       {
         title: "Profile",
         url: "/settings/profile",
@@ -242,7 +242,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [currentUser, setCurrentUser] = React.useState<{
     name: string;
     email: string;
-    role: 'admin' | 'staff';
+    role: "admin" | "staff";
     initials: string;
     avatar?: string;
   } | null>(null);
@@ -256,7 +256,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   React.useEffect(() => {
     if (session?.user) {
       const role = getCurrentUserRole(session.user);
-      
+
       setCurrentUser({
         name: session.user.name || "User",
         email: session.user.email || "",
@@ -269,7 +269,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       // No session - redirect to login
       setCurrentUser(null);
       setIsLoading(false);
-      router.push('/');
+      // router.push('/');
     }
   }, [session, router]);
 
@@ -279,10 +279,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       try {
         setIsLoading(true);
         const user = await getCurrentUser();
-        
+
         if (user) {
           const role = getCurrentUserRole(user);
-          
+
           setCurrentUser({
             name: user.name || "User",
             email: user.email || "",
@@ -292,11 +292,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           });
         } else {
           // No user found - redirect to login
-          router.push('/');
+          router.push("/");
         }
       } catch (error) {
         console.error("Error fetching user:", error);
-        router.push('/');
+        router.push("/");
       } finally {
         setIsLoading(false);
       }
@@ -312,7 +312,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      
+
       await signOut({
         fetchOptions: {
           onSuccess: () => {
@@ -323,8 +323,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             console.error("Logout error:", error);
             setCurrentUser(null);
             router.push("/");
-          }
-        }
+          },
+        },
       });
     } catch (error) {
       console.error("Logout error:", error);
@@ -342,8 +342,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
       <div className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-accent transition-colors">
         {currentUser.avatar ? (
-          <img 
-            src={currentUser.avatar} 
+          <img
+            src={currentUser.avatar}
             alt={currentUser.name}
             className="h-8 w-8 rounded-full object-cover"
           />
@@ -353,10 +353,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
         )}
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-sm font-medium truncate">{currentUser.name}</span>
-          <span className="text-xs text-muted-foreground truncate">{currentUser.email}</span>
+          <span className="text-sm font-medium truncate">
+            {currentUser.name}
+          </span>
+          <span className="text-xs text-muted-foreground truncate">
+            {currentUser.email}
+          </span>
           <span className="text-xs text-primary capitalize">
-            {currentUser.role === 'admin' ? 'Administrator' : 'Staff'}
+            {currentUser.role === "admin" ? "Administrator" : "Staff"}
           </span>
         </div>
         <button
@@ -399,7 +403,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarContent>
           <div className="space-y-2 px-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-8 rounded-md bg-muted animate-pulse"></div>
+              <div
+                key={i}
+                className="h-8 rounded-md bg-muted animate-pulse"
+              ></div>
             ))}
           </div>
         </SidebarContent>
@@ -422,7 +429,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   // Determine which navigation to show based on role
-  const navigationItems = currentUser.role === 'admin' ? adminNavigation : staffNavigation;
+  const navigationItems =
+    currentUser.role === "admin" ? adminNavigation : staffNavigation;
 
   return (
     <Sidebar collapsible="icon" {...props}>
