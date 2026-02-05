@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import * as React from "react";
 import {
@@ -159,6 +159,7 @@ const adminNavigation = [
         title: "Payment Methods",
         url: "/settings/payments-methods",
       },
+
       {
         title: "Profile",
         url: "/settings/profile",
@@ -232,6 +233,14 @@ const staffNavigation = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
+  const [currentUser, setCurrentUser] = React.useState<{
+    name: string;
+    email: string;
+    role: 'admin' | 'staff';
+    initials: string;
+    avatar?: string;
+  } | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   // Use Better Auth's useSession hook - this is the main way to get user data
@@ -347,7 +356,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarContent>
           <div className="space-y-2 px-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-8 rounded-md bg-muted animate-pulse"></div>
+              <div
+                key={i}
+                className="h-8 rounded-md bg-muted animate-pulse"
+              ></div>
             ))}
           </div>
         </SidebarContent>
