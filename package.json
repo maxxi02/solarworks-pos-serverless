@@ -9,6 +9,7 @@
     "build:socket": "next build && tsc --project tsconfig.server.json",
     "start": "next start",
     "start:socket": "cross-env NODE_ENV=production node dist/server.mjs",
+    "start:prod": "npm run start & npm run start:socket",
     "lint": "eslint"
   },
   "dependencies": {
