@@ -1,18 +1,29 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+// eslint.config.mjs
+import nextPlugin from '@next/eslint-plugin-next';
+import tsEslint from 'typescript-eslint';
+import js from '@eslint/js';
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
-]);
-
-export default eslintConfig;
+export default [
+  js.configs.recommended,
+  ...tsEslint.configs.recommended,
+  {
+    plugins: {
+      '@next/next': nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs['core-web-vitals'].rules,
+      ...nextPlugin.configs.recommended.rules,
+      // your overrides
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    ignores: [
+      '.next/**',
+      'out/**',
+      'build/**',
+      'next-env.d.ts',
+      // add any other patterns you want to ignore
+    ],
+  },
+];

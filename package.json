@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "dev:socket": "cross-env NODE_OPTIONS=\"--loader ts-node/esm --trace-warnings --no-warnings\" ts-node server.mts",
     "dev": "next dev",
     "build": "next build",
+    "build:socket": "next build && tsc --project tsconfig.server.json",
     "start": "next start",
+    "start:socket": "cross-env NODE_ENV=production node dist/server.mjs",
     "lint": "eslint"
   },
   "dependencies": {
@@ -21,6 +24,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.4",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.31.0",
     "input-otp": "^1.4.2",
@@ -40,8 +44,11 @@
     "react-qr-code": "^2.0.18",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^2.15.4",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
+    "ts-node": "^10.9.2",
     "vaul": "^1.1.2",
     "zod": "^4.3.6"
   },
@@ -52,6 +59,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4.1.18",
