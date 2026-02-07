@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // Use environment variable for flexibility
-const SOCKET_URL = process.env.PUBLIC_SOCKET_URL!;
+const SOCKET_URL = process.env.SOCKET_URL!;
 
 export const socket = io(SOCKET_URL, {
   autoConnect: true,
