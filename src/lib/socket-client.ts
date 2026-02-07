@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // Use environment variable for flexibility
-const SOCKET_URL = process.env.SOCKET_URL!;
+const SOCKET_URL = "https://rendezvous-server-gpmv.onrender.com";
 
 export const socket = io(SOCKET_URL, {
   autoConnect: true,
@@ -12,7 +12,6 @@ export const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"], // T
 });
 
-// Optional: Add connection event listeners for debugging
 socket.on("connect", () => {
   console.log("✅ Connected to Socket.IO server:", socket.id);
 });
