@@ -1,123 +1,203 @@
 "use client";
+
+import { FormEvent, useEffect, useRef, useState } from "react";
 import ChatMessage from "@/components/chat-message";
 import ChatForm from "@/components/forms/chat-form";
-import { FormEvent, useEffect, useState } from "react";
 import { socket } from "@/lib/socket-client";
+
+interface ChatMessageType {
+  sender: string;
+  message: string;
+  isSystem?: boolean;
+}
 
 const ServerPage = () => {
   const [username, setUsername] = useState("");
   const [room, setRoom] = useState("");
   const [joined, setJoined] = useState(false);
-  const [messages, setMessages] = useState<
-    { sender: string; message: string; isSystem?: boolean }[]
-  >([]);
+  const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
-  // Socket listeners
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to latest message
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
-    // Listen for user joined system message
-    socket.on("user_joined", (data: string) => {
+    scrollToBottom();
+  }, [messages]);
+
+  // ─── Socket Connection Status ───────────────────────────────────────
+  useEffect(() => {
+    const onConnect = () => {
+      setIsConnected(true);
+      setError(null);
+    };
+
+    const onDisconnect = () => {
+      setIsConnected(false);
+      setError("Disconnected from chat server");
+    };
+
+    const onConnectError = (err: Error) => {
+      setError(`Connection failed: ${err.message}`);
+      setIsConnected(false);
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+
+    // Set initial connection state
+    setIsConnected(socket.connected);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
+    };
+  }, []);
+
+  // ─── Chat Event Listeners ───────────────────────────────────────────
+  useEffect(() => {
+    socket.on("user_joined", (username: string) => {
       setMessages((prev) => [
         ...prev,
-        { sender: "system", message: data, isSystem: true },
+        { sender: "System", message: `${username} joined the room`, isSystem: true },
       ]);
     });
 
-    // Listen for chat messages from other users
     socket.on("message", (data: { sender: string; message: string }) => {
-      setMessages((prev) => [
-        ...prev,
-        { sender: data.sender, message: data.message },
-      ]);
+      setMessages((prev) => [...prev, { sender: data.sender, message: data.message }]);
     });
 
-    // Optional: listen for errors from server
     socket.on("error", (msg: string) => {
       setError(msg);
     });
 
-    // Cleanup on unmount
+    // Optional: room-specific system messages
+    socket.on("room_message", (msg: string) => {
+      setMessages((prev) => [...prev, { sender: "System", message: msg, isSystem: true }]);
+    });
+
     return () => {
       socket.off("user_joined");
       socket.off("message");
       socket.off("error");
+      socket.off("room_message");
     };
   }, []);
 
   const handleJoinRoom = (e: FormEvent) => {
-    e.preventDefault(); // ← Prevent page reload
+    e.preventDefault();
 
-    if (!username.trim() || !room.trim()) {
+    if (!isConnected) {
+      setError("Not connected to server. Trying to reconnect...");
+      return;
+    }
+
+    const trimmedUsername = username.trim();
+    const trimmedRoom = room.trim();
+
+    if (!trimmedUsername || !trimmedRoom) {
       setError("Please enter both username and room ID");
       return;
     }
 
     setError(null);
-    socket.emit("join-room", { room, username });
+    socket.emit("join-room", { room: trimmedRoom, username: trimmedUsername });
     setJoined(true);
   };
 
   const handleSendMessage = (message: string) => {
-    if (!message.trim() || !joined) return;
+    if (!message.trim() || !joined || !isConnected) return;
 
-    // Send to server
-    socket.emit("message", { room, message, sender: username });
+    const trimmedMessage = message.trim();
 
-    // Optimistically add your own message to the UI
-    setMessages((prev) => [...prev, { sender: username, message }]);
+    // We can send sender from client or let server assign it
+    socket.emit("message", {
+      room,
+      message: trimmedMessage,
+      // sender: username,   // ← optional, depends on your backend
+    });
+
+    // Optimistic UI update
+    setMessages((prev) => [...prev, { sender: username, message: trimmedMessage }]);
   };
 
   return (
-    <div className="flex mt-24 justify-center w-full px-4">
+    <div className="flex min-h-screen items-start justify-center pt-24 px-4">
+      {/* Connection Status Badge */}
+      <div className="fixed top-4 right-4 z-50">
+        <div
+          className={`px-4 py-2 rounded-full text-sm font-medium shadow-lg transition-colors ${isConnected
+            ? "bg-green-600 text-white"
+            : "bg-red-600 text-white animate-pulse"
+            }`}
+        >
+          {isConnected ? "🟢 Connected" : "🔴 Disconnected"}
+        </div>
+      </div>
+
       {!joined ? (
-        <div className="flex flex-col items-center justify-center w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-6">Join Chat Room</h2>
+        <div className="w-full max-w-md flex flex-col items-center">
+          <h2 className="text-3xl font-bold mb-8 text-center">Join Chat Room</h2>
 
           {error && (
-            <p className="text-red-600 bg-red-100 p-3 rounded mb-4 w-full text-center">
+            <div className="w-full p-4 mb-6 bg-red-100 border border-red-400 text-red-700 rounded-lg text-center">
               {error}
-            </p>
+            </div>
           )}
 
-          <form
-            onSubmit={handleJoinRoom}
-            className="flex flex-col gap-4 items-center w-full"
-          >
+          <form onSubmit={handleJoinRoom} className="w-full space-y-4">
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Your username"
               required
-              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               aria-label="Username"
             />
+
             <input
               value={room}
               onChange={(e) => setRoom(e.target.value)}
-              placeholder="Room ID (e.g. room-123)"
+              placeholder="Room ID (e.g. room-123 or friends-chat)"
               required
-              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
               aria-label="Room ID"
             />
+
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+              disabled={!isConnected}
+              className={`w-full py-3 rounded-lg font-medium text-white transition-colors ${isConnected
+                ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
+                : "bg-gray-400 cursor-not-allowed"
+                }`}
             >
-              Join Room
+              {isConnected ? "Join Room" : "Connecting..."}
             </button>
           </form>
         </div>
       ) : (
-        <div className="w-full max-w-3xl flex flex-col h-[80vh]">
-          <h1 className="text-2xl font-bold mb-4">
-            Room: <span className="text-blue-600">{room}</span>
-          </h1>
+        <div className="w-full max-w-3xl flex flex-col h-[80vh] sm:h-[85vh]">
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold">
+              Room: <span className="text-blue-600">{room}</span>
+            </h1>
+            <p className="text-sm text-gray-500">Logged in as: {username}</p>
+          </div>
 
-          <div className="flex-1 overflow-y-auto p-4 mb-4 bg-gray-100 dark:bg-gray-800 border rounded-lg shadow-inner">
+          <div className="flex-1 overflow-y-auto p-4 mb-4 bg-gray-50 dark:bg-gray-900 border rounded-xl shadow-inner">
             {messages.length === 0 ? (
-              <p className="text-gray-500 text-center py-10">
-                No messages yet. Say something!
-              </p>
+              <div className="h-full flex items-center justify-center text-gray-500">
+                No messages yet. Be the first to say hi!
+              </div>
             ) : (
               messages.map((msg, index) => (
                 <ChatMessage
@@ -128,6 +208,7 @@ const ServerPage = () => {
                 />
               ))
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <ChatForm onSendMessage={handleSendMessage} />

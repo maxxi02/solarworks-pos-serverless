@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Eye, EyeOff, Mail, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNotificationSound } from "@/lib/use-notification-sound";
 
@@ -24,9 +24,7 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
 
-  const [step, setStep] = React.useState<"login" | "verify-2fa" | "email-sent">(
-    "login",
-  );
+  const [step, setStep] = React.useState<"login" | "verify-2fa" | "email-sent">("login");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [otpCode, setOtpCode] = React.useState("");
@@ -34,51 +32,45 @@ export function LoginForm({
   const [showPassword, setShowPassword] = React.useState(false);
   const { playError, playSuccess } = useNotificationSound();
 
-  // Automatically send verification email
   const autoSendVerificationEmail = async (userEmail: string) => {
     try {
       await authClient.sendVerificationEmail({
         email: userEmail,
-        callbackURL: "/login?verified=true", // Redirect back to login after verification
+        callbackURL: "/login?verified=true",
       });
 
       toast.success("Verification email sent! Please check your inbox.");
       playSuccess();
       setStep("email-sent");
-    } catch (error: any) {
-      console.error("Auto-send verification error:", error);
+    } catch (err) {
+      // We log but don't use the error variable → use _err or just log directly
+      console.error("Auto-send verification error:", err);
       toast.error("Failed to send verification email. Please try again.");
       playError();
     }
   };
 
-  // Regular password login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { error } = await authClient.signIn.email(
-        {
-          email,
-          password,
-        },
+      await authClient.signIn.email(
+        { email, password },
         {
           async onSuccess(context) {
             if (context.data?.twoFactorRedirect) {
               setStep("verify-2fa");
               setLoading(false);
               return;
-            } else {
-              toast.success("Login successful! Setting up 2FA...");
-              playSuccess();
-              router.replace("/setup-2fa");
             }
+            toast.success("Login successful! Setting up 2FA...");
+            playSuccess();
+            router.replace("/setup-2fa");
           },
           async onError(context) {
             const errorMessage = context.error.message ?? "Login failed";
 
-            // Check if error is due to unverified email
             if (
               errorMessage.toLowerCase().includes("verify") ||
               errorMessage.toLowerCase().includes("not verified") ||
@@ -87,20 +79,26 @@ export function LoginForm({
             ) {
               toast.info("Email not verified. Sending verification link...");
               setLoading(false);
-
-              // Automatically send verification email
               await autoSendVerificationEmail(email);
               return;
             }
 
-            // Other errors
             toast.error(errorMessage);
             playError();
             setLoading(false);
           },
-        },
+        }
       );
-    } catch (err: any) {
+
+      // ────────────────────────────────────────
+      // Most common fix for: 'error' is assigned but never used
+      // Either:
+      //    1. Remove it if you don't need it (recommended here)
+      //    2. Or prefix with _   →   const { error: _error }
+      // ────────────────────────────────────────
+
+      // Option chosen: we already handle everything in onError → ignore top-level error
+    } catch (err: unknown) {
       console.error("Login error:", err);
       toast.error("An unexpected error occurred. Please try again.");
       playError();
@@ -108,7 +106,6 @@ export function LoginForm({
     }
   };
 
-  // Manually send verification email
   const handleSendVerificationEmail = async () => {
     if (!email) {
       toast.error("Please enter your email address");
@@ -119,25 +116,22 @@ export function LoginForm({
 
     try {
       await authClient.sendVerificationEmail({
-        email: email,
+        email,
         callbackURL: "/?verified=true",
       });
 
       toast.success("Verification email sent! Check your inbox.");
       playSuccess();
       setStep("email-sent");
-      setLoading(false);
-    } catch (error: any) {
-      toast.error(
-        error?.message ??
-          "Failed to send verification email. Please try again.",
-      );
+    } catch (err: unknown) {
+      console.error("Resend verification error:", err);
+      toast.error("Failed to send verification email. Please try again.");
       playError();
+    } finally {
       setLoading(false);
     }
   };
 
-  // 2FA verification
   const handleVerify2FA = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -148,9 +142,7 @@ export function LoginForm({
       });
 
       if (error) {
-        toast.error(
-          "Invalid code. Please check your authenticator app and try again.",
-        );
+        toast.error("Invalid code. Please check your authenticator app and try again.");
         playError();
         setOtpCode("");
         setLoading(false);
@@ -160,7 +152,8 @@ export function LoginForm({
       toast.success("2FA verified! Welcome back.");
       playSuccess();
       router.replace("/dashboard");
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("2FA verification failed:", err);
       toast.error("Verification failed. Please try again.");
       playError();
       setLoading(false);
