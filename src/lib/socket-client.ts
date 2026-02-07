@@ -10,7 +10,6 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelayMax: 5000,
   reconnectionAttempts: 5,
   transports: ["websocket", "polling"], // T
-  // ry websocket first, fallback to polling
 });
 
 // Optional: Add connection event listeners for debugging
