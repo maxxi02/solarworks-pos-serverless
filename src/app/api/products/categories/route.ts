@@ -32,17 +32,15 @@ export async function GET() {
   try {
     console.log('🔍 Fetching categories...');
     
-    // Get all categories
     const categories = await MONGODB.collection('categories')
       .find({})
       .sort({ createdAt: -1 })
       .toArray() as MongoDBCategory[];
     console.log(`📊 Found ${categories.length} categories`);
     
-    // Get all products
     const products = await MONGODB.collection('products').find({}).toArray() as MongoDBProduct[];
     console.log(`📊 Found ${products.length} products`);
-    // Combine categories with their products
+    
     const categoriesWithProducts = categories.map((category: MongoDBCategory) => ({
       _id: category._id.toString(),
       name: category.name,
@@ -61,6 +59,7 @@ export async function GET() {
       createdAt: category.createdAt,
       updatedAt: category.updatedAt
     }));
+    
     console.log('✅ Categories fetched successfully');
     return NextResponse.json(categoriesWithProducts);
     
@@ -87,14 +86,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
     const newCategory = {
       name: body.name.trim(),
       description: body.description?.trim() || '',
       createdAt: new Date(),
       updatedAt: new Date()
     };
+    
     const result = await MONGODB.collection('categories').insertOne(newCategory);
     console.log('✅ Category created:', result.insertedId);
+    
     return NextResponse.json({
       _id: result.insertedId.toString(),
       ...newCategory,
