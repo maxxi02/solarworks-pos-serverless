@@ -1,6 +1,6 @@
 import { InventoryItem } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.BETTER_AUTH_URL || 'http://localhost:3000/api';
 
 // Helper function to handle API responses
 async function handleResponse(response: Response) {
