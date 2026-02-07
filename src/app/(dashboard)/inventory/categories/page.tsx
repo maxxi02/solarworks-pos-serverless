@@ -131,17 +131,49 @@ export default function CategoriesPage() {
 
     try {
       setLoading(true);
+      setError(null);
+
+      console.log(`🗑️ Attempting to delete category ${id}`);
+
       const response = await fetch(`/api/products/categories/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Failed to delete category');
+      if (!response.ok) {
+        let errorMessage = `Delete failed: ${response.status}`;
+
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          // If not JSON → maybe empty body or HTML error page
+          console.warn("Response was not JSON:", await response.text());
+        }
+
+        if (response.status === 404) {
+          setError('Category not found. It may have already been deleted.');
+          // Auto-refresh list to sync UI with DB
+          await fetchCategories();
+          return;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('Delete success:', result);
+
+      // Update UI
+      setCategories(prev => prev.filter(c => c._id !== id));
+      if (selectedCategory?._id === id) {
+        setSelectedCategory(null);
+      }
+
+      alert(result.message || 'Category and its products deleted successfully');
       
-      setCategories(prev => prev.filter(cat => cat._id !== id));
-      if (selectedCategory?._id === id) setSelectedCategory(null);
-      alert('Category deleted successfully!');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete category');
+    } catch (err: any) {
+      console.error('❌ Delete failed:', err);
+      setError(err.message || 'Failed to delete category');
     } finally {
       setLoading(false);
     }
@@ -169,100 +201,101 @@ export default function CategoriesPage() {
   };
 
   // Product Functions
-const saveProduct = async () => {
-  if (!productForm.name || !productForm.price || !selectedCategory || productIngredients.length === 0) {
-    setError('Please fill all required fields');
-    return;
-  }
+  const saveProduct = async () => {
+    if (!productForm.name || !productForm.price || !selectedCategory || productIngredients.length === 0) {
+      setError('Please fill all required fields');
+      return;
+    }
 
-  const price = parseFloat(productForm.price);
-  if (isNaN(price) || price <= 0) {
-    setError('Please enter a valid price');
-    return;
-  }
+    const price = parseFloat(productForm.price);
+    if (isNaN(price) || price <= 0) {
+      setError('Please enter a valid price');
+      return;
+    }
 
-  const productData = {
-    name: productForm.name,
-    price: price,
-    description: productForm.description,
-    ingredients: productIngredients.map(ing => ({
-      name: ing.name,
-      quantity: ing.quantity,
-      unit: ing.unit
-    })),
-    available: productForm.available,
-    categoryId: selectedCategory._id
+    const productData = {
+      name: productForm.name,
+      price: price,
+      description: productForm.description,
+      ingredients: productIngredients.map(ing => ({
+        name: ing.name,
+        quantity: ing.quantity,
+        unit: ing.unit
+      })),
+      available: productForm.available,
+      categoryId: selectedCategory._id
+    };
+
+    console.log('📤 Sending product:', productData);
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const endpoint = '/api/products/add';
+      console.log('📡 Calling endpoint:', endpoint);
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(productData)
+      });
+
+      console.log('📥 Response status:', response.status);
+      
+      // Check if response is OK first
+      if (!response.ok) {
+        // Try to get error message from response
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          console.log('📥 Error response text:', errorText);
+          if (errorText) {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorData.message || errorText;
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+        }
+        throw new Error(errorMessage);
+      }
+      
+      // Parse successful response
+      const result = await response.json();
+      console.log('✅ Product saved:', result);
+      
+      // Refresh categories
+      await fetchCategories();
+      
+      // Update selected category
+      const updatedCategories = await fetch('/api/products/categories')
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch updated categories');
+          return res.json();
+        })
+        .catch(err => {
+          console.error('Error fetching updated categories:', err);
+          return categories; // Fallback to current categories
+        });
+      
+      const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
+      if (updatedCategory) {
+        setSelectedCategory(updatedCategory);
+      }
+      
+      resetProductForm();
+      alert('✅ Product added successfully!');
+      
+    } catch (err) {
+      console.error('❌ Error saving product:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save product');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  console.log('📤 Sending product:', productData);
-
-  try {
-    setLoading(true);
-    setError(null);
-    
-    const endpoint = '/api/products/add';
-    console.log('📡 Calling endpoint:', endpoint);
-    
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(productData)
-    });
-
-    console.log('📥 Response status:', response.status);
-    
-    // Check if response is OK first
-    if (!response.ok) {
-      // Try to get error message from response
-      let errorMessage = `Server error: ${response.status}`;
-      try {
-        const errorText = await response.text();
-        console.log('📥 Error response text:', errorText);
-        if (errorText) {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorData.message || errorText;
-        }
-      } catch (parseError) {
-        console.error('Failed to parse error response:', parseError);
-      }
-      throw new Error(errorMessage);
-    }
-    
-    // Parse successful response
-    const result = await response.json();
-    console.log('✅ Product saved:', result);
-    
-    // Refresh categories
-    await fetchCategories();
-    
-    // Update selected category
-    const updatedCategories = await fetch('/api/products/categories')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch updated categories');
-        return res.json();
-      })
-      .catch(err => {
-        console.error('Error fetching updated categories:', err);
-        return categories; // Fallback to current categories
-      });
-    
-    const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
-    if (updatedCategory) {
-      setSelectedCategory(updatedCategory);
-    }
-    
-    resetProductForm();
-    alert('✅ Product added successfully!');
-    
-  } catch (err) {
-    console.error('❌ Error saving product:', err);
-    setError(err instanceof Error ? err.message : 'Failed to save product');
-  } finally {
-    setLoading(false);
-  }
-};
   const editProduct = (product: Product) => {
     setEditingProduct(product);
     setProductForm({
@@ -274,21 +307,29 @@ const saveProduct = async () => {
     setProductIngredients([...product.ingredients]);
   };
 
+  // Add debug logging sa deleteProduct function
   const deleteProduct = async (productId: string) => {
     if (!selectedCategory || !confirm('Are you sure you want to delete this product?')) return;
 
     try {
       setLoading(true);
+      console.log(`🗑️ Deleting product ${productId} from category ${selectedCategory._id}...`);
+      
       const response = await fetch(`/api/products/categories/${selectedCategory._id}/products/${productId}`, {
         method: 'DELETE'
       });
 
-      if (!response.ok) throw new Error('Failed to delete product');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Delete product error response:', errorText);
+        throw new Error(`Failed to delete product: ${response.status}`);
+      }
       
       await fetchCategories();
       await updateSelectedCategory();
       alert('Product deleted successfully!');
     } catch (err) {
+      console.error('❌ Delete product error:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete product');
     } finally {
       setLoading(false);
@@ -328,17 +369,14 @@ const saveProduct = async () => {
     setIngredientForm({ name: '', quantity: '', unit: 'grams' });
   };
 
-  // Calculations
+  // Calculations - INALIS ANG AVG PRICE
   const calculateStats = () => {
     const totalProducts = categories.reduce((sum, cat) => sum + (cat.products?.length || 0), 0);
     const activeProducts = categories.reduce((sum, cat) => 
       sum + (cat.products?.filter(p => p.available).length || 0), 0
     );
-    const avgPrice = categories.flatMap(cat => cat.products || []).length > 0
-      ? Math.round(categories.flatMap(cat => cat.products || []).reduce((sum, p) => sum + p.price, 0) / totalProducts)
-      : 0;
-
-    return { totalProducts, activeProducts, avgPrice };
+    
+    return { totalProducts, activeProducts };
   };
 
   const stats = calculateStats();
@@ -369,8 +407,8 @@ const saveProduct = async () => {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Stats Cards - 3 COLUMNS NA LANG */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-card p-4 rounded-lg border">
             <p className="text-sm text-muted-foreground">Categories</p>
             <p className="text-xl font-bold">{categories.length}</p>
@@ -382,10 +420,6 @@ const saveProduct = async () => {
           <div className="bg-card p-4 rounded-lg border">
             <p className="text-sm text-muted-foreground">Active Products</p>
             <p className="text-xl font-bold">{stats.activeProducts}</p>
-          </div>
-          <div className="bg-card p-4 rounded-lg border">
-            <p className="text-sm text-muted-foreground">Avg. Price</p>
-            <p className="text-xl font-bold">{formatCurrency(stats.avgPrice)}</p>
           </div>
         </div>
       </div>
@@ -490,6 +524,7 @@ const saveProduct = async () => {
                               }}
                               disabled={loading}
                               className="text-red-500 hover:text-red-700"
+                              title="Delete category and all its products"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
