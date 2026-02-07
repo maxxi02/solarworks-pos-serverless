@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // Use environment variable for flexibility
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL!;
+const SOCKET_URL = process.env.PUBLIC_SOCKET_URL!;
 
 export const socket = io(SOCKET_URL, {
   autoConnect: true,
@@ -9,7 +9,8 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
   reconnectionAttempts: 5,
-  transports: ["websocket", "polling"], // Try websocket first, fallback to polling
+  transports: ["websocket", "polling"], // T
+  // ry websocket first, fallback to polling
 });
 
 // Optional: Add connection event listeners for debugging
