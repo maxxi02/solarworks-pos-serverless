@@ -3,13 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:socket": "cross-env NODE_OPTIONS=\"--loader ts-node/esm --trace-warnings --no-warnings\" ts-node server.mts",
     "dev": "next dev",
     "build": "next build",
-    "build:socket": "next build && tsc --project tsconfig.server.json",
     "start": "next start",
-    "start:socket": "cross-env NODE_ENV=production node dist/server.mjs",
-    "start:prod": "npm run start & npm run start:socket",
     "lint": "eslint"
   },
   "dependencies": {
