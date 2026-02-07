@@ -1,15 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image"; // ← Added for optimized images
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Package,
-  Users,
-  UserCog,
-  BarChart3,
-  Settings,
-  Receipt,
+
   FolderOpen,
   LogOut,
 } from "lucide-react";
@@ -25,319 +19,128 @@ import {
 import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
 
-// Import Better Auth hooks
-import { useSession, signOut, getCurrentUserRole, getUserInitials } from "@/lib/auth-client";
+// Import Better Auth client
+import { authClient } from "@/lib/auth-client";
+import { ExtendedUser } from "@/types/user.type";
+import { UserRole } from "@/types/role.type";
+import { adminNavigation, staffNavigation } from "@/constants/navigation";
 
-// Store/Team data
 const storeData = {
   name: "SolarWorks POS",
   logo: FolderOpen,
   plan: "Business",
 };
+interface SessionData {
+  user: ExtendedUser | null;
 
-// Navigation structures (keep the same arrays from your original code)
-const adminNavigation = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-    isActive: true,
-  },
-  {
-    title: "Sales",
-    url: "/sales",
-    icon: ShoppingCart,
-    items: [
-      {
-        title: "All Transactions",
-        url: "/sales/all-transactions",
-      },
-      {
-        title: "Sales Analytics",
-        url: "/sales/sales-analytics",
-      },
-      {
-        title: "Refunds & Returns",
-        url: "/sales/refund-and-return",
-      },
-    ],
-  },
-  {
-    title: "Inventory",
-    url: "/inventory",
-    icon: Package,
-    items: [
-      {
-        title: "Products",
-        url: "/inventory/product",
-      },
-      {
-        title: "Add Product",
-        url: "/inventory/addproduct",
-      },
-      {
-        title: "Categories",
-        url: "/inventory/categories",
-      },
-      {
-        title: "Stock Alerts",
-        url: "/inventory/stockalert",
-      },
-      {
-        title: "Reports",
-        url: "/inventory/reports",
-      },
-    ],
-  },
-  {
-    title: "Customers",
-    url: "/customers",
-    icon: Users,
-    items: [
-      {
-        title: "Customer List",
-        url: "/customer/customer-list",
-      },
-      {
-        title: "Analytics",
-        url: "/customer/analytics",
-      },
-    ],
-  },
-  {
-    title: "Staff Management",
-    url: "/staff",
-    icon: UserCog,
-    items: [
-      {
-        title: "Staff List",
-        url: "/staff-management/staff-list",
-      },
-      {
-        title: "Add Staff",
-        url: "/staff-management/add-staff",
-      },
-      {
-        title: "Access Control",
-        url: "/staff-management/access-control",
-      },
-    ],
-  },
-  {
-    title: "Reports & Analytics",
-    url: "/reports",
-    icon: BarChart3,
-    items: [
-      {
-        title: "Financial Reports",
-        url: "/reports-and-analytics/financial-reports",
-      },
-      {
-        title: "inventory-reports",
-        url: "/reports-and-analytics/inventory-reports",
-      },
-      {
-        title: "Customer Reports",
-        url: "/reports-and-analytics/custom-reports",
-      },
-    ],
-  },
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
-    items: [
-      {
-        title: "Store Settings",
-        url: "/settings/store-setting",
-      },
-      {
-        title: "Receipt Settings",
-        url: "/settings/receipt-setting",
-      },
-      {
-        title: "Payment Methods",
-        url: "/settings/payments-methods",
-      },
+}
 
-      {
-        title: "Profile",
-        url: "/settings/profile",
-      },
-    ],
-  },
-];
+const getUserRole = (user: ExtendedUser | null | undefined): UserRole => {
+  return user?.role === "admin" ? "admin" : "user"; // fallback to "user"
+};
 
-const staffNavigation = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-    isActive: true,
-  },
-  {
-    title: "Point of Sale",
-    url: "/pos",
-    icon: ShoppingCart,
-  },
-  {
-    title: "My Sales",
-    url: "/my-sales",
-    icon: Receipt,
-    items: [
-      {
-        title: "Transaction History",
-        url: "/my-sales/history",
-      },
-      {
-        title: "My Performance",
-        url: "/my-sales/performance",
-      },
-    ],
-  },
-  {
-    title: "Inventory",
-    url: "/inventory",
-    icon: Package,
-    items: [
-      {
-        title: "View Products",
-        url: "/src/inventory/product",
-      },
-      {
-        title: "Stock Levels",
-        url: "/inventory/stock",
-      },
-    ],
-  },
-  {
-    title: "Profile",
-    url: "/profile",
-    icon: Settings,
-    items: [
-      {
-        title: "Personal Info",
-        url: "/profile/info",
-      },
-      {
-        title: "Change Password",
-        url: "/profile/password",
-      },
-      {
-        title: "Activity Log",
-        url: "/profile/activity",
-      },
-    ],
-  },
-];
+const getUserInitials = (name?: string | null): string => {
+  if (!name) return "U";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = React.useState<{
-    name: string;
-    email: string;
-    role: 'admin' | 'staff';
-    initials: string;
-    avatar?: string;
-  } | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
-
-  // Use Better Auth's useSession hook - this is the main way to get user data
-  const { data: session, isPending } = useSession();
-
-  // Determine which navigation to show based on role
-  const getUserRole = () => {
-    if (!session?.user) return "staff";
-    return getCurrentUserRole(session.user);
+  const { data: session, isPending } = authClient.useSession() as {
+    data: SessionData | null;
+    isPending: boolean;
   };
 
-  const navigationItems = getUserRole() === 'admin' ? adminNavigation : staffNavigation;
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
-  // Logout function using Better Auth's signOut
+  const user = session?.user;
+  const userRole = getUserRole(user);
+
+  // Select navigation based on role
+  const navigationItems = userRole === "admin" ? adminNavigation : staffNavigation;
+
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     try {
-      setIsLoggingOut(true);
-      
-      // Sign out using Better Auth - this will clear the session cookie
-      await signOut({
+      await authClient.signOut({
         fetchOptions: {
-          onSuccess: () => {
-            console.log("Logged out successfully");
-            // Redirect to home/login page
-            router.push("/");
-          },
-          onError: (error) => {
-            console.error("Logout error:", error);
-            // Even if there's an error, redirect to home
-            router.push("/");
-          },
+          onSuccess: () => router.push("/"),
+          onError: () => router.push("/"),
         },
       });
     } catch (error) {
-      console.error("Logout error:", error);
-      // Redirect to home even on error
+      console.error("Logout failed:", error);
       router.push("/");
     } finally {
       setIsLoggingOut(false);
     }
   };
 
-  // User profile component for sidebar footer
+  // ──────────────────────────────────────────────
+  // User Profile Footer
+  // ──────────────────────────────────────────────
   const UserProfileFooter = () => {
     if (isPending) {
       return (
         <div className="flex w-full items-center gap-3 rounded-lg p-2">
-          <div className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
-          <div className="flex flex-col flex-1 space-y-2">
-            <div className="h-4 w-3/4 bg-muted rounded animate-pulse"></div>
-            <div className="h-3 w-full bg-muted rounded animate-pulse"></div>
+          <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+          <div className="flex flex-1 flex-col space-y-2">
+            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-full animate-pulse rounded bg-muted" />
           </div>
         </div>
       );
     }
 
-    if (!session?.user) {
-      return null;
-    }
+    if (!user) return null;
 
-    const user = session.user;
-    const userRole = getCurrentUserRole(user);
-    const userInitials = getUserInitials(user.name || undefined);
+    const initials = getUserInitials(user.name);
 
     return (
-      <div className="flex w-full items-center gap-3 rounded-lg p-2 hover:bg-accent transition-colors">
+      <div className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent">
         {user.image ? (
-          <img 
-            src={user.image} 
-            alt={user.name || "User"}
-            className="h-8 w-8 rounded-full object-cover"
-          />
+          <div className="relative h-8 w-8 shrink-0">
+            <Image
+              src={user.image}
+              alt={user.name || "User avatar"}
+              fill
+              className="rounded-full object-cover"
+              sizes="32px"
+              priority // optional: if this is always above the fold
+            />
+          </div>
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-            {userInitials}
+            {initials}
           </div>
         )}
-        <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-sm font-medium truncate">
-            {user.name || user.email?.split('@')[0] || "User"}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium">
+            {user.name || user.email?.split("@")[0] || "User"}
           </span>
-          <span className="text-xs text-muted-foreground truncate">
+          <span className="truncate text-xs text-muted-foreground">
             {user.email || ""}
           </span>
-          <span className="text-xs text-primary capitalize">
-            {userRole === 'admin' ? 'Administrator' : 'Staff'}
+          <span className="capitalize text-xs text-primary">
+            {userRole === "admin" ? "Administrator" : "Staff"}
           </span>
         </div>
+
         <button
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
           title="Logout"
           aria-label="Logout"
         >
           {isLoggingOut ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
           ) : (
             <LogOut className="h-4 w-4" />
           )}
@@ -346,7 +149,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
   };
 
-  // Loading state
+  // ──────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────
   if (isPending) {
     return (
       <Sidebar collapsible="icon" {...props}>
@@ -356,10 +161,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarContent>
           <div className="space-y-2 px-2">
             {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-8 rounded-md bg-muted animate-pulse"
-              ></div>
+              <div key={i} className="h-8 animate-pulse rounded-md bg-muted" />
             ))}
           </div>
         </SidebarContent>
@@ -371,10 +173,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     );
   }
 
-  // If no session but not loading, don't show sidebar
-  if (!session) {
-    return null;
-  }
+  if (!session?.user) return null;
 
   return (
     <Sidebar collapsible="icon" {...props}>

@@ -6,6 +6,7 @@ import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { admin, twoFactor } from "better-auth/plugins";
 import { sendVerificationEmail } from "./email";
+import { nextCookies } from "better-auth/next-js";
 
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
@@ -15,6 +16,14 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+  },
+  user: {
+    additionalFields: {
+      phoneNumber: {
+        type: "string",
+        required: false,
+      },
+    },
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -49,7 +58,19 @@ export const auth = betterAuth({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,
     }),
+    nextCookies(),
   ],
 });
+
+export type ExtendedUser = typeof auth.$Infer.Session.user & {
+  role?: string;
+  phoneNumber?: string;
+  twoFactorEnabled?: boolean;
+};
+
+export type ExtendedSession = {
+  user: ExtendedUser;
+  session: typeof auth.$Infer.Session.session;
+};
 
 export type Session = typeof auth.$Infer.Session;

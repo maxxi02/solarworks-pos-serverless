@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Eye, EyeOff, Mail, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNotificationSound } from "@/lib/use-notification-sound";
 
@@ -130,7 +130,7 @@ export function LoginForm({
     } catch (error: any) {
       toast.error(
         error?.message ??
-          "Failed to send verification email. Please try again.",
+        "Failed to send verification email. Please try again.",
       );
       playError();
       setLoading(false);
