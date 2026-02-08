@@ -4,10 +4,10 @@ dns.setServers(["8.8.8.8", "1.1.1.1"]);
 import { MONGODB } from "@/config/db";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
-import { admin, twoFactor } from "better-auth/plugins";
+import { admin as adminPlugin, twoFactor } from "better-auth/plugins";
 import { sendVerificationEmail } from "./email";
 import { nextCookies } from "better-auth/next-js";
-
+import { ac, staff, manager, admin } from "./permissions";
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
@@ -22,6 +22,12 @@ export const auth = betterAuth({
       phoneNumber: {
         type: "string",
         required: false,
+      },
+      role: {
+        type: "string",
+        required: true, // or defaultValue: "staff"
+        input: false,
+        defaultValue: "staff", // default to "staff" if not provided
       },
     },
   },
@@ -53,11 +59,12 @@ export const auth = betterAuth({
     },
   },
   plugins: [
-    admin(),
+    adminPlugin({ ac, roles: { staff, manager, admin } }),
     twoFactor({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,
     }),
+
     nextCookies(),
   ],
 });
