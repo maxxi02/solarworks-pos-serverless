@@ -38,9 +38,7 @@ export const PATHS = {
     CUSTOMER_ANALYTICS: "/customer/analytics",
 
     STAFF: "/staff",
-    STAFF_LIST: "/staff-management/staff-list",
-    STAFF_ADD: "/staff-management/add-staff",
-    STAFF_ACCESS_CONTROL: "/staff-management/access-control",
+    STAFF_ACCESS_CONTROL: "/staff-management",
 
     REPORTS: "/reports",
     REPORTS_FINANCIAL: "/reports-and-analytics/financial-reports",
@@ -122,9 +120,7 @@ export const adminNavigation: NavItem[] = [
     url: PATHS.ADMIN.STAFF,
     icon: UserCog,
     items: [
-      { title: "Staff List", url: PATHS.ADMIN.STAFF_LIST },
-      { title: "Add Staff", url: PATHS.ADMIN.STAFF_ADD },
-      { title: "Access Control", url: PATHS.ADMIN.STAFF_ACCESS_CONTROL },
+      { title: "Manage Staff", url: PATHS.ADMIN.STAFF_ACCESS_CONTROL },
     ],
   },
   {
