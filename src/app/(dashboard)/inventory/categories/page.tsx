@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Package, Plus, X, Edit2, Trash2, Check, Loader2 } from 'lucide-react';
+import { Package, Plus, X, Edit2, Trash2,Utensils, Coffee } from 'lucide-react';
 
-// Types
 interface Ingredient {
   name: string;
   quantity: string;
@@ -18,7 +17,6 @@ interface Product {
   ingredients: Ingredient[];
   available: boolean;
   categoryId?: string;
-  createdAt?: string;
 }
 
 interface Category {
@@ -26,22 +24,25 @@ interface Category {
   name: string;
   description: string;
   products: Product[];
-  createdAt?: string;
-  updatedAt?: string;
+  menuType: 'food' | 'drink';
 }
 
 const UNITS = ['grams', 'kg', 'ml', 'liters', 'pieces', 'cups', 'tbsp', 'tsp', 'oz'];
+const DRINK_UNITS = ['ml', 'liters', 'cups', 'oz'];
 
 export default function CategoriesPage() {
-  // States
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMenu, setSelectedMenu] = useState<'food' | 'drink'>('food');
   
-  // Form States
-  const [newCategory, setNewCategory] = useState({ name: '', description: '' });
+  const [categoryForm, setCategoryForm] = useState({ 
+    name: '', 
+    description: '', 
+    menuType: 'food' as 'food' | 'drink' 
+  });
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [productForm, setProductForm] = useState({ 
     name: '', price: '', description: '', available: true 
@@ -51,25 +52,12 @@ export default function CategoriesPage() {
   });
   const [productIngredients, setProductIngredients] = useState<Ingredient[]>([]);
 
-  // Fetch categories on mount
+  const filteredCategories = categories.filter(cat => cat.menuType === selectedMenu);
+
   useEffect(() => {
     fetchCategories();
   }, []);
 
-  // Utility Functions
-  const formatCurrency = (amount: number) => 
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-PH', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  // API Functions
   const fetchCategories = async () => {
     try {
       setLoading(true);
@@ -84,21 +72,8 @@ export default function CategoriesPage() {
     }
   };
 
-  const updateSelectedCategory = async () => {
-    if (!selectedCategory?._id) return;
-    
-    try {
-      const updatedCategories = await fetch('/api/products/categories').then(res => res.json());
-      const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
-      setSelectedCategory(updatedCategory);
-    } catch (err) {
-      console.error('Failed to update selected category:', err);
-    }
-  };
-
-  // Category Functions
   const addCategory = async () => {
-    if (!newCategory.name.trim()) {
+    if (!categoryForm.name.trim()) {
       setError('Category name is required');
       return;
     }
@@ -108,16 +83,17 @@ export default function CategoriesPage() {
       const response = await fetch('/api/products/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCategory)
+        body: JSON.stringify(categoryForm)
       });
 
       if (!response.ok) throw new Error('Failed to add category');
       
       const category = await response.json();
       setCategories(prev => [...prev, category]);
-      setNewCategory({ name: '', description: '' });
+      setCategoryForm({ name: '', description: '', menuType: 'food' });
       setShowCategoryForm(false);
       setSelectedCategory(category);
+      setSelectedMenu(category.menuType);
       alert('Category added successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add category');
@@ -131,76 +107,34 @@ export default function CategoriesPage() {
 
     try {
       setLoading(true);
-      setError(null);
-
-      console.log(`🗑️ Attempting to delete category ${id}`);
-
-      const response = await fetch(`/api/products/categories/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        let errorMessage = `Delete failed: ${response.status}`;
-
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch (e) {
-          // If not JSON → maybe empty body or HTML error page
-          console.warn("Response was not JSON:", await response.text());
-        }
-
-        if (response.status === 404) {
-          setError('Category not found. It may have already been deleted.');
-          // Auto-refresh list to sync UI with DB
-          await fetchCategories();
-          return;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      console.log('Delete success:', result);
-
-      // Update UI
-      setCategories(prev => prev.filter(c => c._id !== id));
-      if (selectedCategory?._id === id) {
-        setSelectedCategory(null);
-      }
-
-      alert(result.message || 'Category and its products deleted successfully');
+      const response = await fetch(`/api/products/categories/${id}`, { method: 'DELETE' });
       
-    } catch (err: any) {
-      console.error('❌ Delete failed:', err);
-      setError(err.message || 'Failed to delete category');
+      if (!response.ok) throw new Error('Failed to delete category');
+      
+      setCategories(prev => prev.filter(c => c._id !== id));
+      if (selectedCategory?._id === id) setSelectedCategory(null);
+      alert('Category deleted successfully');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete category');
     } finally {
       setLoading(false);
     }
   };
 
-  // Ingredient Functions
   const addIngredient = () => {
     if (!ingredientForm.name.trim() || !ingredientForm.quantity.trim()) {
       setError('Ingredient name and quantity are required');
       return;
     }
 
-    const newIng: Ingredient = {
-      name: ingredientForm.name,
-      quantity: ingredientForm.quantity,
-      unit: ingredientForm.unit
-    };
-    
-    setProductIngredients(prev => [...prev, newIng]);
-    setIngredientForm({ name: '', quantity: '', unit: 'grams' });
+    setProductIngredients(prev => [...prev, ingredientForm]);
+    setIngredientForm({ 
+      name: '', 
+      quantity: '', 
+      unit: 'grams' 
+    });
   };
 
-  const removeIngredient = (index: number) => {
-    setProductIngredients(prev => prev.filter((_, i) => i !== index));
-  };
-
-  // Product Functions
   const saveProduct = async () => {
     if (!productForm.name || !productForm.price || !selectedCategory || productIngredients.length === 0) {
       setError('Please fill all required fields');
@@ -214,122 +148,46 @@ export default function CategoriesPage() {
     }
 
     const productData = {
-      name: productForm.name,
-      price: price,
-      description: productForm.description,
-      ingredients: productIngredients.map(ing => ({
-        name: ing.name,
-        quantity: ing.quantity,
-        unit: ing.unit
-      })),
-      available: productForm.available,
+      ...productForm,
+      price,
+      ingredients: productIngredients,
       categoryId: selectedCategory._id
     };
 
-    console.log('📤 Sending product:', productData);
-
     try {
       setLoading(true);
-      setError(null);
-      
-      const endpoint = '/api/products/add';
-      console.log('📡 Calling endpoint:', endpoint);
-      
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/products/add', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData)
       });
 
-      console.log('📥 Response status:', response.status);
+      if (!response.ok) throw new Error('Failed to save product');
       
-      // Check if response is OK first
-      if (!response.ok) {
-        // Try to get error message from response
-        let errorMessage = `Server error: ${response.status}`;
-        try {
-          const errorText = await response.text();
-          console.log('📥 Error response text:', errorText);
-          if (errorText) {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.error || errorData.message || errorText;
-          }
-        } catch (parseError) {
-          console.error('Failed to parse error response:', parseError);
-        }
-        throw new Error(errorMessage);
-      }
-      
-      // Parse successful response
-      const result = await response.json();
-      console.log('✅ Product saved:', result);
-      
-      // Refresh categories
       await fetchCategories();
-      
-      // Update selected category
-      const updatedCategories = await fetch('/api/products/categories')
-        .then(res => {
-          if (!res.ok) throw new Error('Failed to fetch updated categories');
-          return res.json();
-        })
-        .catch(err => {
-          console.error('Error fetching updated categories:', err);
-          return categories; // Fallback to current categories
-        });
-      
-      const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
-      if (updatedCategory) {
-        setSelectedCategory(updatedCategory);
-      }
-      
       resetProductForm();
-      alert('✅ Product added successfully!');
-      
+      alert('Product added successfully!');
     } catch (err) {
-      console.error('❌ Error saving product:', err);
       setError(err instanceof Error ? err.message : 'Failed to save product');
     } finally {
       setLoading(false);
     }
   };
 
-  const editProduct = (product: Product) => {
-    setEditingProduct(product);
-    setProductForm({
-      name: product.name,
-      price: product.price.toString(),
-      description: product.description,
-      available: product.available
-    });
-    setProductIngredients([...product.ingredients]);
-  };
-
-  // Add debug logging sa deleteProduct function
   const deleteProduct = async (productId: string) => {
     if (!selectedCategory || !confirm('Are you sure you want to delete this product?')) return;
 
     try {
       setLoading(true);
-      console.log(`🗑️ Deleting product ${productId} from category ${selectedCategory._id}...`);
-      
       const response = await fetch(`/api/products/categories/${selectedCategory._id}/products/${productId}`, {
         method: 'DELETE'
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Delete product error response:', errorText);
-        throw new Error(`Failed to delete product: ${response.status}`);
-      }
+      if (!response.ok) throw new Error('Failed to delete product');
       
       await fetchCategories();
-      await updateSelectedCategory();
       alert('Product deleted successfully!');
     } catch (err) {
-      console.error('❌ Delete product error:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete product');
     } finally {
       setLoading(false);
@@ -353,13 +211,23 @@ export default function CategoriesPage() {
       if (!response.ok) throw new Error('Failed to update product');
       
       await fetchCategories();
-      await updateSelectedCategory();
       alert(`Product ${!product.available ? 'activated' : 'deactivated'} successfully!`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update product');
     } finally {
       setLoading(false);
     }
+  };
+
+  const editProduct = (product: Product) => {
+    setEditingProduct(product);
+    setProductForm({
+      name: product.name,
+      price: product.price.toString(),
+      description: product.description,
+      available: product.available
+    });
+    setProductIngredients([...product.ingredients]);
   };
 
   const resetProductForm = () => {
@@ -369,53 +237,89 @@ export default function CategoriesPage() {
     setIngredientForm({ name: '', quantity: '', unit: 'grams' });
   };
 
-  // Calculations - INALIS ANG AVG PRICE
-  const calculateStats = () => {
-    const totalProducts = categories.reduce((sum, cat) => sum + (cat.products?.length || 0), 0);
-    const activeProducts = categories.reduce((sum, cat) => 
-      sum + (cat.products?.filter(p => p.available).length || 0), 0
-    );
+  const getStats = () => {
+    const foodCategories = categories.filter(c => c.menuType === 'food');
+    const drinkCategories = categories.filter(c => c.menuType === 'drink');
     
-    return { totalProducts, activeProducts };
+    const currentCategories = selectedMenu === 'food' ? foodCategories : drinkCategories;
+    
+    return {
+      categories: currentCategories.length,
+      products: currentCategories.reduce((sum, cat) => sum + (cat.products?.length || 0), 0),
+      activeProducts: currentCategories.reduce((sum, cat) => 
+        sum + (cat.products?.filter(p => p.available).length || 0), 0
+      )
+    };
   };
 
-  const stats = calculateStats();
+  const stats = getStats();
 
   return (
     <div className="min-h-screen p-4 md:p-8">
-      {/* Header */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Menu Management</h1>
-            <p className="text-muted-foreground mt-1">Manage categories and products</p>
+            <p className="text-muted-foreground">Manage food and drink menus</p>
           </div>
           <button 
             onClick={() => setShowCategoryForm(true)}
             disabled={loading}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Add Category
+            <Plus className="h-4 w-4" /> Add Category
           </button>
         </div>
 
-        {/* Error Message */}
+        {/* Menu Selector - Food and Drink only */}
+        <div className="flex space-x-4 mb-6">
+          <button
+            onClick={() => setSelectedMenu('food')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-all ${
+              selectedMenu === 'food' 
+                ? 'bg-green-600 text-white border-2 border-green-600' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
+            }`}
+          >
+            <Utensils className="h-5 w-5" />
+            Food Menu
+            <span className="ml-2 px-2 py-1 text-xs bg-white text-green-800 rounded">
+              {categories.filter(c => c.menuType === 'food').length}
+            </span>
+          </button>
+          <button
+            onClick={() => setSelectedMenu('drink')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-all ${
+              selectedMenu === 'drink' 
+                ? 'bg-blue-600 text-white border-2 border-blue-600' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
+            }`}
+          >
+            <Coffee className="h-5 w-5" />
+            Drink Menu
+            <span className="ml-2 px-2 py-1 text-xs bg-white text-blue-800 rounded">
+              {categories.filter(c => c.menuType === 'drink').length}
+            </span>
+          </button>
+        </div>
+
         {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded border border-red-300">
             {error}
           </div>
         )}
 
-        {/* Stats Cards - 3 COLUMNS NA LANG */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-card p-4 rounded-lg border">
-            <p className="text-sm text-muted-foreground">Categories</p>
-            <p className="text-xl font-bold">{categories.length}</p>
+            <p className="text-sm text-muted-foreground">
+              {selectedMenu === 'food' ? 'Food' : 'Drink'} Categories
+            </p>
+            <p className="text-xl font-bold">{stats.categories}</p>
           </div>
           <div className="bg-card p-4 rounded-lg border">
             <p className="text-sm text-muted-foreground">Total Products</p>
-            <p className="text-xl font-bold">{stats.totalProducts}</p>
+            <p className="text-xl font-bold">{stats.products}</p>
           </div>
           <div className="bg-card p-4 rounded-lg border">
             <p className="text-sm text-muted-foreground">Active Products</p>
@@ -424,48 +328,70 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      {/* Main Content - Table Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Categories Table - Left Column */}
+        {/* Categories List */}
         <div className="lg:col-span-2">
           <div className="bg-card rounded-lg border p-6">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h3 className="font-semibold">Categories</h3>
-                <p className="text-sm text-muted-foreground mt-1">Click on a category to view its products</p>
+                <h3 className="font-semibold">
+                  {selectedMenu === 'food' ? 'Food' : 'Drink'} Categories
+                </h3>
+                <p className="text-sm text-muted-foreground">Click on a category to view its products</p>
               </div>
             </div>
-            
-            {/* Add Category Form */}
+
             {showCategoryForm && (
               <div className="mb-6 p-4 border rounded bg-gray-50">
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="font-medium">New Category</h4>
-                  <button onClick={() => setShowCategoryForm(false)} disabled={loading}>
-                    <X className="h-5 w-5" />
+                  <button onClick={() => setShowCategoryForm(false)}><X className="h-5 w-5" /></button>
+                </div>
+                
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setCategoryForm({...categoryForm, menuType: 'food'})}
+                    className={`flex-1 px-3 py-2 rounded border flex items-center justify-center gap-2 ${
+                      categoryForm.menuType === 'food' 
+                        ? 'bg-green-100 text-green-800 border-green-500' 
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    <Utensils className="h-4 w-4" /> Food
+                  </button>
+                  <button
+                    onClick={() => setCategoryForm({...categoryForm, menuType: 'drink'})}
+                    className={`flex-1 px-3 py-2 rounded border flex items-center justify-center gap-2 ${
+                      categoryForm.menuType === 'drink' 
+                        ? 'bg-blue-100 text-blue-800 border-blue-500' 
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    <Coffee className="h-4 w-4" /> Drink
                   </button>
                 </div>
+
                 <div className="space-y-3">
                   <input
                     type="text"
                     placeholder="Category name"
-                    value={newCategory.name}
-                    onChange={(e) => setNewCategory({...newCategory, name: e.target.value})}
+                    value={categoryForm.name}
+                    onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
                     className="w-full px-3 py-2 border rounded"
                     disabled={loading}
                   />
                   <input
                     type="text"
                     placeholder="Description (optional)"
-                    value={newCategory.description}
-                    onChange={(e) => setNewCategory({...newCategory, description: e.target.value})}
+                    value={categoryForm.description}
+                    onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
                     className="w-full px-3 py-2 border rounded"
                     disabled={loading}
                   />
                   <button 
                     onClick={addCategory} 
                     disabled={loading}
-                    className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90 disabled:opacity-50"
+                    className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90"
                   >
                     {loading ? 'Adding...' : 'Add Category'}
                   </button>
@@ -473,373 +399,310 @@ export default function CategoriesPage() {
               </div>
             )}
 
-            {/* Loading State */}
-            {loading && categories.length === 0 ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              /* Categories Table */
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">Category Name</th>
-                      <th className="text-left py-3 px-4 font-medium">Products</th>
-                      <th className="text-left py-3 px-4 font-medium">Created</th>
-                      <th className="text-left py-3 px-4 font-medium">Actions</th>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4">Category</th>
+                    <th className="text-left py-3 px-4">Products</th>
+                    <th className="text-left py-3 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCategories.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center text-gray-500">
+                        <Package className="h-12 w-12 mx-auto mb-3" />
+                        <p>No {selectedMenu} categories yet</p>
+                        <button 
+                          onClick={() => setShowCategoryForm(true)}
+                          className="mt-2 flex items-center gap-1 mx-auto text-primary hover:underline"
+                        >
+                          <Plus className="h-3 w-3" /> Add {selectedMenu === 'food' ? 'Food' : 'Drink'} Category
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {categories.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-gray-500">
-                          <Package className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                          <p>No categories yet. Add your first category!</p>
+                  ) : (
+                    filteredCategories.map((category) => (
+                      <tr 
+                        key={category._id} 
+                        className={`border-b hover:bg-gray-50 cursor-pointer ${selectedCategory?._id === category._id ? 'bg-primary/10' : ''}`}
+                        onClick={() => setSelectedCategory(category)}
+                      >
+                        <td className="py-4 px-4">
+                          <div className="font-medium">{category.name}</div>
+                          {category.description && (
+                            <div className="text-sm text-gray-500">{category.description}</div>
+                          )}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
+                            {category.products?.length || 0}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteCategory(category._id!);
+                            }}
+                            disabled={loading}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
-                    ) : (
-                      categories.map((category) => (
-                        <tr 
-                          key={category._id} 
-                          className={`border-b hover:bg-gray-50 cursor-pointer ${selectedCategory?._id === category._id ? 'bg-primary/10' : ''}`}
-                          onClick={() => setSelectedCategory(category)}
-                        >
-                          <td className="py-4 px-4">
-                            <div className="font-medium">{category.name}</div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
-                              {category.products?.length || 0}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 text-sm text-gray-500">
-                            {formatDate(category.createdAt)}
-                          </td>
-                          <td className="py-4 px-4">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteCategory(category._id!);
-                              }}
-                              disabled={loading}
-                              className="text-red-500 hover:text-red-700"
-                              title="Delete category and all its products"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Products Table */}
+            {selectedCategory && (
+              <div className="mt-6 bg-card rounded-lg border p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{selectedCategory.name} - Products</h3>
+                      <span className={`px-2 py-1 text-xs rounded ${
+                        selectedCategory.menuType === 'food' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {selectedCategory.menuType === 'food' ? 'Food' : 'Drink'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedCategory.products?.length || 0} product(s)
+                    </p>
+                  </div>
+                  <button onClick={() => setSelectedCategory(null)}><X className="h-5 w-5" /></button>
+                </div>
+
+                {selectedCategory.products?.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Package className="h-12 w-12 mx-auto mb-3" />
+                    <p className="text-gray-500">No products in this category</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-3 px-4">Product</th>
+                          <th className="text-left py-3 px-4">Price</th>
+                          <th className="text-left py-3 px-4">Status</th>
+                          <th className="text-left py-3 px-4">Actions</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {selectedCategory.products?.map((product) => (
+                          <tr key={product._id} className="border-b hover:bg-gray-50">
+                            <td className="py-4 px-4">
+                              <div>
+                                <div className="font-medium">{product.name}</div>
+                                <div className="text-xs text-gray-500">{product.description}</div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              ₱{product.price.toLocaleString()}
+                            </td>
+                            <td className="py-4 px-4">
+                              <button
+                                onClick={() => toggleProductAvailability(product._id!)}
+                                disabled={loading}
+                                className={`px-2.5 py-0.5 rounded-full text-xs ${
+                                  product.available 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}
+                              >
+                                {product.available ? 'Active' : 'Inactive'}
+                              </button>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => editProduct(product)}
+                                  disabled={loading}
+                                  className="text-blue-500 hover:text-blue-700"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => deleteProduct(product._id!)}
+                                  disabled={loading}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
-
-          {/* Products Table for Selected Category */}
-          {selectedCategory && (
-            <div className="mt-6 bg-card rounded-lg border p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h3 className="font-semibold">{selectedCategory.name} - Products</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {selectedCategory.products?.length || 0} product(s) in this category
-                  </p>
-                </div>
-                <button 
-                  onClick={() => setSelectedCategory(null)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {selectedCategory.products?.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                  <p className="text-gray-500">No products in this category. Add your first product!</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">Product Name</th>
-                        <th className="text-left py-3 px-4 font-medium">Price</th>
-                        <th className="text-left py-3 px-4 font-medium">Status</th>
-                        <th className="text-left py-3 px-4 font-medium">Ingredients</th>
-                        <th className="text-left py-3 px-4 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedCategory.products?.map((product) => (
-                        <tr key={product._id} className="border-b hover:bg-gray-50">
-                          <td className="py-4 px-4">
-                            <div>
-                              <div className="font-medium">{product.name}</div>
-                              {product.description && (
-                                <div className="text-xs text-gray-500 mt-1">{product.description}</div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            {formatCurrency(product.price)}
-                          </td>
-                          <td className="py-4 px-4">
-                            <button
-                              onClick={() => toggleProductAvailability(product._id!)}
-                              disabled={loading}
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                product.available 
-                                  ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                                  : 'bg-red-100 text-red-800 hover:bg-red-200'
-                              }`}
-                            >
-                              <Check className={`h-3 w-3 mr-1 ${product.available ? 'text-green-500' : 'text-red-500'}`} />
-                              {product.available ? 'Active' : 'Inactive'}
-                            </button>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="text-xs text-gray-600">
-                              {product.ingredients.length > 0 ? (
-                                <div className="max-h-20 overflow-y-auto">
-                                  {product.ingredients.map((ing, idx) => (
-                                    <div key={idx} className="mb-1">
-                                      • {ing.name} ({ing.quantity} {ing.unit})
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">No ingredients</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => editProduct(product)}
-                                disabled={loading}
-                                className="text-blue-500 hover:text-blue-700"
-                                title="Edit"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => deleteProduct(product._id!)}
-                                disabled={loading}
-                                className="text-red-500 hover:text-red-700"
-                                title="Delete"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Product Form - Right Column */}
+        {/* Product Form */}
         <div className="lg:col-span-1">
           <div className="bg-card rounded-lg border p-6 sticky top-6">
             <div className="mb-6">
               <h3 className="font-semibold">
-                {selectedCategory 
-                  ? `${selectedCategory.name} - Product Form`
-                  : 'Product Management'
-                }
+                {selectedCategory ? `${selectedCategory.name} - Product Form` : 'Product Form'}
               </h3>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground">
                 {selectedCategory 
-                  ? editingProduct ? 'Edit existing product' : 'Add new product to this category'
+                  ? editingProduct ? 'Edit product' : 'Add new product'
                   : 'Select a category first'
                 }
               </p>
             </div>
 
             {selectedCategory ? (
-              <div>
-                {/* Product Form */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Product Name *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter product name"
-                      value={productForm.name}
-                      onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                      className="w-full px-3 py-2 border rounded"
-                      disabled={loading}
-                    />
-                  </div>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Product name"
+                  value={productForm.name}
+                  onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                  className="w-full px-3 py-2 border rounded"
+                  disabled={loading}
+                />
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Price (₱) *
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={productForm.price}
-                      onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                      className="w-full px-3 py-2 border rounded"
-                      disabled={loading}
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
+                <input
+                  type="number"
+                  placeholder="Price"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                  className="w-full px-3 py-2 border rounded"
+                  disabled={loading}
+                />
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Description (Optional)
-                    </label>
-                    <textarea
-                      placeholder="Product description"
-                      value={productForm.description}
-                      onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                      className="w-full px-3 py-2 border rounded"
-                      rows={2}
-                      disabled={loading}
-                    />
-                  </div>
+                <textarea
+                  placeholder="Description"
+                  value={productForm.description}
+                  onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                  className="w-full px-3 py-2 border rounded"
+                  rows={2}
+                  disabled={loading}
+                />
 
-                  {/* Ingredients Section */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ingredients *
-                    </label>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-5">
-                          <input
-                            type="text"
-                            placeholder="Ingredient"
-                            value={ingredientForm.name}
-                            onChange={(e) => setIngredientForm({...ingredientForm, name: e.target.value})}
-                            className="w-full px-3 py-2 border rounded text-sm"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <input
-                            type="text"
-                            placeholder="Qty"
-                            value={ingredientForm.quantity}
-                            onChange={(e) => setIngredientForm({...ingredientForm, quantity: e.target.value})}
-                            className="w-full px-3 py-2 border rounded text-sm"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <select
-                            value={ingredientForm.unit}
-                            onChange={(e) => setIngredientForm({...ingredientForm, unit: e.target.value})}
-                            className="w-full px-3 py-2 border rounded text-sm"
-                            disabled={loading}
-                          >
-                            {UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-span-1">
-                          <button 
-                            onClick={addIngredient}
-                            disabled={loading}
-                            className="w-full h-full bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Ingredients List */}
-                      {productIngredients.length > 0 && (
-                        <div className="border rounded">
-                          <div className="p-2 bg-gray-50 border-b">
-                            <span className="text-xs font-medium text-gray-600">
-                              Added Ingredients ({productIngredients.length})
-                            </span>
-                          </div>
-                          <div className="max-h-48 overflow-y-auto">
-                            {productIngredients.map((ing, index) => (
-                              <div key={index} className="flex justify-between items-center px-3 py-2 border-b hover:bg-gray-50">
-                                <div>
-                                  <span className="text-sm font-medium text-gray-700">{ing.name}</span>
-                                  <span className="text-xs text-gray-500 ml-2">
-                                    {ing.quantity} {ing.unit}
-                                  </span>
-                                </div>
-                                <button 
-                                  onClick={() => removeIngredient(index)} 
-                                  disabled={loading}
-                                  className="text-red-500 hover:text-red-700"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                {/* Ingredients */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {selectedCategory.menuType === 'food' ? 'Ingredients' : 'Contents'}
+                  </label>
+                  <div className="grid grid-cols-12 gap-2 mb-2">
+                    <div className="col-span-5">
+                      <input
+                        type="text"
+                        placeholder={selectedCategory.menuType === 'food' ? 'Ingredient' : 'Content'}
+                        value={ingredientForm.name}
+                        onChange={(e) => setIngredientForm({...ingredientForm, name: e.target.value})}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <input
+                        type="text"
+                        placeholder="Qty"
+                        value={ingredientForm.quantity}
+                        onChange={(e) => setIngredientForm({...ingredientForm, quantity: e.target.value})}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <select
+                        value={ingredientForm.unit}
+                        onChange={(e) => setIngredientForm({...ingredientForm, unit: e.target.value})}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                        disabled={loading}
+                      >
+                        {(selectedCategory.menuType === 'food' ? UNITS : DRINK_UNITS).map(unit => 
+                          <option key={unit} value={unit}>{unit}</option>
+                        )}
+                      </select>
+                    </div>
+                    <div className="col-span-1">
+                      <button 
+                        onClick={addIngredient}
+                        disabled={loading}
+                        className="w-full h-full bg-gray-800 text-white rounded hover:bg-gray-700 flex items-center justify-center"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Status Toggle */}
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="available"
-                      checked={productForm.available}
-                      onChange={(e) => setProductForm({...productForm, available: e.target.checked})}
-                      className="h-4 w-4 text-primary border-gray-300 rounded"
-                      disabled={loading}
-                    />
-                    <label htmlFor="available" className="ml-2 text-sm text-gray-700">
-                      Product is available for sale
-                    </label>
-                  </div>
+                  {productIngredients.length > 0 && (
+                    <div className="border rounded max-h-48 overflow-y-auto">
+                      {productIngredients.map((ing, index) => (
+                        <div key={index} className="flex justify-between items-center px-3 py-2 border-b">
+                          <div>
+                            <span className="text-sm">{ing.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">
+                              {ing.quantity} {ing.unit}
+                            </span>
+                          </div>
+                          <button 
+                            onClick={() => setProductIngredients(prev => prev.filter((_, i) => i !== index))}
+                            className="text-red-500"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-                  {/* Submit Buttons */}
-                  <div className="pt-4 border-t space-y-2">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="available"
+                    checked={productForm.available}
+                    onChange={(e) => setProductForm({...productForm, available: e.target.checked})}
+                    className="h-4 w-4 text-primary border-gray-300 rounded"
+                    disabled={loading}
+                  />
+                  <label htmlFor="available" className="ml-2 text-sm">
+                    Available for sale
+                  </label>
+                </div>
+
+                <div className="pt-4 space-y-2">
+                  <button
+                    onClick={saveProduct}
+                    disabled={loading || !productForm.name || !productForm.price || productIngredients.length === 0}
+                    className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : editingProduct ? 'Update Product' : 'Add Product'}
+                  </button>
+                  
+                  {editingProduct && (
                     <button
-                      onClick={saveProduct}
-                      disabled={loading || !productForm.name || !productForm.price || productIngredients.length === 0}
-                      className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      onClick={resetProductForm}
+                      className="w-full bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
                     >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Saving...
-                        </>
-                      ) : editingProduct ? 'Update Product' : 'Add Product'}
+                      Cancel Edit
                     </button>
-                    
-                    {editingProduct && (
-                      <button
-                        onClick={resetProductForm}
-                        className="w-full bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
-                      >
-                        Cancel Edit
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="text-center py-8">
-                <Package className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                <h4 className="font-semibold mb-2">Select a Category</h4>
-                <p className="text-sm text-gray-500">
-                  Select a category from the table to add or edit products
-                </p>
+                <Package className="h-12 w-12 mx-auto mb-3" />
+                <p className="text-gray-500">Select a category to add products</p>
               </div>
             )}
           </div>

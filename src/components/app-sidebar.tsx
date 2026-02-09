@@ -1,12 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image"; // ← Added for optimized images
-import {
-
-  FolderOpen,
-  LogOut,
-} from "lucide-react";
+import Image from "next/image";
+import { FolderOpen, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -15,11 +11,21 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
 
-// Import Better Auth client
 import { authClient } from "@/lib/auth-client";
 import { ExtendedUser } from "@/types/user.type";
 import { UserRole } from "@/types/role.type";
@@ -30,23 +36,18 @@ const storeData = {
   logo: FolderOpen,
   plan: "Business",
 };
+
 interface SessionData {
   user: ExtendedUser | null;
-
 }
 
 const getUserRole = (user: ExtendedUser | null | undefined): UserRole => {
-  return user?.role === "admin" ? "admin" : "user"; // fallback to "user"
+  return user?.role === "admin" ? "admin" : "user";
 };
 
 const getUserInitials = (name?: string | null): string => {
   if (!name) return "U";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -56,12 +57,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     isPending: boolean;
   };
 
+  const { state } = useSidebar();
+
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const user = session?.user;
   const userRole = getUserRole(user);
-
-  // Select navigation based on role
   const navigationItems = userRole === "admin" ? adminNavigation : staffNavigation;
 
   const handleLogout = async () => {
@@ -81,9 +82,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   };
 
-  // ──────────────────────────────────────────────
-  // User Profile Footer
-  // ──────────────────────────────────────────────
   const UserProfileFooter = () => {
     if (isPending) {
       return (
@@ -111,7 +109,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               fill
               className="rounded-full object-cover"
               sizes="32px"
-              priority // optional: if this is always above the fold
+              priority
             />
           </div>
         ) : (
@@ -132,26 +130,46 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </span>
         </div>
 
-        <button
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-          title="Logout"
-          aria-label="Logout"
-        >
-          {isLoggingOut ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            <LogOut className="h-4 w-4" />
-          )}
-        </button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              disabled={isLoggingOut}
+              className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              title="Logout"
+              aria-label="Logout"
+            >
+              {isLoggingOut ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Logout?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to logout?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {}}>
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? "Logging out..." : "Yes, Logout"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   };
 
-  // ──────────────────────────────────────────────
-  // Render
-  // ──────────────────────────────────────────────
   if (isPending) {
     return (
       <Sidebar collapsible="icon" {...props}>
@@ -165,9 +183,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             ))}
           </div>
         </SidebarContent>
-        <SidebarFooter>
-          <UserProfileFooter />
-        </SidebarFooter>
+        {state !== "collapsed" && (
+          <SidebarFooter>
+            <UserProfileFooter />
+          </SidebarFooter>
+        )}
         <SidebarRail />
       </Sidebar>
     );
@@ -183,9 +203,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <NavMain items={navigationItems} />
       </SidebarContent>
-      <SidebarFooter>
-        <UserProfileFooter />
-      </SidebarFooter>
+      {state !== "collapsed" && (
+        <SidebarFooter>
+          <UserProfileFooter />
+        </SidebarFooter>
+      )}
       <SidebarRail />
     </Sidebar>
   );

@@ -24,6 +24,7 @@ interface MongoDBCategory {
   _id: ObjectId;
   name: string;
   description: string;
+  menuType: 'food' | 'drink'; // Added menuType
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -45,6 +46,7 @@ export async function GET() {
       _id: category._id.toString(),
       name: category.name,
       description: category.description || '',
+      menuType: category.menuType || 'food', // Default to 'food' if not set
       products: products
         .filter((p: MongoDBProduct) => p.categoryId === category._id.toString())
         .map((p: MongoDBProduct) => ({
@@ -87,9 +89,16 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Validate menuType
+    const validMenuTypes = ['food', 'drink'];
+    const menuType = body.menuType && validMenuTypes.includes(body.menuType) 
+      ? body.menuType 
+      : 'food'; // Default to 'food' if not specified or invalid
+    
     const newCategory = {
       name: body.name.trim(),
       description: body.description?.trim() || '',
+      menuType: menuType, // Include menuType
       createdAt: new Date(),
       updatedAt: new Date()
     };
