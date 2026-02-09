@@ -1,8 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Package, Plus, X, Edit2, Trash2,Utensils, Coffee } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import { Package, Plus, Edit2, Trash2 } from 'lucide-react';
 
+// Types
 interface Ingredient {
   name: string;
   quantity: string;
@@ -13,7 +25,6 @@ interface Product {
   _id?: string;
   name: string;
   price: number;
-  description: string;
   ingredients: Ingredient[];
   available: boolean;
   categoryId?: string;
@@ -22,13 +33,31 @@ interface Product {
 interface Category {
   _id?: string;
   name: string;
-  description: string;
   products: Product[];
   menuType: 'food' | 'drink';
 }
 
+// Constants
 const UNITS = ['grams', 'kg', 'ml', 'liters', 'pieces', 'cups', 'tbsp', 'tsp', 'oz'];
 const DRINK_UNITS = ['ml', 'liters', 'cups', 'oz'];
+
+// Initial States
+const initialCategoryForm = { 
+  name: '', 
+  menuType: 'food' as const 
+};
+
+const initialProductForm = { 
+  name: '', 
+  price: '', 
+  available: true 
+};
+
+const initialIngredientForm = { 
+  name: '', 
+  quantity: '', 
+  unit: 'grams' 
+};
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -37,19 +66,10 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedMenu, setSelectedMenu] = useState<'food' | 'drink'>('food');
-  
-  const [categoryForm, setCategoryForm] = useState({ 
-    name: '', 
-    description: '', 
-    menuType: 'food' as 'food' | 'drink' 
-  });
+  const [categoryForm, setCategoryForm] = useState(initialCategoryForm);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [productForm, setProductForm] = useState({ 
-    name: '', price: '', description: '', available: true 
-  });
-  const [ingredientForm, setIngredientForm] = useState({ 
-    name: '', quantity: '', unit: 'grams' 
-  });
+  const [productForm, setProductForm] = useState(initialProductForm);
+  const [ingredientForm, setIngredientForm] = useState(initialIngredientForm);
   const [productIngredients, setProductIngredients] = useState<Ingredient[]>([]);
 
   const filteredCategories = categories.filter(cat => cat.menuType === selectedMenu);
@@ -72,7 +92,7 @@ export default function CategoriesPage() {
     }
   };
 
-  const addCategory = async () => {
+  const handleAddCategory = async () => {
     if (!categoryForm.name.trim()) {
       setError('Category name is required');
       return;
@@ -90,11 +110,9 @@ export default function CategoriesPage() {
       
       const category = await response.json();
       setCategories(prev => [...prev, category]);
-      setCategoryForm({ name: '', description: '', menuType: 'food' });
-      setShowCategoryForm(false);
+      resetCategoryForm();
       setSelectedCategory(category);
       setSelectedMenu(category.menuType);
-      alert('Category added successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add category');
     } finally {
@@ -102,7 +120,7 @@ export default function CategoriesPage() {
     }
   };
 
-  const deleteCategory = async (id: string) => {
+  const handleDeleteCategory = async (id: string) => {
     if (!confirm('Are you sure you want to delete this category and all its products?')) return;
 
     try {
@@ -113,7 +131,6 @@ export default function CategoriesPage() {
       
       setCategories(prev => prev.filter(c => c._id !== id));
       if (selectedCategory?._id === id) setSelectedCategory(null);
-      alert('Category deleted successfully');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete category');
     } finally {
@@ -121,21 +138,17 @@ export default function CategoriesPage() {
     }
   };
 
-  const addIngredient = () => {
+  const handleAddIngredient = () => {
     if (!ingredientForm.name.trim() || !ingredientForm.quantity.trim()) {
       setError('Ingredient name and quantity are required');
       return;
     }
 
     setProductIngredients(prev => [...prev, ingredientForm]);
-    setIngredientForm({ 
-      name: '', 
-      quantity: '', 
-      unit: 'grams' 
-    });
+    setIngredientForm(initialIngredientForm);
   };
 
-  const saveProduct = async () => {
+  const handleSaveProduct = async () => {
     if (!productForm.name || !productForm.price || !selectedCategory || productIngredients.length === 0) {
       setError('Please fill all required fields');
       return;
@@ -156,8 +169,14 @@ export default function CategoriesPage() {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/products/add', {
-        method: 'POST',
+      const url = editingProduct 
+        ? `/api/products/categories/${selectedCategory._id}/products/${editingProduct._id}`
+        : '/api/products/add';
+      
+      const method = editingProduct ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData)
       });
@@ -166,7 +185,6 @@ export default function CategoriesPage() {
       
       await fetchCategories();
       resetProductForm();
-      alert('Product added successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save product');
     } finally {
@@ -174,7 +192,7 @@ export default function CategoriesPage() {
     }
   };
 
-  const deleteProduct = async (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (!selectedCategory || !confirm('Are you sure you want to delete this product?')) return;
 
     try {
@@ -186,7 +204,6 @@ export default function CategoriesPage() {
       if (!response.ok) throw new Error('Failed to delete product');
       
       await fetchCategories();
-      alert('Product deleted successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete product');
     } finally {
@@ -194,7 +211,7 @@ export default function CategoriesPage() {
     }
   };
 
-  const toggleProductAvailability = async (productId: string) => {
+  const handleToggleProductAvailability = async (productId: string) => {
     if (!selectedCategory) return;
 
     try {
@@ -211,7 +228,6 @@ export default function CategoriesPage() {
       if (!response.ok) throw new Error('Failed to update product');
       
       await fetchCategories();
-      alert(`Product ${!product.available ? 'activated' : 'deactivated'} successfully!`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update product');
     } finally {
@@ -219,29 +235,30 @@ export default function CategoriesPage() {
     }
   };
 
-  const editProduct = (product: Product) => {
+  const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
     setProductForm({
       name: product.name,
       price: product.price.toString(),
-      description: product.description,
       available: product.available
     });
     setProductIngredients([...product.ingredients]);
   };
 
+  const resetCategoryForm = () => {
+    setCategoryForm(initialCategoryForm);
+    setShowCategoryForm(false);
+  };
+
   const resetProductForm = () => {
     setEditingProduct(null);
-    setProductForm({ name: '', price: '', description: '', available: true });
+    setProductForm(initialProductForm);
     setProductIngredients([]);
-    setIngredientForm({ name: '', quantity: '', unit: 'grams' });
+    setIngredientForm(initialIngredientForm);
   };
 
   const getStats = () => {
-    const foodCategories = categories.filter(c => c.menuType === 'food');
-    const drinkCategories = categories.filter(c => c.menuType === 'drink');
-    
-    const currentCategories = selectedMenu === 'food' ? foodCategories : drinkCategories;
+    const currentCategories = filteredCategories;
     
     return {
       categories: currentCategories.length,
@@ -262,450 +279,402 @@ export default function CategoriesPage() {
             <h1 className="text-2xl md:text-3xl font-bold">Menu Management</h1>
             <p className="text-muted-foreground">Manage food and drink menus</p>
           </div>
-          <button 
-            onClick={() => setShowCategoryForm(true)}
-            disabled={loading}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" /> Add Category
-          </button>
+          <Button onClick={() => setShowCategoryForm(true)} disabled={loading}>
+            <Plus className="h-4 w-4 mr-2" /> Add Category
+          </Button>
         </div>
 
-        {/* Menu Selector - Food and Drink only */}
-        <div className="flex space-x-4 mb-6">
-          <button
-            onClick={() => setSelectedMenu('food')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-all ${
-              selectedMenu === 'food' 
-                ? 'bg-green-600 text-white border-2 border-green-600' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
-            }`}
-          >
-            <Utensils className="h-5 w-5" />
-            Food Menu
-            <span className="ml-2 px-2 py-1 text-xs bg-white text-green-800 rounded">
-              {categories.filter(c => c.menuType === 'food').length}
-            </span>
-          </button>
-          <button
-            onClick={() => setSelectedMenu('drink')}
-            className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-all ${
-              selectedMenu === 'drink' 
-                ? 'bg-blue-600 text-white border-2 border-blue-600' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
-            }`}
-          >
-            <Coffee className="h-5 w-5" />
-            Drink Menu
-            <span className="ml-2 px-2 py-1 text-xs bg-white text-blue-800 rounded">
-              {categories.filter(c => c.menuType === 'drink').length}
-            </span>
-          </button>
-        </div>
+        <Tabs value={selectedMenu} onValueChange={(value) => setSelectedMenu(value as 'food' | 'drink')} className="mb-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="food">
+              Food Menu
+              <Badge variant="secondary" className="ml-2">
+                {categories.filter(c => c.menuType === 'food').length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="drink">
+              Drink Menu
+              <Badge variant="secondary" className="ml-2">
+                {categories.filter(c => c.menuType === 'drink').length}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded border border-red-300">
-            {error}
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-card p-4 rounded-lg border">
-            <p className="text-sm text-muted-foreground">
-              {selectedMenu === 'food' ? 'Food' : 'Drink'} Categories
-            </p>
-            <p className="text-xl font-bold">{stats.categories}</p>
-          </div>
-          <div className="bg-card p-4 rounded-lg border">
-            <p className="text-sm text-muted-foreground">Total Products</p>
-            <p className="text-xl font-bold">{stats.products}</p>
-          </div>
-          <div className="bg-card p-4 rounded-lg border">
-            <p className="text-sm text-muted-foreground">Active Products</p>
-            <p className="text-xl font-bold">{stats.activeProducts}</p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">
+                {selectedMenu === 'food' ? 'Food' : 'Drink'} Categories
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.categories}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.products}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Active Products</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.activeProducts}</div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Categories List */}
-        <div className="lg:col-span-2">
-          <div className="bg-card rounded-lg border p-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h3 className="font-semibold">
-                  {selectedMenu === 'food' ? 'Food' : 'Drink'} Categories
-                </h3>
-                <p className="text-sm text-muted-foreground">Click on a category to view its products</p>
-              </div>
-            </div>
-
-            {showCategoryForm && (
-              <div className="mb-6 p-4 border rounded bg-gray-50">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-medium">New Category</h4>
-                  <button onClick={() => setShowCategoryForm(false)}><X className="h-5 w-5" /></button>
-                </div>
-                
-                <div className="flex gap-2 mb-3">
-                  <button
-                    onClick={() => setCategoryForm({...categoryForm, menuType: 'food'})}
-                    className={`flex-1 px-3 py-2 rounded border flex items-center justify-center gap-2 ${
-                      categoryForm.menuType === 'food' 
-                        ? 'bg-green-100 text-green-800 border-green-500' 
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <Utensils className="h-4 w-4" /> Food
-                  </button>
-                  <button
-                    onClick={() => setCategoryForm({...categoryForm, menuType: 'drink'})}
-                    className={`flex-1 px-3 py-2 rounded border flex items-center justify-center gap-2 ${
-                      categoryForm.menuType === 'drink' 
-                        ? 'bg-blue-100 text-blue-800 border-blue-500' 
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <Coffee className="h-4 w-4" /> Drink
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Category name"
-                    value={categoryForm.name}
-                    onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
-                    className="w-full px-3 py-2 border rounded"
-                    disabled={loading}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Description (optional)"
-                    value={categoryForm.description}
-                    onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
-                    className="w-full px-3 py-2 border rounded"
-                    disabled={loading}
-                  />
-                  <button 
-                    onClick={addCategory} 
-                    disabled={loading}
-                    className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90"
-                  >
-                    {loading ? 'Adding...' : 'Add Category'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4">Category</th>
-                    <th className="text-left py-3 px-4">Products</th>
-                    <th className="text-left py-3 px-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCategories.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="py-8 text-center text-gray-500">
-                        <Package className="h-12 w-12 mx-auto mb-3" />
-                        <p>No {selectedMenu} categories yet</p>
-                        <button 
-                          onClick={() => setShowCategoryForm(true)}
-                          className="mt-2 flex items-center gap-1 mx-auto text-primary hover:underline"
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{selectedMenu === 'food' ? 'Food' : 'Drink'} Categories</CardTitle>
+              <CardDescription>Click on a category to view its products</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {showCategoryForm && (
+                <Card className="mb-6">
+                  <CardContent className="pt-6">
+                    <div className="space-y-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant={categoryForm.menuType === 'food' ? 'default' : 'outline'}
+                          onClick={() => setCategoryForm({...categoryForm, menuType: 'food'})}
+                          className="flex-1"
                         >
-                          <Plus className="h-3 w-3" /> Add {selectedMenu === 'food' ? 'Food' : 'Drink'} Category
-                        </button>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredCategories.map((category) => (
-                      <tr 
+                          Food
+                        </Button>
+                        <Button
+                          variant={categoryForm.menuType === 'drink' ? 'default' : 'outline'}
+                          onClick={() => setCategoryForm({...categoryForm, menuType: 'drink'})}
+                          className="flex-1"
+                        >
+                          Drink
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="category-name">Category Name</Label>
+                        <Input
+                          id="category-name"
+                          placeholder="Category name"
+                          value={categoryForm.name}
+                          onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button onClick={handleAddCategory} disabled={loading} className="flex-1">
+                          {loading ? 'Adding...' : 'Add Category'}
+                        </Button>
+                        <Button variant="outline" onClick={resetCategoryForm}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {filteredCategories.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p className="text-gray-500">No {selectedMenu} categories yet</p>
+                  <Button variant="outline" onClick={() => setShowCategoryForm(true)} className="mt-4">
+                    <Plus className="h-4 w-4 mr-2" /> Add {selectedMenu === 'food' ? 'Food' : 'Drink'} Category
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Products</TableHead>
+                      <TableHead className="w-25">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCategories.map((category) => (
+                      <TableRow 
                         key={category._id} 
-                        className={`border-b hover:bg-gray-50 cursor-pointer ${selectedCategory?._id === category._id ? 'bg-primary/10' : ''}`}
+                        className={`cursor-pointer ${selectedCategory?._id === category._id ? 'bg-muted' : ''}`}
                         onClick={() => setSelectedCategory(category)}
                       >
-                        <td className="py-4 px-4">
+                        <TableCell>
                           <div className="font-medium">{category.name}</div>
-                          {category.description && (
-                            <div className="text-sm text-gray-500">{category.description}</div>
-                          )}
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
                             {category.products?.length || 0}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4">
-                          <button
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteCategory(category._id!);
+                              if (category._id) {
+                                handleDeleteCategory(category._id);
+                              }
                             }}
                             disabled={loading}
-                            className="text-red-500 hover:text-red-700"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Products Table */}
-            {selectedCategory && (
-              <div className="mt-6 bg-card rounded-lg border p-6">
-                <div className="flex justify-between items-center mb-6">
+          {selectedCategory && (
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{selectedCategory.name} - Products</h3>
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        selectedCategory.menuType === 'food' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {selectedCategory.menuType === 'food' ? 'Food' : 'Drink'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
+                    <CardTitle className="flex items-center gap-2">
+                      {selectedCategory.name} - Products
+                      <Badge 
+                        variant={selectedCategory.menuType === 'food' ? 'default' : 'secondary'}
+                      >
+                        {selectedCategory.menuType.charAt(0).toUpperCase() + selectedCategory.menuType.slice(1)}
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription>
                       {selectedCategory.products?.length || 0} product(s)
-                    </p>
+                    </CardDescription>
                   </div>
-                  <button onClick={() => setSelectedCategory(null)}><X className="h-5 w-5" /></button>
+                  <Button variant="ghost" size="icon" onClick={() => setSelectedCategory(null)}>
+                    ×
+                  </Button>
                 </div>
-
+              </CardHeader>
+              <CardContent>
                 {selectedCategory.products?.length === 0 ? (
                   <div className="text-center py-8">
-                    <Package className="h-12 w-12 mx-auto mb-3" />
+                    <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
                     <p className="text-gray-500">No products in this category</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-3 px-4">Product</th>
-                          <th className="text-left py-3 px-4">Price</th>
-                          <th className="text-left py-3 px-4">Status</th>
-                          <th className="text-left py-3 px-4">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedCategory.products?.map((product) => (
-                          <tr key={product._id} className="border-b hover:bg-gray-50">
-                            <td className="py-4 px-4">
-                              <div>
-                                <div className="font-medium">{product.name}</div>
-                                <div className="text-xs text-gray-500">{product.description}</div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              ₱{product.price.toLocaleString()}
-                            </td>
-                            <td className="py-4 px-4">
-                              <button
-                                onClick={() => toggleProductAvailability(product._id!)}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-25">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedCategory.products?.map((product) => (
+                        <TableRow key={product._id}>
+                          <TableCell>
+                            <div className="font-medium">{product.name}</div>
+                          </TableCell>
+                          <TableCell>
+                            ₱{product.price.toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant={product.available ? 'default' : 'secondary'}
+                              size="sm"
+                              onClick={() => {
+                                if (product._id) {
+                                  handleToggleProductAvailability(product._id);
+                                }
+                              }}
+                              disabled={loading}
+                            >
+                              {product.available ? 'Active' : 'Inactive'}
+                            </Button>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEditProduct(product)}
                                 disabled={loading}
-                                className={`px-2.5 py-0.5 rounded-full text-xs ${
-                                  product.available 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}
                               >
-                                {product.available ? 'Active' : 'Inactive'}
-                              </button>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex space-x-2">
-                                <button
-                                  onClick={() => editProduct(product)}
-                                  disabled={loading}
-                                  className="text-blue-500 hover:text-blue-700"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => deleteProduct(product._id!)}
-                                  disabled={loading}
-                                  className="text-red-500 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  if (product._id) {
+                                    handleDeleteProduct(product._id);
+                                  }
+                                }}
+                                disabled={loading}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
-              </div>
-            )}
-          </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Product Form */}
-        <div className="lg:col-span-1">
-          <div className="bg-card rounded-lg border p-6 sticky top-6">
-            <div className="mb-6">
-              <h3 className="font-semibold">
+        <div>
+          <Card className="sticky top-6">
+            <CardHeader>
+              <CardTitle>
                 {selectedCategory ? `${selectedCategory.name} - Product Form` : 'Product Form'}
-              </h3>
-              <p className="text-sm text-muted-foreground">
+              </CardTitle>
+              <CardDescription>
                 {selectedCategory 
                   ? editingProduct ? 'Edit product' : 'Add new product'
                   : 'Select a category first'
                 }
-              </p>
-            </div>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedCategory ? (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="product-name">Product Name</Label>
+                    <Input
+                      id="product-name"
+                      placeholder="Product name"
+                      value={productForm.name}
+                      onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                      disabled={loading}
+                    />
+                  </div>
 
-            {selectedCategory ? (
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Product name"
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                  className="w-full px-3 py-2 border rounded"
-                  disabled={loading}
-                />
+                  <div className="space-y-2">
+                    <Label htmlFor="product-price">Price</Label>
+                    <Input
+                      id="product-price"
+                      type="number"
+                      placeholder="Price"
+                      value={productForm.price}
+                      onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                      disabled={loading}
+                    />
+                  </div>
 
-                <input
-                  type="number"
-                  placeholder="Price"
-                  value={productForm.price}
-                  onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                  className="w-full px-3 py-2 border rounded"
-                  disabled={loading}
-                />
+                  <Separator />
 
-                <textarea
-                  placeholder="Description"
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                  className="w-full px-3 py-2 border rounded"
-                  rows={2}
-                  disabled={loading}
-                />
-
-                {/* Ingredients */}
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    {selectedCategory.menuType === 'food' ? 'Ingredients' : 'Contents'}
-                  </label>
-                  <div className="grid grid-cols-12 gap-2 mb-2">
-                    <div className="col-span-5">
-                      <input
-                        type="text"
+                  <div className="space-y-2">
+                    <Label>{selectedCategory.menuType === 'food' ? 'Ingredients' : 'Contents'}</Label>
+                    <div className="flex gap-2">
+                      <Input
                         placeholder={selectedCategory.menuType === 'food' ? 'Ingredient' : 'Content'}
                         value={ingredientForm.name}
                         onChange={(e) => setIngredientForm({...ingredientForm, name: e.target.value})}
-                        className="w-full px-3 py-2 border rounded text-sm"
+                        className="flex-1"
                         disabled={loading}
                       />
-                    </div>
-                    <div className="col-span-3">
-                      <input
-                        type="text"
-                        placeholder="Qty"
+                      <Input
+                        placeholder="Quantity"
                         value={ingredientForm.quantity}
                         onChange={(e) => setIngredientForm({...ingredientForm, quantity: e.target.value})}
-                        className="w-full px-3 py-2 border rounded text-sm"
+                        className="w-24"
                         disabled={loading}
                       />
-                    </div>
-                    <div className="col-span-3">
-                      <select
+                      <Select
                         value={ingredientForm.unit}
-                        onChange={(e) => setIngredientForm({...ingredientForm, unit: e.target.value})}
-                        className="w-full px-3 py-2 border rounded text-sm"
+                        onValueChange={(value) => setIngredientForm({...ingredientForm, unit: value})}
                         disabled={loading}
                       >
-                        {(selectedCategory.menuType === 'food' ? UNITS : DRINK_UNITS).map(unit => 
-                          <option key={unit} value={unit}>{unit}</option>
-                        )}
-                      </select>
-                    </div>
-                    <div className="col-span-1">
-                      <button 
-                        onClick={addIngredient}
-                        disabled={loading}
-                        className="w-full h-full bg-gray-800 text-white rounded hover:bg-gray-700 flex items-center justify-center"
-                      >
+                        <SelectTrigger className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(selectedCategory.menuType === 'food' ? UNITS : DRINK_UNITS).map(unit => 
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <Button size="icon" onClick={handleAddIngredient} disabled={loading}>
                         <Plus className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
+
+                    {productIngredients.length > 0 && (
+                      <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                        {productIngredients.map((ing, index) => (
+                          <div key={index} className="flex justify-between items-center px-3 py-2">
+                            <div className="text-sm">
+                              {ing.name}
+                              <span className="text-muted-foreground ml-2">
+                                {ing.quantity} {ing.unit}
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setProductIngredients(prev => prev.filter((_, i) => i !== index))}
+                              className="h-6 w-6"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {productIngredients.length > 0 && (
-                    <div className="border rounded max-h-48 overflow-y-auto">
-                      {productIngredients.map((ing, index) => (
-                        <div key={index} className="flex justify-between items-center px-3 py-2 border-b">
-                          <div>
-                            <span className="text-sm">{ing.name}</span>
-                            <span className="text-xs text-gray-500 ml-2">
-                              {ing.quantity} {ing.unit}
-                            </span>
-                          </div>
-                          <button 
-                            onClick={() => setProductIngredients(prev => prev.filter((_, i) => i !== index))}
-                            className="text-red-500"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="available"
+                      checked={productForm.available}
+                      onCheckedChange={(checked) => setProductForm({...productForm, available: checked})}
+                      disabled={loading}
+                    />
+                    <Label htmlFor="available">Available for sale</Label>
+                  </div>
 
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="available"
-                    checked={productForm.available}
-                    onChange={(e) => setProductForm({...productForm, available: e.target.checked})}
-                    className="h-4 w-4 text-primary border-gray-300 rounded"
-                    disabled={loading}
-                  />
-                  <label htmlFor="available" className="ml-2 text-sm">
-                    Available for sale
-                  </label>
-                </div>
-
-                <div className="pt-4 space-y-2">
-                  <button
-                    onClick={saveProduct}
-                    disabled={loading || !productForm.name || !productForm.price || productIngredients.length === 0}
-                    className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {loading ? 'Saving...' : editingProduct ? 'Update Product' : 'Add Product'}
-                  </button>
-                  
-                  {editingProduct && (
-                    <button
-                      onClick={resetProductForm}
-                      className="w-full bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
+                  <div className="space-y-2 pt-4">
+                    <Button
+                      onClick={handleSaveProduct}
+                      disabled={loading || !productForm.name || !productForm.price || productIngredients.length === 0}
+                      className="w-full"
                     >
-                      Cancel Edit
-                    </button>
-                  )}
+                      {loading ? 'Saving...' : editingProduct ? 'Update Product' : 'Add Product'}
+                    </Button>
+                    
+                    {editingProduct && (
+                      <Button variant="outline" onClick={resetProductForm} className="w-full">
+                        Cancel Edit
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Package className="h-12 w-12 mx-auto mb-3" />
-                <p className="text-gray-500">Select a category to add products</p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p className="text-gray-500">Select a category to add products</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
