@@ -4,7 +4,6 @@ import * as React from "react";
 import Image from "next/image";
 import { FolderOpen, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Swal from "sweetalert2";
 
 import {
   Sidebar,
@@ -14,6 +13,16 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { TeamSwitcher } from "./team-switcher";
 import { NavMain } from "./nav-main";
 
@@ -57,19 +66,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navigationItems = userRole === "admin" ? adminNavigation : staffNavigation;
 
   const handleLogout = async () => {
-    const result = await Swal.fire({
-      title: "Logout?",
-      text: "Are you sure you want to logout?",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, logout",
-      cancelButtonText: "Cancel"
-    });
-
-    if (!result.isConfirmed) return;
-
     setIsLoggingOut(true);
     try {
       await authClient.signOut({
@@ -134,19 +130,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </span>
         </div>
 
-        <button
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-          title="Logout"
-          aria-label="Logout"
-        >
-          {isLoggingOut ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            <LogOut className="h-4 w-4" />
-          )}
-        </button>
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              disabled={isLoggingOut}
+              className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              title="Logout"
+              aria-label="Logout"
+            >
+              {isLoggingOut ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Logout?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to logout?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {}}>
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? "Logging out..." : "Yes, Logout"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   };
