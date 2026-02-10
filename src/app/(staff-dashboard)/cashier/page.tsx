@@ -1,7 +1,8 @@
-// File: src/app/cashier/page.tsx
+// File: src/app/(staff-dashboard)/cashier/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSwipeable } from 'react-swipeable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,176 +11,261 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Search, 
-  ShoppingCart, 
-  Plus,
-  Minus,
-  Trash2,
-  Save,
-  DollarSign,
-  Smartphone,
-  Receipt,
-  Filter,
-  TableIcon,
-  X,
-  Check
+  ShoppingCart, Plus, Minus, Trash2, Save,
+  DollarSign, Smartphone, Receipt, TableIcon,
+  X, Loader2, Utensils, Coffee, ArrowRight,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 // Types
-type MenuItem = {
-  id: number;
+interface Product {
+  _id: string;
   name: string;
   price: number;
-  category: string;
-  description: string;
-};
+  description?: string;
+  ingredients: { name: string; quantity: string; unit: string }[];
+  available: boolean;
+  category?: string;
+  menuType?: 'food' | 'drink';
+}
 
-type CartItem = MenuItem & {
+interface CartItem extends Product {
   quantity: number;
   notes?: string;
-};
+}
 
-type SavedCart = {
+interface SavedCart {
   id: string;
   name: string;
   items: CartItem[];
   total: number;
   timestamp: Date;
   customerName?: string;
-};
+}
 
-type Table = {
+interface Table {
   id: string;
   number: string;
   status: 'available' | 'occupied' | 'reserved';
-  orderId?: string;
   customerName?: string;
   total?: number;
-};
+  orderId?: string;
+}
 
-// Mock data
-const mockMenuItems: MenuItem[] = [
-  { id: 1, name: 'Avocado Morning Toast', price: 12.50, category: 'breakfast', description: 'Sourdough, fresh avocado, poached egg' },
-  { id: 2, name: 'Iced Caramel Macchiato', price: 5.75, category: 'drinks', description: 'Double espresso with caramel drizzle' },
-  { id: 3, name: 'Penne Arrabbiata', price: 14.20, category: 'pasta', description: 'Spicy tomato sauce with basil' },
-  { id: 4, name: 'Berry Mini Cupcake Set', price: 8.00, category: 'desserts', description: 'Box of 4 assorted berry cupcakes' },
-  { id: 5, name: 'Classic Cappuccino', price: 4.50, category: 'drinks', description: 'Perfectly foamed milk over espresso' },
-  { id: 6, name: 'Steakhouse Burger', price: 15.90, category: 'snacks', description: 'Angus beef with cheddar and onions' },
-  { id: 7, name: 'Artisan Baguette', price: 3.25, category: 'breads', description: 'Freshly baked sourdough baguette' },
-  { id: 8, name: 'Atlantic Salmon Salad', price: 18.50, category: 'specials', description: 'Grilled salmon with kale and quinoa' },
-  { id: 9, name: 'Margherita Pizza', price: 16.50, category: 'specials', description: 'Mozzarella, tomato sauce, and basil' },
-  { id: 10, name: 'Chocolate Lava Cake', price: 7.50, category: 'desserts', description: 'Warm chocolate cake with molten center' },
-  { id: 11, name: 'Extra Rice', price: 2.00, category: 'addons', description: 'Additional serving of rice' },
-  { id: 12, name: 'Garlic Sauce', price: 1.00, category: 'addons', description: 'Side of garlic sauce' },
-];
+interface CategoryData {
+  products?: Product[];
+  name: string;
+  menuType: 'food' | 'drink';
+}
 
-const categories = ['All', 'Breakfast', 'Snacks', 'Pasta', 'Breads', 'Drinks', 'Desserts', 'Specials', 'Addons'];
+// Define tab type for type safety
+type TabType = 'menu' | 'saved' | 'tables' | 'checkout';
 
 const CashierPage = () => {
-  // State
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: 1, name: 'Avocado Morning Toast', price: 12.50, category: 'breakfast', description: 'Sourdough, fresh avocado, poached egg', quantity: 1 },
-    { id: 2, name: 'Iced Caramel Macchiato', price: 5.75, category: 'drinks', description: 'Double espresso with caramel drizzle', quantity: 2 },
-  ]);
+  // Data State
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const [savedCarts, setSavedCarts] = useState<SavedCart[]>([
-    {
-      id: 'SAVED-001',
-      name: 'Morning Breakfast',
-      items: [mockMenuItems[0], mockMenuItems[4]].map(item => ({ ...item, quantity: 1 })),
-      total: 17.00,
-      timestamp: new Date(Date.now() - 3600000),
-      customerName: 'John Doe'
-    },
-    {
-      id: 'SAVED-002',
-      name: 'Lunch Special',
-      items: [mockMenuItems[2], mockMenuItems[3]].map(item => ({ ...item, quantity: 1 })),
-      total: 22.20,
-      timestamp: new Date(Date.now() - 7200000),
-    }
-  ]);
+  // Cart & Order State
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [savedCarts, setSavedCarts] = useState<SavedCart[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
   
-  const [tables, setTables] = useState<Table[]>([
-    { id: '1', number: 'T01', status: 'occupied', orderId: 'ORD-101', customerName: 'Alice', total: 45.50 },
-    { id: '2', number: 'T02', status: 'available' },
-    { id: '3', number: 'T03', status: 'occupied', orderId: 'ORD-102', customerName: 'Bob', total: 32.25 },
-    { id: '4', number: 'T04', status: 'reserved' },
-    { id: '5', number: 'T05', status: 'available' },
-    { id: '6', number: 'T06', status: 'occupied', orderId: 'ORD-103', customerName: 'Charlie', total: 28.75 },
-    { id: '7', number: 'T07', status: 'available' },
-    { id: '8', number: 'T08', status: 'occupied', orderId: 'ORD-104', customerName: 'Diana', total: 51.80 },
-  ]);
-  
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  // UI State
+  const [activeTab, setActiveTab] = useState<TabType>('menu');
+  const [selectedMenuType, setSelectedMenuType] = useState<'food' | 'drink' | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash' | 'split'>('cash');
   const [splitPayment, setSplitPayment] = useState({ cash: 0, gcash: 0 });
   const [orderType, setOrderType] = useState<'dine-in' | 'takeaway'>('takeaway');
-  const [selectedTable, setSelectedTable] = useState<string>('T07');
-  const [activeTab, setActiveTab] = useState<'menu' | 'saved' | 'tables'>('menu');
-  const [editingCartItem, setEditingCartItem] = useState<number | null>(null);
+  const [selectedTable, setSelectedTable] = useState<string>('');
   
+  // Categories scroll ref
+  const categoriesContainerRef = useRef<HTMLDivElement>(null);
+  const [showLeftScroll, setShowLeftScroll] = useState(false);
+  const [showRightScroll, setShowRightScroll] = useState(true);
+
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * 0.10;
   const total = subtotal + tax;
-  
-  // Filter menu items
-  const filteredItems = mockMenuItems.filter(item => {
-    const matchesCategory = selectedCategory === 'All' || 
-      item.category.toLowerCase() === selectedCategory.toLowerCase();
-    const matchesSearch = searchQuery === '' || 
-      item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+
+  // Swipe handlers for CATEGORIES section only
+  const categoriesSwipeHandlers = useSwipeable({
+    onSwipedLeft: () => {
+      scrollCategories('right');
+    },
+    onSwipedRight: () => {
+      scrollCategories('left');
+    },
+    preventScrollOnSwipe: false,
+    trackMouse: true,
+    delta: 5
   });
-  
-  // Cart functions
-  const addToCart = (item: MenuItem) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === item.id);
-      if (existing) {
-        return prev.map(i => 
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
-        );
+
+  // Fetch data - Products and Categories
+  const fetchProductsData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/products/categories');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      
+      const categoriesData: CategoryData[] = await response.json();
+      const productsList: Product[] = [];
+      
+      categoriesData.forEach((category: CategoryData) => {
+        if (category.products?.length) {
+          category.products.forEach((product: Product) => {
+            productsList.push({ 
+              ...product, 
+              category: category.name, 
+              menuType: category.menuType 
+            });
+          });
+        }
+      });
+      
+      setProducts(productsList);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch tables data
+  const fetchTablesData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/tables');
+      if (response.ok) {
+        const tablesData: Table[] = await response.json();
+        setTables(tablesData);
+      } else {
+        // If no tables API, create default tables
+        const defaultTables: Table[] = Array.from({ length: 12 }, (_, i) => ({
+          id: (i + 1).toString(),
+          number: `T${String(i + 1).padStart(2, '0')}`,
+          status: 'available',
+        }));
+        setTables(defaultTables);
       }
-      return [...prev, { ...item, quantity: 1 }];
+    } catch (error) {
+      console.error('Error fetching tables:', error);
+    }
+  }, []);
+
+  // Fetch saved carts
+  const fetchSavedCarts = useCallback(async () => {
+    try {
+      const response = await fetch('/api/carts');
+      if (response.ok) {
+        const cartsData: SavedCart[] = await response.json();
+        setSavedCarts(cartsData);
+      }
+    } catch (error) {
+      console.error('Error fetching saved carts:', error);
+    }
+  }, []);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchProductsData();
+    fetchTablesData();
+    fetchSavedCarts();
+  }, [fetchProductsData, fetchTablesData, fetchSavedCarts]);
+
+  // Update split payment when total changes
+  useEffect(() => {
+    if (paymentMethod === 'split' && total > 0) {
+      setSplitPayment({ cash: total / 2, gcash: total / 2 });
+    }
+  }, [total, paymentMethod]);
+
+  // Filter products
+  const filteredProducts = products.filter(product => {
+    if (!product.available) return false;
+    if (selectedMenuType !== 'all' && product.menuType !== selectedMenuType) return false;
+    if (selectedCategory !== 'All' && product.category !== selectedCategory) return false;
+    return true;
+  });
+
+  // Get unique categories
+  const categories = ['All', ...Array.from(new Set(
+    products
+      .filter(p => p.available && (selectedMenuType === 'all' || p.menuType === selectedMenuType))
+      .map(p => p.category || 'Uncategorized')
+  ))];
+
+  // Scroll categories function
+  const scrollCategories = useCallback((direction: 'left' | 'right') => {
+    if (categoriesContainerRef.current) {
+      const container = categoriesContainerRef.current;
+      const scrollAmount = 200;
+      
+      if (direction === 'left') {
+        container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+      } else {
+        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+      }
+      
+      // Update scroll buttons after a delay
+      setTimeout(checkScrollPosition, 300);
+    }
+  }, []);
+
+  // Check scroll position for showing/hiding scroll buttons
+  const checkScrollPosition = useCallback(() => {
+    if (categoriesContainerRef.current) {
+      const container = categoriesContainerRef.current;
+      const { scrollLeft, scrollWidth, clientWidth } = container;
+      
+      setShowLeftScroll(scrollLeft > 0);
+      setShowRightScroll(scrollLeft < scrollWidth - clientWidth - 10);
+    }
+  }, []);
+
+  // Check scroll position on mount and when categories change
+  useEffect(() => {
+    checkScrollPosition();
+  }, [categories, selectedMenuType, checkScrollPosition]);
+
+  // Cart functions
+  const addToCart = useCallback((product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(i => i._id === product._id);
+      return existing 
+        ? prev.map(i => i._id === product._id ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...prev, { ...product, quantity: 1 }];
     });
-  };
-  
-  const updateCartQuantity = (itemId: number, change: number) => {
-    setCart(prev => 
-      prev.map(item => 
-        item.id === itemId 
-          ? { ...item, quantity: Math.max(1, item.quantity + change) }
-          : item
-      ).filter(item => item.quantity > 0)
+  }, []);
+
+  const updateCartQuantity = useCallback((itemId: string, change: number) => {
+    setCart(prev => prev
+      .map(item => item._id === itemId 
+        ? { ...item, quantity: Math.max(1, item.quantity + change) }
+        : item
+      )
+      .filter(item => item.quantity > 0)
     );
-  };
-  
-  const removeFromCart = (itemId: number) => {
-    setCart(prev => prev.filter(item => item.id !== itemId));
-    setEditingCartItem(null);
-  };
-  
-  const clearCart = () => {
+  }, []);
+
+  const removeFromCart = useCallback((itemId: string) => {
+    setCart(prev => prev.filter(item => item._id !== itemId));
+  }, []);
+
+  const clearCart = useCallback(() => {
     setCart([]);
     setCustomerName('');
     setSplitPayment({ cash: 0, gcash: 0 });
     setPaymentMethod('cash');
     setSelectedTable('');
-    setEditingCartItem(null);
-  };
-  
-  // Save cart function
-  const saveCart = () => {
-    if (cart.length === 0) {
-      alert('Cart is empty!');
-      return;
-    }
+  }, []);
+
+  const saveCart = useCallback(async () => {
+    if (cart.length === 0) return alert('Cart is empty!');
     
-    const cartName = prompt('Enter a name for this saved cart:', `Cart ${savedCarts.length + 1}`);
+    const cartName = prompt('Enter cart name:', `Cart ${savedCarts.length + 1}`);
     if (!cartName) return;
     
     const newCart: SavedCart = {
@@ -191,578 +277,565 @@ const CashierPage = () => {
       customerName: customerName || undefined,
     };
     
-    setSavedCarts(prev => [newCart, ...prev]);
-    alert('Cart saved successfully!');
-  };
-  
-  // Load saved cart
-  const loadSavedCart = (savedCart: SavedCart) => {
+    try {
+      const response = await fetch('/api/carts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCart)
+      });
+      
+      if (response.ok) {
+        const savedCart = await response.json();
+        setSavedCarts(prev => [savedCart, ...prev]);
+        alert('Cart saved to server!');
+      } else {
+        setSavedCarts(prev => [newCart, ...prev]);
+        localStorage.setItem('savedCarts', JSON.stringify([newCart, ...savedCarts]));
+        alert('Cart saved locally!');
+      }
+    } catch (error) {
+      setSavedCarts(prev => [newCart, ...prev]);
+      localStorage.setItem('savedCarts', JSON.stringify([newCart, ...savedCarts]));
+      alert('Cart saved locally!');
+    }
+  }, [cart, savedCarts, total, customerName]);
+
+  const loadSavedCart = useCallback((savedCart: SavedCart) => {
     setCart(savedCart.items);
     setCustomerName(savedCart.customerName || '');
     setActiveTab('menu');
-  };
-  
-  // Split payment functions
-  const updateSplitAmount = (type: 'cash' | 'gcash', value: number) => {
-    setSplitPayment(prev => {
-      const newValue = Math.max(0, Math.min(total, value));
-      const otherType = type === 'cash' ? 'gcash' : 'cash';
-      const otherAmount = prev[otherType];
-      const totalPaid = newValue + otherAmount;
+  }, []);
+
+  const processPayment = async () => {
+    if (cart.length === 0) return alert('Cart is empty!');
+    if (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total) {
+      return alert('Split payment amounts must equal total!');
+    }
+    
+    const orderData = {
+      customerName,
+      items: cart,
+      subtotal,
+      tax,
+      total,
+      paymentMethod,
+      splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+      orderType,
+      tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
+      timestamp: new Date(),
+    };
+    
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData)
+      });
       
-      if (totalPaid > total) {
-        return { ...prev, [type]: newValue, [otherType]: total - newValue };
+      if (response.ok) {
+        alert(`Payment processed successfully!\nOrder Total: ₱${total.toFixed(2)}`);
+        
+        if (orderType === 'dine-in' && selectedTable) {
+          const tableUpdate = tables.find(t => t.number === selectedTable);
+          if (tableUpdate) {
+            await fetch(`/api/tables/${tableUpdate.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...tableUpdate, status: 'occupied' })
+            });
+            
+            fetchTablesData();
+          }
+        }
+        
+        clearCart();
+      } else {
+        alert(`Payment processed (local only)!\nOrder Total: ₱${total.toFixed(2)}`);
+        clearCart();
       }
-      return { ...prev, [type]: newValue };
-    });
-  };
-  
-  const autoSplit = (type: 'half' | 'cash' | 'gcash') => {
-    switch (type) {
-      case 'half':
-        setSplitPayment({ cash: total / 2, gcash: total / 2 });
-        break;
-      case 'cash':
-        setSplitPayment({ cash: total, gcash: 0 });
-        break;
-      case 'gcash':
-        setSplitPayment({ cash: 0, gcash: total });
-        break;
+    } catch (error) {
+      alert(`Payment processed (local only)!\nOrder Total: ₱${total.toFixed(2)}`);
+      clearCart();
     }
   };
-  
-  // Format time
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-  
-  // Format date
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString();
-  };
-  
-  // Initialize split payment when total changes
-  useEffect(() => {
-    if (paymentMethod === 'split' && total > 0) {
-      setSplitPayment({ cash: total / 2, gcash: total / 2 });
-    }
-  }, [total, paymentMethod]);
-  
+
+  // Auto split functions
+  const autoSplit = useCallback((type: 'half' | 'cash' | 'gcash') => {
+    const splits = {
+      half: { cash: total / 2, gcash: total / 2 },
+      cash: { cash: total, gcash: 0 },
+      gcash: { cash: 0, gcash: total }
+    };
+    setSplitPayment(splits[type]);
+  }, [total]);
+
+  // Merge refs function to handle multiple refs
+  const mergeRefs = useCallback((...refs: Array<React.Ref<HTMLDivElement> | undefined>) => {
+    return (node: HTMLDivElement) => {
+      refs.forEach(ref => {
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref != null) {
+          (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }
+      });
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-50 p-2 md:p-4">
-      <div className="max-w-[1920px] mx-auto">
-        {/* Top Header */}
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <header className="bg-white rounded-xl shadow-sm p-4 mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">POS System</h1>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm font-semibold">Cashier #04</p>
-                <p className="text-xs text-gray-500">Active</p>
-              </div>
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h1 className="text-2xl font-bold">POS System</h1>
+              <p className="text-sm text-gray-500">Point of Sale</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold">Cashier #04</p>
+              <p className="text-xs text-gray-500">Active</p>
             </div>
           </div>
           
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-            <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="menu" className="flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                Menu
-              </TabsTrigger>
-              <TabsTrigger value="saved" className="flex items-center gap-2">
-                <Save className="w-4 h-4" />
-                Saved
-                <Badge variant="secondary" className="ml-1">{savedCarts.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="tables" className="flex items-center gap-2">
-                <TableIcon className="w-4 h-4" />
-                Tables
-                <Badge variant="secondary" className="ml-1">{tables.filter(t => t.status === 'occupied').length}</Badge>
+          <Tabs value={activeTab} onValueChange={(value: string) => setActiveTab(value as TabType)}>
+            <TabsList className="grid grid-cols-4 w-full">
+              <TabsTrigger value="menu" className="text-sm">Menu</TabsTrigger>
+              <TabsTrigger value="saved" className="text-sm">Saved</TabsTrigger>
+              <TabsTrigger value="tables" className="text-sm">Tables</TabsTrigger>
+              <TabsTrigger value="checkout" className="text-sm">
+                <ArrowRight className="w-4 h-4 mr-1" />
+                Checkout
               </TabsTrigger>
             </TabsList>
           </Tabs>
         </header>
-        
-        <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-150px)]">
-          {/* Left Side - Main Content */}
+
+        <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-180px)]">
+          {/* Left Panel - Main Content */}
           <div className="lg:w-7/12 flex flex-col h-full">
-            {/* Search Bar */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <Input
-                  placeholder="Search menu items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            
-            {/* Categories */}
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-              {categories.map(cat => (
-                <Button
-                  key={cat}
-                  variant={selectedCategory === cat ? "default" : "outline"}
-                  onClick={() => setSelectedCategory(cat)}
-                  className="whitespace-nowrap rounded-full text-sm"
-                >
-                  {cat}
-                </Button>
-              ))}
-            </div>
-            
-            {/* Scrollable Content Area */}
-            <div className="flex-1 overflow-hidden">
-              {/* Menu Items Grid */}
-              {activeTab === 'menu' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 h-full overflow-y-auto pr-2">
-                  {filteredItems.map(item => (
-                    <Card key={item.id} className="hover:shadow-md transition-all">
-                      <CardContent className="p-4">
-                        <div className="flex flex-col h-full">
-                          <div className="flex-1">
-                            <h3 className="font-bold text-lg mb-1">{item.name}</h3>
-                            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{item.description}</p>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Badge variant="outline" className="text-xs">
-                              {item.category}
-                            </Badge>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-blue-600">${item.price.toFixed(2)}</span>
-                              <Button
-                                size="sm"
-                                onClick={() => addToCart(item)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Plus className="w-4 h-4" />
+            {activeTab === 'menu' && (
+              <>
+                {/* Menu Type */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {(['all', 'food', 'drink'] as const).map((type) => (
+                    <Button
+                      key={type}
+                      variant={selectedMenuType === type ? "default" : "outline"}
+                      onClick={() => {
+                        setSelectedMenuType(type);
+                        setSelectedCategory('All');
+                      }}
+                      className="h-10 text-sm"
+                    >
+                      {type === 'food' && <Utensils className="w-4 h-4 mr-2" />}
+                      {type === 'drink' && <Coffee className="w-4 h-4 mr-2" />}
+                      {type === 'all' ? 'All Menu' : type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Categories Section with SWIPE */}
+                <div className="mb-4 relative">
+                  <Label className="text-sm font-medium mb-2 block">Categories</Label>
+                  
+                  <div className="relative">
+                    {/* Left Scroll Button */}
+                    {showLeftScroll && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md hover:bg-gray-100 h-8 w-8"
+                        onClick={() => scrollCategories('left')}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                    )}
+                    
+                    {/* Swipeable Categories Container */}
+                    <div 
+                      ref={mergeRefs(categoriesContainerRef, categoriesSwipeHandlers.ref)}
+                      className="flex gap-2 overflow-x-auto scrollbar-hide px-8 py-1"
+                      onScroll={checkScrollPosition}
+                      style={{ 
+                        scrollbarWidth: 'none' as const, 
+                        msOverflowStyle: 'none',
+                        cursor: 'grab',
+                        touchAction: 'pan-y'
+                      }}
+                    >
+                      {categories.map(cat => (
+                        <Button
+                          key={cat}
+                          variant={selectedCategory === cat ? "default" : "outline"}
+                          onClick={() => setSelectedCategory(cat)}
+                          className="whitespace-nowrap text-sm flex-shrink-0 px-3"
+                        >
+                          {cat}
+                        </Button>
+                      ))}
+                    </div>
+                    
+                    {/* Right Scroll Button */}
+                    {showRightScroll && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md hover:bg-gray-100 h-8 w-8"
+                        onClick={() => scrollCategories('right')}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Swipe Hint */}
+                  <p className="text-xs text-gray-500 mt-1 text-center">
+                    ← Swipe left/right to browse categories →
+                  </p>
+                </div>
+
+                {/* Products Grid */}
+                <div className="overflow-y-auto flex-1 pr-2">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                      <span className="ml-2">Loading products...</span>
+                    </div>
+                  ) : filteredProducts.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No products found</p>
+                      {selectedCategory !== 'All' && (
+                        <p className="text-sm text-gray-400 mt-1">Try selecting "All" categories</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {filteredProducts.map(product => (
+                        <Card key={product._id} className="hover:shadow-md transition-all">
+                          <CardContent className="p-3">
+                            <div className="space-y-2">
+                              <div>
+                                <h3 className="font-bold text-sm line-clamp-2">{product.name}</h3>
+                                <div className="flex gap-1 mt-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    {product.category}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-600 line-clamp-2">
+                                {product.description || product.ingredients?.map(i => i.name).join(', ')}
+                              </p>
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-blue-600">₱{product.price.toFixed(2)}</span>
+                                <Button size="sm" onClick={() => addToCart(product)} className="h-7">
+                                  <Plus className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {activeTab === 'saved' && (
+              <div className="h-full overflow-y-auto">
+                <div className="mb-4">
+                  <h2 className="text-lg font-bold">Saved Orders</h2>
+                  <p className="text-sm text-gray-500">Load previously saved orders</p>
+                </div>
+                
+                <div className="space-y-2">
+                  {savedCarts.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No saved orders yet</p>
+                      <p className="text-sm text-gray-400 mt-1">Save your current order to see it here</p>
+                    </div>
+                  ) : (
+                    savedCarts.map(savedCart => (
+                      <Card key={savedCart.id}>
+                        <CardContent className="p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-bold">{savedCart.name}</h3>
+                              <p className="text-sm text-gray-500">
+                                {savedCart.customerName || 'No customer'}
+                              </p>
+                              <Badge variant="outline" className="mt-1">
+                                {savedCart.items.length} items
+                              </Badge>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {new Date(savedCart.timestamp).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-blue-600">₱{savedCart.total.toFixed(2)}</p>
+                              <Button size="sm" onClick={() => loadSavedCart(savedCart)} className="mt-1">
+                                Load
                               </Button>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
-              )}
-              
-              {/* Saved Carts */}
-              {activeTab === 'saved' && (
-                <div className="space-y-3 h-full overflow-y-auto pr-2">
-                  {savedCarts.map(savedCart => (
-                    <Card key={savedCart.id}>
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="font-bold">{savedCart.name}</h3>
-                            <p className="text-sm text-gray-500">
-                              {savedCart.customerName || 'No customer name'}
+              </div>
+            )}
+
+            {activeTab === 'tables' && (
+              <>
+                <div className="mb-4">
+                  <h2 className="text-lg font-bold">Tables</h2>
+                  <p className="text-sm text-gray-500">Select a table for dine-in orders</p>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 overflow-y-auto flex-1">
+                  {tables.length === 0 ? (
+                    <div className="col-span-full text-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                      <p className="mt-2 text-gray-500">Loading tables...</p>
+                    </div>
+                  ) : (
+                    tables.map(table => (
+                      <Card 
+                        key={table.id}
+                        className={`cursor-pointer transition-all ${selectedTable === table.number ? 'ring-2 ring-blue-500' : ''} ${
+                          table.status === 'occupied' ? 'bg-red-50' : 
+                          table.status === 'reserved' ? 'bg-yellow-50' : ''
+                        }`}
+                        onClick={() => {
+                          if (table.status === 'available') {
+                            setSelectedTable(table.number);
+                            setOrderType('dine-in');
+                          }
+                        }}
+                      >
+                        <CardContent className="p-3 text-center">
+                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                            <TableIcon className="w-6 h-6 text-gray-400" />
+                          </div>
+                          <h3 className="font-bold">{table.number}</h3>
+                          <Badge className={`mt-1 ${
+                            table.status === 'available' ? 'bg-green-100 text-green-800' :
+                            table.status === 'occupied' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {table.status}
+                          </Badge>
+                          {table.status === 'occupied' && table.customerName && (
+                            <p className="text-xs text-gray-600 mt-1 truncate">
+                              {table.customerName}
                             </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-gray-500">
-                                {formatDate(savedCart.timestamp)} {formatTime(savedCart.timestamp)}
-                              </span>
-                              <Badge variant="outline">
-                                {savedCart.items.length} items
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-lg text-blue-600">${savedCart.total.toFixed(2)}</p>
-                            <Button
-                              size="sm"
-                              onClick={() => loadSavedCart(savedCart)}
-                              className="mt-2"
-                            >
-                              Load
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          {savedCart.items.slice(0, 3).map(item => (
-                            <div key={item.id} className="flex justify-between text-sm">
-                              <span className="truncate max-w-[70%]">{item.quantity}x {item.name}</span>
-                              <span>${(item.price * item.quantity).toFixed(2)}</span>
-                            </div>
-                          ))}
-                          {savedCart.items.length > 3 && (
-                            <p className="text-sm text-gray-500">+{savedCart.items.length - 3} more items</p>
                           )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
-              )}
-              
-              {/* Tables */}
-              {activeTab === 'tables' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 h-full overflow-y-auto pr-2">
-                  {tables.map(table => (
-                    <Card 
-                      key={table.id}
-                      className={`cursor-pointer transition-all ${
-                        selectedTable === table.number ? 'ring-2 ring-blue-500' : ''
-                      } ${table.status === 'occupied' ? 'bg-red-50' : table.status === 'reserved' ? 'bg-yellow-50' : ''}`}
-                      onClick={() => {
-                        setSelectedTable(table.number);
-                        setOrderType('dine-in');
-                      }}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex flex-col items-center text-center">
-                          <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mb-2">
-                            <TableIcon className="w-8 h-8 text-gray-400" />
-                          </div>
-                          
-                          <div className="text-center">
-                            <h3 className="font-bold text-lg">{table.number}</h3>
-                            <Badge className={`mt-2 ${
-                              table.status === 'available' 
-                                ? 'bg-green-100 text-green-800' 
-                                : table.status === 'occupied'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {table.status}
-                            </Badge>
-                            
-                            {table.status === 'occupied' && (
-                              <div className="mt-3 text-sm space-y-1">
-                                <p className="font-medium truncate">{table.customerName}</p>
-                                <p className="text-gray-500">Order: {table.orderId}</p>
-                                <p className="font-bold text-blue-600">${table.total?.toFixed(2)}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
-          
-          {/* Right Side - Order Panel */}
+
+          {/* Right Panel - Checkout */}
           <div className="lg:w-5/12 h-full">
             <Card className="h-full flex flex-col">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex justify-between items-center">
                   <CardTitle className="flex items-center gap-2">
                     <ShoppingCart className="w-5 h-5" />
-                    Current Order
-                    <Badge variant="secondary">{cart.length}</Badge>
+                    Order ({cart.length})
                   </CardTitle>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={saveCart}
-                      disabled={cart.length === 0}
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Save
+                    <Button variant="outline" size="sm" onClick={saveCart} disabled={!cart.length}>
+                      <Save className="w-4 h-4 mr-1" /> Save
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={clearCart}
-                      disabled={cart.length === 0}
-                    >
+                    <Button variant="outline" size="sm" onClick={clearCart} disabled={!cart.length}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
               </CardHeader>
-              
-              <CardContent className="flex-1 overflow-y-auto">
-                <div className="space-y-4">
-                  {/* Order Type */}
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Order Type</Label>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={orderType === 'dine-in' ? 'default' : 'outline'}
-                        onClick={() => setOrderType('dine-in')}
-                        className="flex-1"
-                      >
-                        Dine In
-                      </Button>
-                      <Button
-                        variant={orderType === 'takeaway' ? 'default' : 'outline'}
-                        onClick={() => setOrderType('takeaway')}
-                        className="flex-1"
-                      >
-                        Take Away
-                      </Button>
-                    </div>
-                    
-                    {orderType === 'dine-in' && selectedTable && (
-                      <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <TableIcon className="w-4 h-4 text-blue-600" />
-                            <span className="font-medium">Table {selectedTable} selected</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedTable('')}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+
+              <CardContent className="flex-1 overflow-y-auto space-y-4">
+                {/* Order Type */}
+                <div>
+                  <Label>Order Type</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Button
+                      variant={orderType === 'dine-in' ? 'default' : 'outline'}
+                      onClick={() => setOrderType('dine-in')}
+                      className="flex-1"
+                    >
+                      Dine In
+                    </Button>
+                    <Button
+                      variant={orderType === 'takeaway' ? 'default' : 'outline'}
+                      onClick={() => setOrderType('takeaway')}
+                      className="flex-1"
+                    >
+                      Take Away
+                    </Button>
                   </div>
-                  
-                  <Separator />
-                  
-                  {/* Cart Items - Customizable */}
-                  <div>
-                    <Label className="text-sm font-medium mb-3 block">Order Items</Label>
-                    <div className="space-y-3">
-                      {cart.length === 0 ? (
-                        <div className="text-center py-4 text-gray-500">
-                          <ShoppingCart className="w-8 h-8 mx-auto mb-2" />
-                          <p>No items in cart</p>
-                        </div>
-                      ) : (
-                        cart.map(item => (
-                          <div 
-                            key={item.id} 
-                            className={`p-3 border rounded-lg transition-all ${
-                              editingCartItem === item.id ? 'border-blue-500 bg-blue-50' : ''
-                            }`}
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex-1">
-                                <h4 className="font-medium">{item.name}</h4>
-                                <p className="text-sm text-gray-500">{item.description}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-bold">${(item.price * item.quantity).toFixed(2)}</p>
-                                <p className="text-sm text-gray-500">${item.price.toFixed(2)} each</p>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => updateCartQuantity(item.id, -1)}
-                                  disabled={item.quantity <= 1}
-                                  className="h-7 w-7"
-                                >
-                                  <Minus className="w-3 h-3" />
-                                </Button>
-                                <span className="w-8 text-center font-bold">{item.quantity}</span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => updateCartQuantity(item.id, 1)}
-                                  className="h-7 w-7"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                </Button>
-                              </div>
-                              
-                              <div className="flex gap-2">
-                                {editingCartItem === item.id ? (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        removeFromCart(item.id);
-                                        setEditingCartItem(null);
-                                      }}
-                                      variant="destructive"
-                                    >
-                                      Remove
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => setEditingCartItem(null)}
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setEditingCartItem(item.id)}
-                                  >
-                                    Edit
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {editingCartItem === item.id && (
-                              <div className="mt-3 pt-3 border-t">
-                                <Input
-                                  placeholder="Add notes (optional)"
-                                  className="text-sm"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  
-                  <Separator />
-                  
-                  {/* Order Summary */}
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Order Summary</Label>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Subtotal:</span>
-                        <span>${subtotal.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Tax (10%):</span>
-                        <span>${tax.toFixed(2)}</span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-bold text-lg">
-                        <span>Total:</span>
-                        <span className="text-blue-600">${total.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <Separator />
-                  
-                  {/* Payment Method */}
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Payment Method</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                        onClick={() => setPaymentMethod('cash')}
-                        className="flex flex-col h-auto py-2"
-                      >
-                        <DollarSign className="w-4 h-4 mb-1" />
-                        <span className="text-xs">Cash</span>
-                      </Button>
-                      <Button
-                        variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
-                        onClick={() => setPaymentMethod('gcash')}
-                        className="flex flex-col h-auto py-2"
-                      >
-                        <Smartphone className="w-4 h-4 mb-1" />
-                        <span className="text-xs">GCash</span>
-                      </Button>
-                      <Button
-                        variant={paymentMethod === 'split' ? 'default' : 'outline'}
-                        onClick={() => setPaymentMethod('split')}
-                        className="flex flex-col h-auto py-2"
-                      >
-                        <Receipt className="w-4 h-4 mb-1" />
-                        <span className="text-xs">Split</span>
+                  {orderType === 'dine-in' && selectedTable && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded-lg flex justify-between items-center">
+                      <span className="font-medium">Table {selectedTable}</span>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedTable('')}>
+                        <X className="w-4 h-4" />
                       </Button>
                     </div>
-                    
-                    {/* Split Payment Controls */}
-                    {paymentMethod === 'split' && (
-                      <div className="mt-3 space-y-2 p-3 border rounded-lg">
-                        <Label className="text-sm font-medium mb-2 block">Split Payment</Label>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs">Cash Amount</Label>
-                            <div className="relative">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">$</span>
-                              <Input
-                                type="number"
-                                value={splitPayment.cash}
-                                onChange={(e) => updateSplitAmount('cash', parseFloat(e.target.value) || 0)}
-                                className="pl-6 text-sm h-8"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <Label className="text-xs">GCash Amount</Label>
-                            <div className="relative">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">$</span>
-                              <Input
-                                type="number"
-                                value={splitPayment.gcash}
-                                onChange={(e) => updateSplitAmount('gcash', parseFloat(e.target.value) || 0)}
-                                className="pl-6 text-sm h-8"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <Button variant="outline" size="sm" onClick={() => autoSplit('half')} className="flex-1 text-xs">
-                            50/50
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => autoSplit('cash')} className="flex-1 text-xs">
-                            All Cash
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => autoSplit('gcash')} className="flex-1 text-xs">
-                            All GCash
-                          </Button>
-                        </div>
-                        <div className="text-xs mt-2 space-y-1">
-                          <div className="flex justify-between">
-                            <span>Cash:</span>
-                            <span>${splitPayment.cash.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>GCash:</span>
-                            <span>${splitPayment.gcash.toFixed(2)}</span>
-                          </div>
-                          <Separator className="my-1" />
-                          <div className="flex justify-between font-bold">
-                            <span>Total:</span>
-                            <span className={splitPayment.cash + splitPayment.gcash === total ? "text-green-600" : "text-red-600"}>
-                              ${(splitPayment.cash + splitPayment.gcash).toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Customer Name */}
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Customer Name (Optional)</Label>
-                    <Input
-                      placeholder="Enter customer name"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                    />
-                  </div>
-                  
-                  {/* Process Payment Button */}
-                  <Button
-                    onClick={() => {
-                      if (cart.length === 0) {
-                        alert('Cart is empty!');
-                        return;
-                      }
-                      alert(`Payment processed successfully!\nTotal: $${total.toFixed(2)}`);
-                      clearCart();
-                    }}
-                    disabled={cart.length === 0 || (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total)}
-                    className="w-full py-6 text-lg"
-                    size="lg"
-                  >
-                    <Receipt className="w-5 h-5 mr-2" />
-                    Process Payment
-                  </Button>
+                  )}
                 </div>
+
+                <Separator />
+
+                {/* Cart Items */}
+                <div>
+                  <Label>Items</Label>
+                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                    {cart.length === 0 ? (
+                      <div className="text-center py-4 text-gray-500">
+                        <ShoppingCart className="w-8 h-8 mx-auto mb-2" />
+                        <p>No items in cart</p>
+                      </div>
+                    ) : (
+                      cart.map(item => (
+                        <div key={item._id} className="flex justify-between items-center p-2 border rounded">
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-sm text-gray-500">{item.quantity} × ₱{item.price.toFixed(2)}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, -1)}>
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="w-6 text-center">{item.quantity}</span>
+                            <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, 1)}>
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => removeFromCart(item._id)}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Order Summary */}
+                <div>
+                  <Label>Order Summary</Label>
+                  <div className="space-y-1 mt-2">
+                    <div className="flex justify-between">
+                      <span>Subtotal:</span>
+                      <span>₱{subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Tax (10%):</span>
+                      <span>₱{tax.toFixed(2)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total:</span>
+                      <span className="text-blue-600">₱{total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Payment Method */}
+                <div>
+                  <Label>Payment Method</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-1">
+                    <Button
+                      variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+                      onClick={() => setPaymentMethod('cash')}
+                      className="py-2"
+                    >
+                      <DollarSign className="w-4 h-4" /> Cash
+                    </Button>
+                    <Button
+                      variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
+                      onClick={() => setPaymentMethod('gcash')}
+                      className="py-2"
+                    >
+                      <Smartphone className="w-4 h-4" /> GCash
+                    </Button>
+                    <Button
+                      variant={paymentMethod === 'split' ? 'default' : 'outline'}
+                      onClick={() => setPaymentMethod('split')}
+                      className="py-2"
+                    >
+                      <Receipt className="w-4 h-4" /> Split
+                    </Button>
+                  </div>
+
+                  {paymentMethod === 'split' && (
+                    <div className="mt-2 space-y-2 p-2 border rounded">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Cash</Label>
+                          <Input
+                            type="number"
+                            value={splitPayment.cash}
+                            onChange={(e) => setSplitPayment(prev => ({ ...prev, cash: +e.target.value }))}
+                            className="h-8"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">GCash</Label>
+                          <Input
+                            type="number"
+                            value={splitPayment.gcash}
+                            onChange={(e) => setSplitPayment(prev => ({ ...prev, gcash: +e.target.value }))}
+                            className="h-8"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => autoSplit('half')} className="flex-1">
+                          50/50
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => autoSplit('cash')} className="flex-1">
+                          Cash
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => autoSplit('gcash')} className="flex-1">
+                          GCash
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Customer Name */}
+                <div>
+                  <Label>Customer Name</Label>
+                  <Input
+                    placeholder="Optional"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+
+                {/* Process Payment Button */}
+                <Button
+                  onClick={processPayment}
+                  disabled={!cart.length || (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total)}
+                  className="w-full py-6 text-lg"
+                >
+                  <Receipt className="w-5 h-5 mr-2" />
+                  Process Payment (₱{total.toFixed(2)})
+                </Button>
               </CardContent>
             </Card>
           </div>
