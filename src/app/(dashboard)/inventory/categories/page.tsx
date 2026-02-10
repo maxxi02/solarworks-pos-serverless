@@ -357,13 +357,13 @@ export default function CategoriesPage() {
                         >
                           Food
                         </Button>
-                        <Button
+                        {/* <Button
                           variant={categoryForm.menuType === 'drink' ? 'default' : 'outline'}
                           onClick={() => setCategoryForm({...categoryForm, menuType: 'drink'})}
                           className="flex-1"
                         >
                           Drink
-                        </Button>
+                        </Button> */}
                       </div>
 
                       <div className="space-y-2">
