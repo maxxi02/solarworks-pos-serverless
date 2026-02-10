@@ -721,25 +721,35 @@ export default function AccessControlPage() {
 
   // ─── Real-time Status Updates ────────────────────────────────────
   React.useEffect(() => {
-    const handleStatusChange = (data: UserStatusUpdate): void => {
-      console.log("📡 Status update received:", data);
+    const handleStatusChange = (data: UserStatusUpdate) => {
+      console.log(
+        "🔴 STATUS EVENT RECEIVED IN TABLE PAGE",
+        data.userId,
+        data.isOnline ? "→ ONLINE" : "→ OFFLINE",
+        "lastSeen:", data.lastSeen
+      );
 
-      setUsers((prev) =>
-        prev.map((user) =>
+      setUsers((prev) => {
+        const exists = prev.some(u => u.id === data.userId);
+        console.log(`User ${data.userId} exists in list? → ${exists}`);
+
+        return prev.map((user) =>
           user.id === data.userId
             ? {
               ...user,
               isOnline: data.isOnline,
-              lastActive: new Date(data.lastSeen),
+              lastActive: data.lastSeen ? new Date(data.lastSeen) : user.lastActive,
             }
             : user
-        )
-      );
+        );
+      });
     };
 
+    console.log("Attaching status listener now...");
     socketClient.onStatusChanged(handleStatusChange);
 
     return () => {
+      console.log("Removing status listener");
       socketClient.offStatusChanged(handleStatusChange);
     };
   }, []);
