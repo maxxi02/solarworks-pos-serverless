@@ -1,31 +1,28 @@
 // File: src/app/cashier/page.tsx
 'use client';
 
-import { useState, useEffect, useRef, TouchEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, 
-  User, 
   ShoppingCart, 
-  Clock, 
-  DollarSign, 
-  Smartphone,
-  Trash2,
   Plus,
   Minus,
+  Trash2,
   Save,
+  DollarSign,
+  Smartphone,
   Receipt,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  Filter
+  Filter,
+  TableIcon,
+  X,
+  Check
 } from 'lucide-react';
 
 // Types
@@ -39,22 +36,25 @@ type MenuItem = {
 
 type CartItem = MenuItem & {
   quantity: number;
+  notes?: string;
 };
 
-type SavedOrder = {
+type SavedCart = {
   id: string;
+  name: string;
   items: CartItem[];
   total: number;
-  subtotal: number;
-  tax: number;
   timestamp: Date;
   customerName?: string;
-  status: 'completed' | 'saved' | 'pending';
-  paymentMethod?: 'cash' | 'gcash' | 'split';
-  splitAmounts?: {
-    cash: number;
-    gcash: number;
-  };
+};
+
+type Table = {
+  id: string;
+  number: string;
+  status: 'available' | 'occupied' | 'reserved';
+  orderId?: string;
+  customerName?: string;
+  total?: number;
 };
 
 // Mock data
@@ -69,60 +69,57 @@ const mockMenuItems: MenuItem[] = [
   { id: 8, name: 'Atlantic Salmon Salad', price: 18.50, category: 'specials', description: 'Grilled salmon with kale and quinoa' },
   { id: 9, name: 'Margherita Pizza', price: 16.50, category: 'specials', description: 'Mozzarella, tomato sauce, and basil' },
   { id: 10, name: 'Chocolate Lava Cake', price: 7.50, category: 'desserts', description: 'Warm chocolate cake with molten center' },
-  { id: 11, name: 'Breakfast Burrito', price: 10.50, category: 'breakfast', description: 'Eggs, cheese, and sausage in tortilla' },
-  { id: 12, name: 'Green Tea Latte', price: 5.25, category: 'drinks', description: 'Matcha green tea with steamed milk' },
-  { id: 13, name: 'Spaghetti Bolognese', price: 15.00, category: 'pasta', description: 'Classic meat sauce over spaghetti' },
-  { id: 14, name: 'Garlic Bread', price: 4.50, category: 'breads', description: 'Toasted bread with garlic butter' },
-  { id: 15, name: 'Tiramisu', price: 8.75, category: 'desserts', description: 'Coffee-flavored Italian dessert' },
+  { id: 11, name: 'Extra Rice', price: 2.00, category: 'addons', description: 'Additional serving of rice' },
+  { id: 12, name: 'Garlic Sauce', price: 1.00, category: 'addons', description: 'Side of garlic sauce' },
 ];
 
-const categories = ['All', 'Breakfast', 'Snacks', 'Pasta', 'Breads', 'Drinks', 'Desserts', 'Specials'];
+const categories = ['All', 'Breakfast', 'Snacks', 'Pasta', 'Breads', 'Drinks', 'Desserts', 'Specials', 'Addons'];
 
 const CashierPage = () => {
   // State
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [savedOrders, setSavedOrders] = useState<SavedOrder[]>([
+  const [cart, setCart] = useState<CartItem[]>([
+    { id: 1, name: 'Avocado Morning Toast', price: 12.50, category: 'breakfast', description: 'Sourdough, fresh avocado, poached egg', quantity: 1 },
+    { id: 2, name: 'Iced Caramel Macchiato', price: 5.75, category: 'drinks', description: 'Double espresso with caramel drizzle', quantity: 2 },
+  ]);
+  
+  const [savedCarts, setSavedCarts] = useState<SavedCart[]>([
     {
-      id: 'ORD-001',
-      items: [mockMenuItems[0], mockMenuItems[1]].map(item => ({ ...item, quantity: 1 })),
-      subtotal: 18.25,
-      tax: 1.83,
-      total: 20.08,
+      id: 'SAVED-001',
+      name: 'Morning Breakfast',
+      items: [mockMenuItems[0], mockMenuItems[4]].map(item => ({ ...item, quantity: 1 })),
+      total: 17.00,
       timestamp: new Date(Date.now() - 3600000),
-      customerName: 'John Smith',
-      status: 'completed',
-      paymentMethod: 'cash'
+      customerName: 'John Doe'
     },
     {
-      id: 'ORD-002',
-      items: [mockMenuItems[2]].map(item => ({ ...item, quantity: 2 })),
-      subtotal: 28.40,
-      tax: 2.84,
-      total: 31.24,
+      id: 'SAVED-002',
+      name: 'Lunch Special',
+      items: [mockMenuItems[2], mockMenuItems[3]].map(item => ({ ...item, quantity: 1 })),
+      total: 22.20,
       timestamp: new Date(Date.now() - 7200000),
-      customerName: 'Jane Doe',
-      status: 'completed',
-      paymentMethod: 'split',
-      splitAmounts: { cash: 15.62, gcash: 15.62 }
     }
   ]);
+  
+  const [tables, setTables] = useState<Table[]>([
+    { id: '1', number: 'T01', status: 'occupied', orderId: 'ORD-101', customerName: 'Alice', total: 45.50 },
+    { id: '2', number: 'T02', status: 'available' },
+    { id: '3', number: 'T03', status: 'occupied', orderId: 'ORD-102', customerName: 'Bob', total: 32.25 },
+    { id: '4', number: 'T04', status: 'reserved' },
+    { id: '5', number: 'T05', status: 'available' },
+    { id: '6', number: 'T06', status: 'occupied', orderId: 'ORD-103', customerName: 'Charlie', total: 28.75 },
+    { id: '7', number: 'T07', status: 'available' },
+    { id: '8', number: 'T08', status: 'occupied', orderId: 'ORD-104', customerName: 'Diana', total: 51.80 },
+  ]);
+  
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash' | 'split'>('cash');
   const [splitPayment, setSplitPayment] = useState({ cash: 0, gcash: 0 });
-  const [orderType, setOrderType] = useState<'dine-in' | 'takeaway'>('dine-in');
-  const [activeTab, setActiveTab] = useState<'menu' | 'history'>('menu');
-  
-  // Touch/swipe states
-  const categoriesRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchEndX, setTouchEndX] = useState<number | null>(null);
-  const [categoryScrollLeft, setCategoryScrollLeft] = useState(0);
-  const [menuTouchStart, setMenuTouchStart] = useState<number | null>(null);
-  
-  const minSwipeDistance = 50;
+  const [orderType, setOrderType] = useState<'dine-in' | 'takeaway'>('takeaway');
+  const [selectedTable, setSelectedTable] = useState<string>('T07');
+  const [activeTab, setActiveTab] = useState<'menu' | 'saved' | 'tables'>('menu');
+  const [editingCartItem, setEditingCartItem] = useState<number | null>(null);
   
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -138,68 +135,6 @@ const CashierPage = () => {
     return matchesCategory && matchesSearch;
   });
   
-  // Touch handlers for categories swipe
-  const handleCategoryTouchStart = (e: TouchEvent) => {
-    setTouchEndX(null);
-    setTouchStartX(e.targetTouches[0].clientX);
-  };
-  
-  const handleCategoryTouchMove = (e: TouchEvent) => {
-    setTouchEndX(e.targetTouches[0].clientX);
-  };
-  
-  const handleCategoryTouchEnd = () => {
-    if (!touchStartX || !touchEndX || !categoriesRef.current) return;
-    
-    const distance = touchStartX - touchEndX;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-    
-    if (isLeftSwipe) {
-      categoriesRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-    } else if (isRightSwipe) {
-      categoriesRef.current.scrollBy({ left: -200, behavior: 'smooth' });
-    }
-  };
-  
-  // Touch handlers for menu category swipe
-  const handleMenuTouchStart = (e: TouchEvent) => {
-    setMenuTouchStart(e.targetTouches[0].clientX);
-  };
-  
-  const handleMenuTouchMove = (e: TouchEvent) => {
-    setTouchEndX(e.targetTouches[0].clientX);
-  };
-  
-  const handleMenuTouchEnd = () => {
-    if (!menuTouchStart || !touchEndX) return;
-    
-    const distance = menuTouchStart - touchEndX;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-    
-    if (isLeftSwipe || isRightSwipe) {
-      const currentIndex = categories.indexOf(selectedCategory);
-      let newIndex = currentIndex;
-      
-      if (isLeftSwipe && currentIndex < categories.length - 1) {
-        newIndex = currentIndex + 1;
-      } else if (isRightSwipe && currentIndex > 0) {
-        newIndex = currentIndex - 1;
-      }
-      
-      if (newIndex !== currentIndex) {
-        setSelectedCategory(categories[newIndex]);
-        if (categoriesRef.current) {
-          const categoryElement = categoriesRef.current.querySelector(`[data-category="${categories[newIndex]}"]`) as HTMLElement;
-          if (categoryElement) {
-            categoryElement.scrollIntoView({ behavior: 'smooth', inline: 'center' });
-          }
-        }
-      }
-    }
-  };
-  
   // Cart functions
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -213,7 +148,7 @@ const CashierPage = () => {
     });
   };
   
-  const updateQuantity = (itemId: number, change: number) => {
+  const updateCartQuantity = (itemId: number, change: number) => {
     setCart(prev => 
       prev.map(item => 
         item.id === itemId 
@@ -225,6 +160,7 @@ const CashierPage = () => {
   
   const removeFromCart = (itemId: number) => {
     setCart(prev => prev.filter(item => item.id !== itemId));
+    setEditingCartItem(null);
   };
   
   const clearCart = () => {
@@ -232,41 +168,38 @@ const CashierPage = () => {
     setCustomerName('');
     setSplitPayment({ cash: 0, gcash: 0 });
     setPaymentMethod('cash');
+    setSelectedTable('');
+    setEditingCartItem(null);
   };
   
-  // Save order function
-  const saveOrder = () => {
+  // Save cart function
+  const saveCart = () => {
     if (cart.length === 0) {
       alert('Cart is empty!');
       return;
     }
     
-    const newOrder: SavedOrder = {
-      id: `ORD-${Date.now().toString().slice(-6)}`,
+    const cartName = prompt('Enter a name for this saved cart:', `Cart ${savedCarts.length + 1}`);
+    if (!cartName) return;
+    
+    const newCart: SavedCart = {
+      id: `SAVED-${Date.now().toString().slice(-6)}`,
+      name: cartName,
       items: [...cart],
-      subtotal,
-      tax,
       total,
       timestamp: new Date(),
-      customerName: customerName || 'Walk-in Customer',
-      status: 'saved',
+      customerName: customerName || undefined,
     };
     
-    setSavedOrders(prev => [newOrder, ...prev]);
-    alert('Order saved successfully!');
+    setSavedCarts(prev => [newCart, ...prev]);
+    alert('Cart saved successfully!');
   };
   
-  // Load saved order
-  const loadSavedOrder = (order: SavedOrder) => {
-    setCart(order.items);
-    setCustomerName(order.customerName || '');
-  };
-  
-  // Delete saved order
-  const deleteSavedOrder = (orderId: string) => {
-    if (confirm('Delete this saved order?')) {
-      setSavedOrders(prev => prev.filter(order => order.id !== orderId));
-    }
+  // Load saved cart
+  const loadSavedCart = (savedCart: SavedCart) => {
+    setCart(savedCart.items);
+    setCustomerName(savedCart.customerName || '');
+    setActiveTab('menu');
   };
   
   // Split payment functions
@@ -298,77 +231,14 @@ const CashierPage = () => {
     }
   };
   
-  // Process payment
-  const processPayment = () => {
-    if (cart.length === 0) {
-      alert('Cart is empty!');
-      return;
-    }
-    
-    let paymentDetails = '';
-    
-    if (paymentMethod === 'split') {
-      if (splitPayment.cash + splitPayment.gcash !== total) {
-        alert('Split payment amounts must equal the total!');
-        return;
-      }
-      paymentDetails = `Split: Cash $${splitPayment.cash.toFixed(2)} + GCash $${splitPayment.gcash.toFixed(2)}`;
-    } else if (paymentMethod === 'cash') {
-      paymentDetails = `Cash: $${total.toFixed(2)}`;
-    } else {
-      paymentDetails = `GCash: $${total.toFixed(2)}`;
-    }
-    
-    const newOrder: SavedOrder = {
-      id: `ORD-${Date.now().toString().slice(-6)}`,
-      items: [...cart],
-      subtotal,
-      tax,
-      total,
-      timestamp: new Date(),
-      customerName: customerName || 'Walk-in Customer',
-      status: 'completed',
-      paymentMethod,
-      splitAmounts: paymentMethod === 'split' ? splitPayment : undefined
-    };
-    
-    setSavedOrders(prev => [newOrder, ...prev]);
-    
-    console.log('Processing payment:', {
-      order: newOrder,
-      paymentDetails,
-      orderType
-    });
-    
-    // Generate receipt
-    const receiptText = `
-      Restaurant POS
-      ====================
-      Order: ${newOrder.id}
-      Date: ${newOrder.timestamp.toLocaleString()}
-      Customer: ${newOrder.customerName}
-      Type: ${orderType}
-      ====================
-      ${cart.map(item => `${item.quantity}x ${item.name} - $${(item.price * item.quantity).toFixed(2)}`).join('\n')}
-      ====================
-      Subtotal: $${subtotal.toFixed(2)}
-      Tax (10%): $${tax.toFixed(2)}
-      Total: $${total.toFixed(2)}
-      Payment: ${paymentDetails}
-      ====================
-      Thank you for your business!
-    `;
-    
-    console.log(receiptText);
-    alert(`Payment processed successfully!\n${paymentDetails}\nOrder #${newOrder.id}`);
-    
-    // Clear cart
-    clearCart();
-  };
-  
   // Format time
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  // Format date
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString();
   };
   
   // Initialize split payment when total changes
@@ -379,501 +249,525 @@ const CashierPage = () => {
   }, [total, paymentMethod]);
   
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="flex h-screen">
-        {/* Main Menu Area (Left - 70%) */}
-        <main className="flex-1 flex flex-col min-w-0 w-7/10">
-          {/* Top Header */}
-          <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 flex-1 max-w-xl">
-                <div className="relative w-full">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <Input
-                    placeholder="Search menu items..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 w-full"
-                  />
-                </div>
+    <div className="min-h-screen bg-gray-50 p-2 md:p-4">
+      <div className="max-w-[1920px] mx-auto">
+        {/* Top Header */}
+        <header className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold">POS System</h1>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm font-semibold">Cashier #04</p>
+                <p className="text-xs text-gray-500">Active</p>
               </div>
-              
-              <div className="flex items-center gap-4 ml-6">
-                <div className="flex items-center gap-3">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-sm font-semibold">Alex Miller</p>
-                    <p className="text-xs text-gray-500">Cashier #04</p>
-                  </div>
-                  <Avatar>
-                    <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alex" />
-                    <AvatarFallback>AM</AvatarFallback>
-                  </Avatar>
-                </div>
+            </div>
+          </div>
+          
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="menu" className="flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                Menu
+              </TabsTrigger>
+              <TabsTrigger value="saved" className="flex items-center gap-2">
+                <Save className="w-4 h-4" />
+                Saved
+                <Badge variant="secondary" className="ml-1">{savedCarts.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="tables" className="flex items-center gap-2">
+                <TableIcon className="w-4 h-4" />
+                Tables
+                <Badge variant="secondary" className="ml-1">{tables.filter(t => t.status === 'occupied').length}</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </header>
+        
+        <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-150px)]">
+          {/* Left Side - Main Content */}
+          <div className="lg:w-7/12 flex flex-col h-full">
+            {/* Search Bar */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Input
+                  placeholder="Search menu items..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
               </div>
             </div>
             
-            {/* Swipeable Categories */}
-            <div className="mt-4 relative">
-              <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white dark:from-gray-800 to-transparent z-10 pointer-events-none" />
-              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white dark:from-gray-800 to-transparent z-10 pointer-events-none" />
-              
-              <div
-                ref={categoriesRef}
-                onTouchStart={handleCategoryTouchStart}
-                onTouchMove={handleCategoryTouchMove}
-                onTouchEnd={handleCategoryTouchEnd}
-                className="flex gap-2 overflow-x-auto scrollbar-hide px-1 py-2"
-              >
-                {categories.map(cat => (
-                  <Button
-                    key={cat}
-                    data-category={cat}
-                    variant={selectedCategory === cat ? "default" : "outline"}
-                    onClick={() => setSelectedCategory(cat)}
-                    className="whitespace-nowrap rounded-full shrink-0"
-                  >
-                    {cat}
-                  </Button>
-                ))}
-              </div>
-              
-              {/* Scroll indicators */}
-              <div className="flex justify-center gap-1 mt-2">
-                {categories.map((cat, index) => (
-                  <div
-                    key={cat}
-                    className={`w-2 h-2 rounded-full ${
-                      selectedCategory === cat 
-                        ? 'bg-blue-600' 
-                        : 'bg-gray-300 dark:bg-gray-700'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          </header>
-          
-          {/* Menu Items */}
-          <div 
-            ref={menuRef}
-            onTouchStart={handleMenuTouchStart}
-            onTouchMove={handleMenuTouchMove}
-            onTouchEnd={handleMenuTouchEnd}
-            className="flex-1 overflow-y-auto p-4"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredItems.map(item => (
-                <Card 
-                  key={item.id} 
-                  className="group hover:shadow-md transition-all cursor-pointer active:scale-98"
-                  onClick={() => addToCart(item)}
+            {/* Categories */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {categories.map(cat => (
+                <Button
+                  key={cat}
+                  variant={selectedCategory === cat ? "default" : "outline"}
+                  onClick={() => setSelectedCategory(cat)}
+                  className="whitespace-nowrap rounded-full text-sm"
                 >
-                  <CardContent className="p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-sm truncate">{item.name}</h3>
-                        <p className="text-xs text-gray-500 truncate">{item.description}</p>
-                      </div>
-                      <span className="font-bold text-blue-600 text-sm ml-2">${item.price.toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-xs">
-                        {item.category}
-                      </Badge>
-                      <Button size="sm" className="h-6 px-2 text-xs">
-                        <Plus className="w-3 h-3 mr-1" />
-                        Add
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                  {cat}
+                </Button>
               ))}
             </div>
             
-            {filteredItems.length === 0 && (
-              <div className="text-center py-12">
-                <Search className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">No items found</p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('All');
-                  }}
-                  className="mt-4"
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            )}
-            
-            {/* Swipe instructions for mobile */}
-            <div className="text-center mt-4 text-sm text-gray-500 lg:hidden">
-              <p>Swipe left/right to change categories</p>
-            </div>
-          </div>
-        </main>
-        
-        {/* Cart Sidebar (Right - 30%) */}
-        <aside className="w-3/10 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
-          {/* Cart Header */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-blue-600" />
-                <h2 className="text-lg font-bold">Current Order</h2>
-                <Badge variant="secondary" className="ml-2">
-                  {cart.length}
-                </Badge>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={saveOrder}
-                  disabled={cart.length === 0}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearCart}
-                  disabled={cart.length === 0}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                variant={orderType === 'dine-in' ? 'default' : 'outline'}
-                onClick={() => setOrderType('dine-in')}
-                className="flex-1 text-sm"
-              >
-                Dine In
-              </Button>
-              <Button
-                variant={orderType === 'takeaway' ? 'default' : 'outline'}
-                onClick={() => setOrderType('takeaway')}
-                className="flex-1 text-sm"
-              >
-                Take Away
-              </Button>
-            </div>
-          </div>
-          
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {cart.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">Cart is empty</p>
-                <p className="text-sm text-gray-400 mt-1">Add items from the menu</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {cart.map(item => (
-                  <div key={item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h4 className="font-medium text-sm">{item.name}</h4>
-                        <p className="text-xs text-gray-500">${item.price.toFixed(2)} each</p>
-                      </div>
-                      <span className="font-bold text-sm">${(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantity(item.id, -1);
-                          }}
-                          disabled={item.quantity <= 1}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantity(item.id, 1);
-                          }}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFromCart(item.id);
-                        }}
-                        className="h-6 px-2"
-                      >
-                        <Trash2 className="w-3 h-3 text-red-500" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* Payment Section */}
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-            <div className="space-y-3">
-              <div>
-                <Label className="text-sm">Customer Name</Label>
-                <Input
-                  placeholder="Enter customer name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              
-              <div>
-                <Label className="text-sm">Payment Method</Label>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  <Button
-                    variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                    onClick={() => setPaymentMethod('cash')}
-                    className="flex flex-col h-auto py-2"
-                  >
-                    <DollarSign className="w-4 h-4 mb-1" />
-                    <span className="text-xs">Cash</span>
-                  </Button>
-                  <Button
-                    variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
-                    onClick={() => setPaymentMethod('gcash')}
-                    className="flex flex-col h-auto py-2"
-                  >
-                    <Smartphone className="w-4 h-4 mb-1" />
-                    <span className="text-xs">GCash</span>
-                  </Button>
-                  <Button
-                    variant={paymentMethod === 'split' ? 'default' : 'outline'}
-                    onClick={() => setPaymentMethod('split')}
-                    className="flex flex-col h-auto py-2"
-                  >
-                    <Receipt className="w-4 h-4 mb-1" />
-                    <span className="text-xs">Split</span>
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Split Payment Controls */}
-              {paymentMethod === 'split' && (
-                <div className="space-y-2 p-3 border rounded-lg">
-                  <Label className="text-sm font-semibold">Split Payment</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs">Cash</Label>
-                      <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">$</span>
-                        <Input
-                          type="number"
-                          value={splitPayment.cash}
-                          onChange={(e) => updateSplitAmount('cash', parseFloat(e.target.value) || 0)}
-                          className="pl-6 text-sm h-8"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs">GCash</Label>
-                      <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">$</span>
-                        <Input
-                          type="number"
-                          value={splitPayment.gcash}
-                          onChange={(e) => updateSplitAmount('gcash', parseFloat(e.target.value) || 0)}
-                          className="pl-6 text-sm h-8"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => autoSplit('half')} className="flex-1 text-xs">
-                      Half/Half
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => autoSplit('cash')} className="flex-1 text-xs">
-                      All Cash
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => autoSplit('gcash')} className="flex-1 text-xs">
-                      All GCash
-                    </Button>
-                  </div>
-                  <div className="text-xs">
-                    <div className="flex justify-between">
-                      <span>Cash:</span>
-                      <span>${splitPayment.cash.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>GCash:</span>
-                      <span>${splitPayment.gcash.toFixed(2)}</span>
-                    </div>
-                    <Separator className="my-1" />
-                    <div className="flex justify-between font-bold">
-                      <span>Total:</span>
-                      <span className={splitPayment.cash + splitPayment.gcash === total ? "text-green-600" : "text-red-600"}>
-                        ${(splitPayment.cash + splitPayment.gcash).toFixed(2)}
-                        {splitPayment.cash + splitPayment.gcash !== total && (
-                          <XCircle className="w-3 h-3 inline ml-1" />
-                        )}
-                      </span>
-                    </div>
-                  </div>
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-hidden">
+              {/* Menu Items Grid */}
+              {activeTab === 'menu' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 h-full overflow-y-auto pr-2">
+                  {filteredItems.map(item => (
+                    <Card key={item.id} className="hover:shadow-md transition-all">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col h-full">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-lg mb-1">{item.name}</h3>
+                            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{item.description}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline" className="text-xs">
+                              {item.category}
+                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-blue-600">${item.price.toFixed(2)}</span>
+                              <Button
+                                size="sm"
+                                onClick={() => addToCart(item)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
               
-              {/* Order Summary */}
-              <div className="space-y-2 pt-2 border-t">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Tax (10%):</span>
-                  <span>${tax.toFixed(2)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between font-bold">
-                  <span>Total:</span>
-                  <span className="text-blue-600">${total.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-            
-            <Button
-              onClick={processPayment}
-              disabled={cart.length === 0 || (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total)}
-              className="w-full py-3"
-            >
-              <Receipt className="w-4 h-4 mr-2" />
-              Process Payment
-            </Button>
-          </div>
-        </aside>
-      </div>
-      
-      {/* Order History Modal/Drawer */}
-      <div className="fixed bottom-4 right-4 z-50">
-        <Button
-          onClick={() => setActiveTab('history')}
-          className="rounded-full p-3 shadow-lg"
-          size="icon"
-        >
-          <Clock className="w-6 h-6" />
-        </Button>
-      </div>
-      
-      {/* Order History Panel */}
-      {activeTab === 'history' && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 w-full max-w-2xl max-h-[80vh] rounded-t-xl sm:rounded-xl overflow-hidden">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="text-lg font-bold">Order History</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setActiveTab('menu')}
-              >
-                ×
-              </Button>
-            </div>
-            <div className="overflow-y-auto p-4 max-h-[60vh]">
-              <div className="space-y-3">
-                {savedOrders.map(order => (
-                  <Card key={order.id}>
-                    <CardContent className="p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-bold text-sm">{order.id}</h4>
-                          <p className="text-xs text-gray-500">{order.customerName}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant={order.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
-                              {order.status}
-                            </Badge>
-                            {order.paymentMethod && (
-                              <Badge variant="outline" className="text-xs">
-                                {order.paymentMethod}
+              {/* Saved Carts */}
+              {activeTab === 'saved' && (
+                <div className="space-y-3 h-full overflow-y-auto pr-2">
+                  {savedCarts.map(savedCart => (
+                    <Card key={savedCart.id}>
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-bold">{savedCart.name}</h3>
+                            <p className="text-sm text-gray-500">
+                              {savedCart.customerName || 'No customer name'}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-500">
+                                {formatDate(savedCart.timestamp)} {formatTime(savedCart.timestamp)}
+                              </span>
+                              <Badge variant="outline">
+                                {savedCart.items.length} items
                               </Badge>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-lg text-blue-600">${savedCart.total.toFixed(2)}</p>
+                            <Button
+                              size="sm"
+                              onClick={() => loadSavedCart(savedCart)}
+                              className="mt-2"
+                            >
+                              Load
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {savedCart.items.slice(0, 3).map(item => (
+                            <div key={item.id} className="flex justify-between text-sm">
+                              <span className="truncate max-w-[70%]">{item.quantity}x {item.name}</span>
+                              <span>${(item.price * item.quantity).toFixed(2)}</span>
+                            </div>
+                          ))}
+                          {savedCart.items.length > 3 && (
+                            <p className="text-sm text-gray-500">+{savedCart.items.length - 3} more items</p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              
+              {/* Tables */}
+              {activeTab === 'tables' && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 h-full overflow-y-auto pr-2">
+                  {tables.map(table => (
+                    <Card 
+                      key={table.id}
+                      className={`cursor-pointer transition-all ${
+                        selectedTable === table.number ? 'ring-2 ring-blue-500' : ''
+                      } ${table.status === 'occupied' ? 'bg-red-50' : table.status === 'reserved' ? 'bg-yellow-50' : ''}`}
+                      onClick={() => {
+                        setSelectedTable(table.number);
+                        setOrderType('dine-in');
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center mb-2">
+                            <TableIcon className="w-8 h-8 text-gray-400" />
+                          </div>
+                          
+                          <div className="text-center">
+                            <h3 className="font-bold text-lg">{table.number}</h3>
+                            <Badge className={`mt-2 ${
+                              table.status === 'available' 
+                                ? 'bg-green-100 text-green-800' 
+                                : table.status === 'occupied'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {table.status}
+                            </Badge>
+                            
+                            {table.status === 'occupied' && (
+                              <div className="mt-3 text-sm space-y-1">
+                                <p className="font-medium truncate">{table.customerName}</p>
+                                <p className="text-gray-500">Order: {table.orderId}</p>
+                                <p className="font-bold text-blue-600">${table.total?.toFixed(2)}</p>
+                              </div>
                             )}
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500">{formatTime(order.timestamp)}</p>
-                          <p className="font-bold text-sm">${order.total.toFixed(2)}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="text-xs space-y-1 mb-3">
-                        {order.items.slice(0, 2).map(item => (
-                          <div key={item.id} className="flex justify-between">
-                            <span>{item.quantity}x {item.name}</span>
-                            <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Right Side - Order Panel */}
+          <div className="lg:w-5/12 h-full">
+            <Card className="h-full flex flex-col">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingCart className="w-5 h-5" />
+                    Current Order
+                    <Badge variant="secondary">{cart.length}</Badge>
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={saveCart}
+                      disabled={cart.length === 0}
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearCart}
+                      disabled={cart.length === 0}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="flex-1 overflow-y-auto">
+                <div className="space-y-4">
+                  {/* Order Type */}
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Order Type</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={orderType === 'dine-in' ? 'default' : 'outline'}
+                        onClick={() => setOrderType('dine-in')}
+                        className="flex-1"
+                      >
+                        Dine In
+                      </Button>
+                      <Button
+                        variant={orderType === 'takeaway' ? 'default' : 'outline'}
+                        onClick={() => setOrderType('takeaway')}
+                        className="flex-1"
+                      >
+                        Take Away
+                      </Button>
+                    </div>
+                    
+                    {orderType === 'dine-in' && selectedTable && (
+                      <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <TableIcon className="w-4 h-4 text-blue-600" />
+                            <span className="font-medium">Table {selectedTable} selected</span>
                           </div>
-                        ))}
-                        {order.items.length > 2 && (
-                          <p className="text-gray-500">+{order.items.length - 2} more items</p>
-                        )}
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            loadSavedOrder(order);
-                            setActiveTab('menu');
-                          }}
-                          className="flex-1 text-xs"
-                        >
-                          Load Order
-                        </Button>
-                        {order.status === 'saved' && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteSavedOrder(order.id)}
-                            className="text-xs"
+                            onClick={() => setSelectedTable('')}
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <X className="w-4 h-4" />
                           </Button>
-                        )}
+                        </div>
                       </div>
-                      
-                      {order.paymentMethod === 'split' && order.splitAmounts && (
-                        <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs">
-                          <p className="font-medium">Split Payment:</p>
+                    )}
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Cart Items - Customizable */}
+                  <div>
+                    <Label className="text-sm font-medium mb-3 block">Order Items</Label>
+                    <div className="space-y-3">
+                      {cart.length === 0 ? (
+                        <div className="text-center py-4 text-gray-500">
+                          <ShoppingCart className="w-8 h-8 mx-auto mb-2" />
+                          <p>No items in cart</p>
+                        </div>
+                      ) : (
+                        cart.map(item => (
+                          <div 
+                            key={item.id} 
+                            className={`p-3 border rounded-lg transition-all ${
+                              editingCartItem === item.id ? 'border-blue-500 bg-blue-50' : ''
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-medium">{item.name}</h4>
+                                <p className="text-sm text-gray-500">{item.description}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold">${(item.price * item.quantity).toFixed(2)}</p>
+                                <p className="text-sm text-gray-500">${item.price.toFixed(2)} each</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateCartQuantity(item.id, -1)}
+                                  disabled={item.quantity <= 1}
+                                  className="h-7 w-7"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </Button>
+                                <span className="w-8 text-center font-bold">{item.quantity}</span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => updateCartQuantity(item.id, 1)}
+                                  className="h-7 w-7"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </Button>
+                              </div>
+                              
+                              <div className="flex gap-2">
+                                {editingCartItem === item.id ? (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        removeFromCart(item.id);
+                                        setEditingCartItem(null);
+                                      }}
+                                      variant="destructive"
+                                    >
+                                      Remove
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => setEditingCartItem(null)}
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEditingCartItem(item.id)}
+                                  >
+                                    Edit
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {editingCartItem === item.id && (
+                              <div className="mt-3 pt-3 border-t">
+                                <Input
+                                  placeholder="Add notes (optional)"
+                                  className="text-sm"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Order Summary */}
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Order Summary</Label>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Subtotal:</span>
+                        <span>${subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tax (10%):</span>
+                        <span>${tax.toFixed(2)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-bold text-lg">
+                        <span>Total:</span>
+                        <span className="text-blue-600">${total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* Payment Method */}
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Payment Method</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+                        onClick={() => setPaymentMethod('cash')}
+                        className="flex flex-col h-auto py-2"
+                      >
+                        <DollarSign className="w-4 h-4 mb-1" />
+                        <span className="text-xs">Cash</span>
+                      </Button>
+                      <Button
+                        variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
+                        onClick={() => setPaymentMethod('gcash')}
+                        className="flex flex-col h-auto py-2"
+                      >
+                        <Smartphone className="w-4 h-4 mb-1" />
+                        <span className="text-xs">GCash</span>
+                      </Button>
+                      <Button
+                        variant={paymentMethod === 'split' ? 'default' : 'outline'}
+                        onClick={() => setPaymentMethod('split')}
+                        className="flex flex-col h-auto py-2"
+                      >
+                        <Receipt className="w-4 h-4 mb-1" />
+                        <span className="text-xs">Split</span>
+                      </Button>
+                    </div>
+                    
+                    {/* Split Payment Controls */}
+                    {paymentMethod === 'split' && (
+                      <div className="mt-3 space-y-2 p-3 border rounded-lg">
+                        <Label className="text-sm font-medium mb-2 block">Split Payment</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Cash Amount</Label>
+                            <div className="relative">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">$</span>
+                              <Input
+                                type="number"
+                                value={splitPayment.cash}
+                                onChange={(e) => updateSplitAmount('cash', parseFloat(e.target.value) || 0)}
+                                className="pl-6 text-sm h-8"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs">GCash Amount</Label>
+                            <div className="relative">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm">$</span>
+                              <Input
+                                type="number"
+                                value={splitPayment.gcash}
+                                onChange={(e) => updateSplitAmount('gcash', parseFloat(e.target.value) || 0)}
+                                className="pl-6 text-sm h-8"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <Button variant="outline" size="sm" onClick={() => autoSplit('half')} className="flex-1 text-xs">
+                            50/50
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => autoSplit('cash')} className="flex-1 text-xs">
+                            All Cash
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => autoSplit('gcash')} className="flex-1 text-xs">
+                            All GCash
+                          </Button>
+                        </div>
+                        <div className="text-xs mt-2 space-y-1">
                           <div className="flex justify-between">
                             <span>Cash:</span>
-                            <span>${order.splitAmounts.cash.toFixed(2)}</span>
+                            <span>${splitPayment.cash.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>GCash:</span>
-                            <span>${order.splitAmounts.gcash.toFixed(2)}</span>
+                            <span>${splitPayment.gcash.toFixed(2)}</span>
+                          </div>
+                          <Separator className="my-1" />
+                          <div className="flex justify-between font-bold">
+                            <span>Total:</span>
+                            <span className={splitPayment.cash + splitPayment.gcash === total ? "text-green-600" : "text-red-600"}>
+                              ${(splitPayment.cash + splitPayment.gcash).toFixed(2)}
+                            </span>
                           </div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Customer Name */}
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Customer Name (Optional)</Label>
+                    <Input
+                      placeholder="Enter customer name"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                    />
+                  </div>
+                  
+                  {/* Process Payment Button */}
+                  <Button
+                    onClick={() => {
+                      if (cart.length === 0) {
+                        alert('Cart is empty!');
+                        return;
+                      }
+                      alert(`Payment processed successfully!\nTotal: $${total.toFixed(2)}`);
+                      clearCart();
+                    }}
+                    disabled={cart.length === 0 || (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total)}
+                    className="w-full py-6 text-lg"
+                    size="lg"
+                  >
+                    <Receipt className="w-5 h-5 mr-2" />
+                    Process Payment
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
