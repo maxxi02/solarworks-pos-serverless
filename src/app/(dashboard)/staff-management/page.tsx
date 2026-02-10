@@ -2,49 +2,14 @@
 
 import * as React from "react";
 import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type UniqueIdentifier,
-} from "@dnd-kit/core";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsLeft,
-  IconChevronsRight,
   IconDotsVertical,
-  IconGripVertical,
   IconPlus,
   IconShield,
   IconUserCheck,
   IconUserX,
   IconTrash,
 } from "@tabler/icons-react";
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type ColumnFiltersState,
-  type Row,
-  type SortingState,
-  type VisibilityState,
-} from "@tanstack/react-table";
+import { type ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { debounce } from "lodash";
@@ -52,7 +17,6 @@ import { debounce } from "lodash";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -88,14 +52,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -109,14 +65,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { DataTable, DragHandle } from "@/components/data-table";
 
 // ─── Better Auth ────────────────────────────────────────────────
 import { authClient } from "@/lib/auth-client";
 
-// Adjust these types based on your actual schema
+// Types
 type UserRole = "admin" | "manager" | "staff" | "user";
 
-// Base Better Auth user type - adjust according to your actual response
 interface BetterAuthUser {
   id: string;
   name: string | null;
@@ -132,13 +88,12 @@ interface BetterAuthUser {
   image?: string | null;
 }
 
-// Extended type for our table with computed status
 interface TableUser extends Omit<BetterAuthUser, "banned"> {
   status: "active" | "banned" | "inactive";
   banned: boolean;
 }
 
-// Helper to convert BetterAuthUser to TableUser
+// Helper functions
 function transformToTableUser(user: BetterAuthUser): TableUser {
   const banned = user.banned ?? false;
   const status = getUserStatus(user);
@@ -151,7 +106,6 @@ function transformToTableUser(user: BetterAuthUser): TableUser {
   };
 }
 
-// Helper function to determine user status
 function getUserStatus(user: BetterAuthUser): TableUser["status"] {
   if (user.banned === true) return "banned";
   if (user.lastActive) {
@@ -164,7 +118,7 @@ function getUserStatus(user: BetterAuthUser): TableUser["status"] {
   return "active";
 }
 
-// Role Badge component
+// Badge Components
 function RoleBadge({ role }: { role?: UserRole }) {
   const variantMap: Record<
     string,
@@ -194,7 +148,6 @@ function RoleBadge({ role }: { role?: UserRole }) {
   );
 }
 
-// Status Badge component
 function StatusBadge({ status }: { status: TableUser["status"] }) {
   const variantMap: Record<
     TableUser["status"],
@@ -212,22 +165,6 @@ function StatusBadge({ status }: { status: TableUser["status"] }) {
   );
 }
 
-// Drag Handle component
-function DragHandle({ id }: { id: string }) {
-  const { attributes, listeners } = useSortable({ id });
-  return (
-    <Button
-      {...attributes}
-      {...listeners}
-      variant="ghost"
-      size="icon"
-      className="text-muted-foreground size-7 hover:bg-transparent cursor-grab active:cursor-grabbing"
-    >
-      <IconGripVertical className="size-3" />
-    </Button>
-  );
-}
-
 // Invite User Dialog
 interface InviteUserDialogProps {
   onSuccess: () => Promise<void>;
@@ -240,7 +177,6 @@ function InviteUserDialog({ onSuccess }: InviteUserDialogProps) {
   const [role, setRole] = React.useState<UserRole>("user");
   const [loading, setLoading] = React.useState(false);
 
-  // In InviteUserDialog component:
   const handleInvite = async () => {
     if (!email.trim()) {
       toast.error("Email is required");
@@ -249,21 +185,19 @@ function InviteUserDialog({ onSuccess }: InviteUserDialogProps) {
 
     setLoading(true);
     try {
-      // Fix: Better Auth createUser returns { user, error }
       const { data: user, error } = await authClient.admin.createUser({
         email: email.trim(),
-        name: name.trim(), // Use undefined instead of null
+        name: name.trim(),
         password: Math.random().toString(36).slice(-12),
       });
 
       if (error) throw error;
 
-      // If role needs to be set separately
       if (role !== "user" && user) {
         await authClient.admin.updateUser({
           userId: user.user.id,
           data: {
-            metadata: { role }, // Try metadata instead of customData
+            customData: { role },
           },
         });
       }
@@ -281,7 +215,6 @@ function InviteUserDialog({ onSuccess }: InviteUserDialogProps) {
       setLoading(false);
     }
   };
-
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -351,7 +284,7 @@ function InviteUserDialog({ onSuccess }: InviteUserDialogProps) {
   );
 }
 
-// User Edit Drawer component
+// User Edit Drawer
 interface UserEditDrawerProps {
   user: TableUser;
   onRefresh: () => Promise<void>;
@@ -366,7 +299,6 @@ function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
   const [banDays, setBanDays] = React.useState<number | "">("");
   const [saving, setSaving] = React.useState(false);
 
-  // Reset form when user changes
   React.useEffect(() => {
     setName(user.name ?? "");
     setRole(user.role ?? "user");
@@ -377,7 +309,6 @@ function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
   const handleSaveDetails = async () => {
     setSaving(true);
     try {
-      // Update name
       const updatePromises = [];
 
       if (name.trim() !== (user.name ?? "")) {
@@ -387,25 +318,23 @@ function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
             data: {
               name: name.trim() || null,
             },
-          })
+          }),
         );
       }
 
-      // Update role
       if (role !== user.role) {
         updatePromises.push(
           authClient.admin.updateUser({
             userId: user.id,
             data: {
-
               customData: { role },
             },
-          })
+          }),
         );
       }
-      const results = await Promise.all(updatePromises);
 
-      const hasError = results.some(result => result.error);
+      const results = await Promise.all(updatePromises);
+      const hasError = results.some((result) => result.error);
       if (hasError) {
         throw new Error("Failed to update user");
       }
@@ -556,7 +485,6 @@ function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
             </div>
           )}
 
-          {/* Ban controls */}
           {user.status !== "banned" && (
             <div className="space-y-3 border-t pt-4">
               <Label>Ban User</Label>
@@ -615,31 +543,6 @@ function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
   );
 }
 
-// Draggable Row component
-function DraggableRow({ row }: { row: Row<TableUser> }) {
-  const { transform, transition, setNodeRef, isDragging } = useSortable({
-    id: row.original.id,
-  });
-
-  return (
-    <TableRow
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.7 : 1,
-      }}
-      className="data-[state=selected]:bg-muted/50"
-    >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell key={cell.id}>
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </TableCell>
-      ))}
-    </TableRow>
-  );
-}
-
 // Delete User Dialog
 interface DeleteUserDialogProps {
   userId: string;
@@ -647,7 +550,11 @@ interface DeleteUserDialogProps {
   onSuccess: () => Promise<void>;
 }
 
-function DeleteUserDialog({ userId, userName, onSuccess }: DeleteUserDialogProps) {
+function DeleteUserDialog({
+  userId,
+  userName,
+  onSuccess,
+}: DeleteUserDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
@@ -672,10 +579,12 @@ function DeleteUserDialog({ userId, userName, onSuccess }: DeleteUserDialogProps
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <DropdownMenuItem onSelect={(e) => {
-        e.preventDefault();
-        setOpen(true);
-      }}>
+      <DropdownMenuItem
+        onSelect={(e) => {
+          e.preventDefault();
+          setOpen(true);
+        }}
+      >
         <IconTrash className="size-4 mr-2" />
         Delete User
       </DropdownMenuItem>
@@ -702,34 +611,172 @@ function DeleteUserDialog({ userId, userName, onSuccess }: DeleteUserDialogProps
   );
 }
 
-// Table columns
+// Bulk Actions Component
+interface BulkActionsProps {
+  selectedUsers: TableUser[];
+  onRefresh: () => Promise<void>;
+  onClearSelection: () => void;
+}
+
+function BulkActions({
+  selectedUsers,
+  onRefresh,
+  onClearSelection,
+}: BulkActionsProps) {
+  const [roleChangeOpen, setRoleChangeOpen] = React.useState(false);
+  const [newRole, setNewRole] = React.useState<UserRole>("user");
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+
+  const handleBulkRoleChange = async () => {
+    setLoading(true);
+    try {
+      const promises = selectedUsers.map((user) =>
+        authClient.admin.updateUser({
+          userId: user.id,
+          data: {
+            customData: { role: newRole },
+          },
+        }),
+      );
+
+      const results = await Promise.all(promises);
+      const hasError = results.some((result) => result.error);
+
+      if (hasError) {
+        throw new Error("Some role updates failed");
+      }
+
+      toast.success(`Updated ${selectedUsers.length} user(s)`);
+      setRoleChangeOpen(false);
+      onClearSelection();
+      await onRefresh();
+    } catch (err) {
+      const error = err as Error;
+      toast.error(error?.message ?? "Bulk role change failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setLoading(true);
+    try {
+      const promises = selectedUsers.map((user) =>
+        authClient.admin.removeUser({
+          userId: user.id,
+        }),
+      );
+
+      const results = await Promise.all(promises);
+      const hasError = results.some((result) => result.error);
+
+      if (hasError) {
+        throw new Error("Some deletions failed");
+      }
+
+      toast.success(`Deleted ${selectedUsers.length} user(s)`);
+      setDeleteOpen(false);
+      onClearSelection();
+      await onRefresh();
+    } catch (err) {
+      const error = err as Error;
+      toast.error(error?.message ?? "Bulk delete failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-muted/60 p-3 rounded-lg flex items-center justify-between">
+      <span className="text-sm font-medium">
+        {selectedUsers.length} user{selectedUsers.length !== 1 ? "s" : ""}{" "}
+        selected
+      </span>
+      <div className="flex gap-2">
+        <Dialog open={roleChangeOpen} onOpenChange={setRoleChangeOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline">
+              Change Role
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Role for Selected Users</DialogTitle>
+              <DialogDescription>
+                Update the role for {selectedUsers.length} selected user(s).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>New Role</Label>
+                <Select
+                  value={newRole}
+                  onValueChange={(v) => setNewRole(v as UserRole)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setRoleChangeOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleBulkRoleChange} disabled={loading}>
+                {loading ? "Updating..." : "Update"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="destructive">
+              Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Selected Users</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {selectedUsers.length} user(s)?
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDelete}
+                disabled={loading}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {loading ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  );
+}
+
+// Column definitions
 const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
   {
     id: "drag",
     header: () => null,
-    cell: ({ row }) => <DragHandle id={row.original.id} />,
-    enableSorting: false,
-    size: 40,
-  },
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
+    cell: ({ row }) => <DragHandle id={row.id} />,
     enableSorting: false,
     size: 40,
   },
@@ -769,8 +816,8 @@ const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
     cell: ({ row }) =>
       row.original.lastActive
         ? formatDistanceToNow(new Date(row.original.lastActive), {
-          addSuffix: true,
-        })
+            addSuffix: true,
+          })
         : "—",
   },
   {
@@ -787,13 +834,17 @@ const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
           <DropdownMenuItem
             onClick={async () => {
               try {
-                const { data, error } = await authClient.admin.listUserSessions({
-                  userId: row.original.id,
-                });
+                const { data, error } = await authClient.admin.listUserSessions(
+                  {
+                    userId: row.original.id,
+                  },
+                );
                 if (error) throw error;
                 toast.info(`Active sessions: ${data?.sessions?.length ?? 0}`);
               } catch (err) {
-                toast.error("Failed to fetch sessions", { description: (err as Error)?.message });
+                toast.error("Failed to fetch sessions", {
+                  description: (err as Error)?.message,
+                });
               }
             }}
           >
@@ -819,164 +870,6 @@ const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
   },
 ];
 
-// Bulk Actions Component
-interface BulkActionsProps {
-  selectedUsers: TableUser[];
-  onRefresh: () => Promise<void>;
-  onClearSelection: () => void;
-}
-
-function BulkActions({ selectedUsers, onRefresh, onClearSelection }: BulkActionsProps) {
-  const [roleChangeOpen, setRoleChangeOpen] = React.useState(false);
-  const [newRole, setNewRole] = React.useState<UserRole>("user");
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
-
-  const handleBulkRoleChange = async () => {
-    setLoading(true);
-    try {
-      const promises = selectedUsers.map((user) =>
-        authClient.admin.updateUser({
-          userId: user.id,
-          data: {
-            customData: { role: newRole },
-          },
-        })
-      );
-
-      const results = await Promise.all(promises);
-      const hasError = results.some(result => result.error);
-
-      if (hasError) {
-        throw new Error("Some role updates failed");
-      }
-
-      toast.success(`Updated ${selectedUsers.length} user(s)`);
-      setRoleChangeOpen(false);
-      onClearSelection();
-      await onRefresh();
-    } catch (err) {
-      const error = err as Error;
-      toast.error(error?.message ?? "Bulk role change failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    setLoading(true);
-    try {
-      const promises = selectedUsers.map((user) =>
-        authClient.admin.removeUser({
-          userId: user.id,
-        })
-      );
-
-      const results = await Promise.all(promises);
-      const hasError = results.some(result => result.error);
-
-      if (hasError) {
-        throw new Error("Some deletions failed");
-      }
-
-      toast.success(`Deleted ${selectedUsers.length} user(s)`);
-      setDeleteOpen(false);
-      onClearSelection();
-      await onRefresh();
-    } catch (err) {
-      const error = err as Error;
-      toast.error(error?.message ?? "Bulk delete failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="bg-muted/60 p-3 rounded-lg flex items-center justify-between">
-        <span className="text-sm font-medium">
-          {selectedUsers.length} user{selectedUsers.length !== 1 ? "s" : ""}{" "}
-          selected
-        </span>
-        <div className="flex gap-2">
-          <Dialog open={roleChangeOpen} onOpenChange={setRoleChangeOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                Change Role
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Change Role for Selected Users</DialogTitle>
-                <DialogDescription>
-                  Update the role for {selectedUsers.length} selected user(s).
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>New Role</Label>
-                  <Select
-                    value={newRole}
-                    onValueChange={(v) => setNewRole(v as UserRole)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setRoleChangeOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleBulkRoleChange} disabled={loading}>
-                  {loading ? "Updating..." : "Update"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <AlertDialogTrigger asChild>
-              <Button size="sm" variant="destructive">
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Selected Users</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete {selectedUsers.length}{" "}
-                  user(s)? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleBulkDelete}
-                  disabled={loading}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {loading ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
-    </>
-  );
-}
-
 // Main Access Control Page
 export default function AccessControlPage() {
   const [users, setUsers] = React.useState<TableUser[]>([]);
@@ -991,27 +884,11 @@ export default function AccessControlPage() {
   const [rowSelection, setRowSelection] = React.useState<
     Record<string, boolean>
   >({});
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<any[]>([]);
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 15,
   });
-
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
-    useSensor(TouchSensor),
-    useSensor(KeyboardSensor)
-  );
-
-  const dataIds = React.useMemo<UniqueIdentifier[]>(
-    () => users.map((u) => u.id),
-    [users]
-  );
 
   const debouncedSearch = React.useMemo(
     () =>
@@ -1019,7 +896,7 @@ export default function AccessControlPage() {
         setSearch(value);
         setPagination((prev) => ({ ...prev, pageIndex: 0 }));
       }, 420),
-    []
+    [],
   );
 
   const fetchUsers = React.useCallback(async () => {
@@ -1044,22 +921,20 @@ export default function AccessControlPage() {
 
       if (error) throw error;
 
-      // Transform the response
       const rawUsers = (data?.users as BetterAuthUser[]) ?? [];
       const mappedUsers = rawUsers.map(transformToTableUser);
 
-      // Apply filters
       let filteredUsers = mappedUsers;
 
       if (roleFilter !== "all") {
         filteredUsers = filteredUsers.filter(
-          (user) => user.role === roleFilter
+          (user) => user.role === roleFilter,
         );
       }
 
       if (statusFilter !== "all") {
         filteredUsers = filteredUsers.filter(
-          (user) => user.status === statusFilter
+          (user) => user.status === statusFilter,
         );
       }
 
@@ -1086,43 +961,12 @@ export default function AccessControlPage() {
     void fetchUsers();
   }, [fetchUsers]);
 
-  const table = useReactTable({
-    data: users,
-    columns: getColumns(fetchUsers),
-    state: {
-      sorting,
-      columnVisibility,
-      rowSelection,
-      columnFilters,
-      pagination,
-    },
-    pageCount: Math.ceil(totalCount / pagination.pageSize) || -1,
-    manualPagination: true,
-    getRowId: (row) => row.id,
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setUsers((old) => {
-        const oldIndex = old.findIndex((u) => u.id === active.id);
-        const newIndex = old.findIndex((u) => u.id === over.id);
-        return arrayMove(old, oldIndex, newIndex);
-      });
-    }
-  }
-
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
-  const selectedUsers = table.getFilteredSelectedRowModel().rows.map(row => row.original);
+  const selectedUsers = React.useMemo(() => {
+    return Object.keys(rowSelection)
+      .filter((id) => rowSelection[id])
+      .map((id) => users.find((user) => user.id === id))
+      .filter((user): user is TableUser => user !== undefined);
+  }, [rowSelection, users]);
 
   return (
     <div className="container mx-auto py-6 px-4 md:px-6">
@@ -1193,7 +1037,7 @@ export default function AccessControlPage() {
           </div>
 
           {/* Bulk actions */}
-          {selectedCount > 0 && (
+          {selectedUsers.length > 0 && (
             <BulkActions
               selectedUsers={selectedUsers}
               onRefresh={fetchUsers}
@@ -1202,139 +1046,28 @@ export default function AccessControlPage() {
           )}
 
           {/* Table */}
-          <div className="rounded-lg border overflow-hidden">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={handleDragEnd}
-            >
-              <Table>
-                <TableHeader className="bg-muted/50 sticky top-0 z-10">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead
-                          key={header.id}
-                          style={{ width: header.getSize() }}
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={getColumns(fetchUsers).length}
-                        className="h-32 text-center"
-                      >
-                        Loading users...
-                      </TableCell>
-                    </TableRow>
-                  ) : table.getRowModel().rows?.length ? (
-                    <SortableContext
-                      items={dataIds}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {table.getRowModel().rows.map((row) => (
-                        <DraggableRow key={row.id} row={row} />
-                      ))}
-                    </SortableContext>
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={getColumns(fetchUsers).length}
-                        className="h-32 text-center"
-                      >
-                        No users found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </DndContext>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-2">
-            <div className="text-sm text-muted-foreground hidden md:block">
-              {selectedCount} of {users.length} selected • Total: {totalCount}
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap justify-center md:justify-end w-full md:w-auto">
-              <Select
-                value={`${pagination.pageSize}`}
-                onValueChange={(value) => {
-                  table.setPageSize(Number(value));
-                }}
-              >
-                <SelectTrigger className="w-20 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 15, 25, 50].map((size) => (
-                    <SelectItem key={size} value={`${size}`}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <IconChevronsLeft className="size-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <IconChevronLeft className="size-4" />
-                </Button>
-
-                <span className="text-sm font-medium mx-2">
-                  Page {table.getState().pagination.pageIndex + 1} of{" "}
-                  {table.getPageCount()}
-                </span>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <IconChevronRight className="size-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 hidden sm:flex"
-                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <IconChevronsRight className="size-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+          <DataTable
+            columns={getColumns(fetchUsers)}
+            data={users}
+            enableDragAndDrop={true}
+            enableRowSelection={false}
+            enablePagination={true}
+            loading={loading}
+            loadingMessage="Loading users..."
+            emptyMessage="No users found."
+            manualPagination={true}
+            pageCount={Math.ceil(totalCount / pagination.pageSize)}
+            rowSelection={rowSelection}
+            onRowSelectionChange={setRowSelection}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            onPaginationChange={setPagination}
+            getRowId={(row) => row.id}
+            onDragEnd={(newData) => setUsers(newData)}
+            totalCount={totalCount}
+            pageSizeOptions={[10, 15, 25, 50]}
+            initialPageSize={15}
+          />
         </TabsContent>
       </Tabs>
     </div>

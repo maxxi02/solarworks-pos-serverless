@@ -17,6 +17,7 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
   },
+  // USER SCHEMA EXTENSIONS
   user: {
     additionalFields: {
       phoneNumber: {
@@ -28,6 +29,16 @@ export const auth = betterAuth({
         required: true, // or defaultValue: "staff"
         input: false,
         defaultValue: "staff", // default to "staff" if not provided
+      },
+      isOnline: {
+        type: "boolean",
+        defaultValue: false,
+        required: false,
+      },
+      lastSeen: {
+        type: "date",
+        defaultValue: () => new Date(),
+        required: false,
       },
     },
   },
