@@ -753,7 +753,7 @@ export default function AccessControlPage() {
   );
 
   return (
-    <div className="container py-6">
+    <div className="container py-6 px-4">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">Access Control</h1>
