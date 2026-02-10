@@ -30,6 +30,8 @@ import { authClient } from "@/lib/auth-client";
 import { ExtendedUser } from "@/types/user.type";
 import { UserRole } from "@/types/role.type";
 import { adminNavigation, staffNavigation } from "@/constants/navigation";
+import { socketClient } from "@/lib/socket-client";
+
 
 const storeData = {
   name: "SolarWorks POS",
@@ -48,6 +50,79 @@ const getUserRole = (user: ExtendedUser | null | undefined): UserRole => {
 const getUserInitials = (name?: string | null): string => {
   if (!name) return "U";
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+};
+
+// ─── Online Status Indicator ─────────────────────────────────────
+const OnlineStatusIndicator = () => {
+  const [isOnline, setIsOnline] = React.useState(false);
+  const [isActive, setIsActive] = React.useState(true);
+  const activityTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    setIsOnline(socketClient.isConnected());
+
+    const handleActivity = () => {
+      setIsActive(true);
+
+      if (activityTimeoutRef.current) {
+        clearTimeout(activityTimeoutRef.current);
+      }
+
+      // Set to inactive after 2 minutes of no activity
+      activityTimeoutRef.current = setTimeout(() => {
+        setIsActive(false);
+      }, 2 * 60 * 1000);
+    };
+
+    // Listen for socket connection changes
+    const socket = socketClient.getSocket();
+    if (socket) {
+      socket.on("connect", () => setIsOnline(true));
+      socket.on("disconnect", () => setIsOnline(false));
+    }
+
+    // Track user activity
+    window.addEventListener("mousemove", handleActivity, { passive: true });
+    window.addEventListener("keydown", handleActivity, { passive: true });
+    window.addEventListener("click", handleActivity, { passive: true });
+
+    // Initial activity
+    handleActivity();
+
+    return () => {
+      if (activityTimeoutRef.current) {
+        clearTimeout(activityTimeoutRef.current);
+      }
+      window.removeEventListener("mousemove", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("click", handleActivity);
+    };
+  }, []);
+
+  if (!isOnline) {
+    return (
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-red-500/30" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+      </span>
+    );
+  }
+
+  if (!isActive) {
+    return (
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-gray-400/30" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-gray-400" />
+      </span>
+    );
+  }
+
+  return (
+    <span className="relative flex h-2.5 w-2.5">
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+    </span>
+  );
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -101,22 +176,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     return (
       <div className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent">
-        {user.image ? (
-          <div className="relative h-8 w-8 shrink-0">
-            <Image
-              src={user.image}
-              alt={user.name || "User avatar"}
-              fill
-              className="rounded-full object-cover"
-              sizes="32px"
-              priority
-            />
+        <div className="relative">
+          {user.image ? (
+            <div className="relative h-8 w-8 shrink-0">
+              <Image
+                src={user.image}
+                alt={user.name || "User avatar"}
+                fill
+                className="rounded-full object-cover"
+                sizes="32px"
+                priority
+              />
+            </div>
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+              {initials}
+            </div>
+          )}
+          {/* Online Status Badge */}
+          <div className="absolute -bottom-0.5 -right-0.5 rounded-full bg-background p-0.5">
+            <OnlineStatusIndicator />
           </div>
-        ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-            {initials}
-          </div>
-        )}
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-medium">
@@ -153,10 +234,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => {}}>
+              <Button variant="outline" onClick={() => { }}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 variant="destructive"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
@@ -209,8 +290,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarFooter>
       )}
       <SidebarRail />
-    </Sidebar> 
+    </Sidebar>
   );
 }
-
-//

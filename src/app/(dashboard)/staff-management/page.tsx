@@ -12,7 +12,6 @@ import {
 import { type ColumnDef } from "@tanstack/react-table";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { debounce } from "lodash";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +28,6 @@ import {
   Drawer,
   DrawerClose,
   DrawerContent,
-  DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
@@ -39,7 +37,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -52,7 +49,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,13 +56,13 @@ import {
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { DataTable, DragHandle } from "@/components/data-table";
 
 import { authClient } from "@/lib/auth-client";
+import { socketClient, UserStatusUpdate } from "@/lib/socket-client";
 
 // ─── Types ───────────────────────────────────────────────────────
 type UserRole = "admin" | "manager" | "staff" | "user";
@@ -84,12 +80,14 @@ interface BetterAuthUser {
   banReason?: string | null;
   role?: UserRole;
   image?: string | null;
+  isOnline?: boolean; // Added
 }
 
 interface TableUser extends Omit<BetterAuthUser, "banned"> {
   status: "active" | "banned" | "inactive";
   banned: boolean;
   payRange: string;
+  isOnline?: boolean; // Added
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -102,6 +100,7 @@ function transformToTableUser(user: BetterAuthUser): TableUser {
     status,
     role: user.role ?? "user",
     payRange: getPayRange(user.role ?? "user"),
+    isOnline: user.isOnline ?? false,
   };
 }
 
@@ -113,12 +112,6 @@ function getUserStatus(user: BetterAuthUser): TableUser["status"] {
     if (new Date(user.lastActive) < thirtyDaysAgo) return "inactive";
   }
   return "active";
-}
-
-function isUserOnline(lastActive?: Date | null): boolean {
-  if (!lastActive) return false;
-  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
-  return new Date(lastActive) >= fiveMinAgo;
 }
 
 function getPayRange(role: UserRole): string {
@@ -133,10 +126,7 @@ function getPayRange(role: UserRole): string {
 
 // ─── Badges ──────────────────────────────────────────────────────
 function RoleBadge({ role }: { role?: UserRole }) {
-  const variantMap: Record<
-    string,
-    "destructive" | "default" | "secondary" | "outline"
-  > = {
+  const variantMap: Record<UserRole, "destructive" | "default" | "secondary" | "outline"> = {
     admin: "destructive",
     manager: "default",
     staff: "secondary",
@@ -161,10 +151,7 @@ function RoleBadge({ role }: { role?: UserRole }) {
 }
 
 function StatusBadge({ status }: { status: TableUser["status"] }) {
-  const variantMap: Record<
-    TableUser["status"],
-    "destructive" | "default" | "secondary"
-  > = {
+  const variantMap: Record<TableUser["status"], "destructive" | "default" | "secondary"> = {
     active: "default",
     banned: "destructive",
     inactive: "secondary",
@@ -176,18 +163,40 @@ function StatusBadge({ status }: { status: TableUser["status"] }) {
   );
 }
 
-function OnlineStatusBadge({ lastActive }: { lastActive?: Date | null }) {
-  const online = isUserOnline(lastActive);
+// ─── Online Status Badge (Updated) ───────────────────────────────
+function OnlineStatusBadge({
+  isOnline,
+  lastActive,
+}: {
+  isOnline?: boolean;
+  lastActive?: Date | null;
+}) {
+  const online = isOnline ?? false;
+
   return (
     <div className="flex items-center gap-2">
-      <div
-        className={`h-2.5 w-2.5 rounded-full ${online ? "bg-green-500" : "bg-gray-400"}`}
-      />
-      <span
-        className={`text-sm font-medium ${online ? "text-green-700" : "text-muted-foreground"}`}
-      >
-        {online ? "Online" : "Offline"}
+      <span className="relative flex h-2.5 w-2.5">
+        {online && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+        )}
+        <span
+          className={`relative inline-flex h-2.5 w-2.5 rounded-full ${online ? "bg-green-500" : "bg-gray-400"
+            }`}
+        />
       </span>
+      <div className="flex flex-col">
+        <span
+          className={`text-sm font-medium ${online ? "text-green-700" : "text-muted-foreground"
+            }`}
+        >
+          {online ? "Online" : "Offline"}
+        </span>
+        {lastActive && !online && (
+          <span className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(lastActive), { addSuffix: true })}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -224,8 +233,10 @@ function AddUserDialog({ onSuccess }: { onSuccess: () => Promise<void> }) {
       setName("");
       setRole("user");
       await onSuccess();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create user");
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create user";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -314,8 +325,10 @@ function CreateStaffDialog({ onSuccess }: { onSuccess: () => Promise<void> }) {
       setEmail("");
       setName("");
       await onSuccess();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create staff");
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create staff";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -380,8 +393,6 @@ function UserEditDrawer({
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState(user.name ?? "");
   const [role, setRole] = React.useState<UserRole>(user.role ?? "user");
-  const [banReason, setBanReason] = React.useState("");
-  const [banDays, setBanDays] = React.useState<number | "">("");
   const [saving, setSaving] = React.useState(false);
 
   const handleSave = async () => {
@@ -414,8 +425,6 @@ function UserEditDrawer({
     }
   };
 
-  // ... (add ban/unban/revoke logic as needed – omitted for brevity)
-
   return (
     <Drawer
       open={open}
@@ -431,7 +440,6 @@ function UserEditDrawer({
         <DrawerHeader>
           <DrawerTitle>{user.email}</DrawerTitle>
         </DrawerHeader>
-        {/* Form fields – name, role, status, etc. */}
         <DrawerFooter>
           <Button onClick={handleSave} disabled={saving}>
             Save
@@ -552,7 +560,7 @@ function BulkActions({
   };
 
   return (
-    <div className="bg-muted p-3 rounded-lg flex justify-between items-center">
+    <div className="bg-muted p-3 rounded-lg flex justify-between items-center mb-4">
       <span>{selectedUsers.length} selected</span>
       <div className="flex gap-2">
         <Dialog open={roleOpen} onOpenChange={setRoleOpen}>
@@ -629,9 +637,12 @@ const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
   },
   {
     id: "online",
-    header: "Online",
+    header: "Status",
     cell: ({ row }) => (
-      <OnlineStatusBadge lastActive={row.original.lastActive} />
+      <OnlineStatusBadge
+        isOnline={row.original.isOnline}
+        lastActive={row.original.lastActive}
+      />
     ),
   },
   {
@@ -643,7 +654,7 @@ const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
   },
   {
     id: "status",
-    header: "Status",
+    header: "Account",
     cell: ({ row }) => <StatusBadge status={row.original.status} />,
   },
   {
@@ -653,16 +664,6 @@ const getColumns = (onRefresh: () => Promise<void>): ColumnDef<TableUser>[] => [
       formatDistanceToNow(new Date(row.original.createdAt), {
         addSuffix: true,
       }),
-  },
-  {
-    id: "lastActive",
-    header: "Last Active",
-    cell: ({ row }) =>
-      row.original.lastActive
-        ? formatDistanceToNow(new Date(row.original.lastActive), {
-            addSuffix: true,
-          })
-        : "—",
   },
   {
     id: "actions",
@@ -694,24 +695,14 @@ export default function AccessControlPage() {
 
   const [users, setUsers] = React.useState<TableUser[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [search, setSearch] = React.useState("");
-  const [roleFilter, setRoleFilter] = React.useState<UserRole | "all">("all");
-  const [statusFilter, setStatusFilter] = React.useState<
-    TableUser["status"] | "all"
-  >("all");
-  const [rowSelection, setRowSelection] = React.useState<
-    Record<string, boolean>
-  >({});
-  const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: 15,
-  });
+  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
 
+  // ─── Fetch Users ─────────────────────────────────────────────────
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const { data } = await authClient.admin.listUsers({
-        query: { limit: 50, offset: 0 }, // adjust as needed
+        query: { limit: 100, offset: 0 },
       });
       const mapped = (data?.users ?? []).map((user) =>
         transformToTableUser(user as BetterAuthUser),
@@ -728,6 +719,31 @@ export default function AccessControlPage() {
     fetchUsers();
   }, []);
 
+  // ─── Real-time Status Updates ────────────────────────────────────
+  React.useEffect(() => {
+    const handleStatusChange = (data: UserStatusUpdate): void => {
+      console.log("📡 Status update received:", data);
+
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === data.userId
+            ? {
+              ...user,
+              isOnline: data.isOnline,
+              lastActive: new Date(data.lastSeen),
+            }
+            : user
+        )
+      );
+    };
+
+    socketClient.onStatusChanged(handleStatusChange);
+
+    return () => {
+      socketClient.offStatusChanged(handleStatusChange);
+    };
+  }, []);
+
   const selectedUsers = React.useMemo(
     () =>
       Object.keys(rowSelection)
@@ -737,23 +753,30 @@ export default function AccessControlPage() {
   );
 
   return (
-    <div className="container py-6">
-      <h1 className="text-3xl font-bold">Access Control</h1>
-
-      <Tabs defaultValue="users" className="mt-6">
-        <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-          <TabsList>
-            <TabsTrigger value="users">Users</TabsTrigger>
-          </TabsList>
-          {isAdmin && (
-            <div className="flex gap-3">
-              <AddUserDialog onSuccess={fetchUsers} />
-              <CreateStaffDialog onSuccess={fetchUsers} />
-            </div>
-          )}
+    <div className="container py-6 px-4">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Access Control</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage staff members and user permissions
+          </p>
         </div>
+        {isAdmin && (
+          <div className="flex gap-3">
+            <AddUserDialog onSuccess={fetchUsers} />
+            <CreateStaffDialog onSuccess={fetchUsers} />
+          </div>
+        )}
+      </div>
 
-        <TabsContent value="users">
+      <Tabs defaultValue="users">
+        <TabsList>
+          <TabsTrigger value="users">
+            All Users ({users.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="users" className="mt-6">
           {selectedUsers.length > 0 && (
             <BulkActions
               selectedUsers={selectedUsers}
