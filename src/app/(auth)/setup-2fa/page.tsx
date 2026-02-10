@@ -256,7 +256,7 @@ export default function Setup2FA() {
 
                 <div className="space-y-3">
                   <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Setting up 2FA..." : "Set Up 2FA"}
+                    {loading ? "Setting up 2FA" : "Set Up 2FA"}
                   </Button>
 
                   <Button
