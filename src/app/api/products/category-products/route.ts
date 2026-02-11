@@ -1,16 +1,9 @@
-// File: src/app/api/products/route.ts
+// File: src/app/api/products/category-products/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { MONGODB } from '@/config/db';
 import { ObjectId } from 'mongodb';
 
-interface ProductIngredient {
-  inventoryItemId: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
-
-// GET all products
+// GET all products from products collection (NOT category-products)
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
@@ -35,6 +28,7 @@ export async function GET(request: NextRequest) {
       ];
     }
     
+    // ✅ CORRECT: Use 'products' collection to match categories API
     const products = await MONGODB.collection('products')
       .find(query)
       .sort({ name: 1 })
@@ -67,7 +61,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST create new product
+// POST create new product in products collection
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -145,6 +139,7 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date()
     };
     
+    // ✅ CORRECT: Insert into 'products' collection to match categories API
     const result = await MONGODB.collection('products').insertOne(newProduct);
     
     return NextResponse.json({

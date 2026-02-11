@@ -1,20 +1,27 @@
-// File: src/app/api/products/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { MONGODB } from '@/config/db';
 import { ObjectId } from 'mongodb';
 
-// Helper function to validate ObjectId
 function isValidObjectId(id: string): boolean {
   return ObjectId.isValid(id);
 }
 
-// GET single product
+// GET single product - FIXED for Next.js 15+
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> } // params is a Promise
 ) {
   try {
-    const { id } = await params; // Await the params
+    const { id } = await params; // MUST AWAIT params
+    
+    console.log('📦 GET product ID:', id);
+    
+    if (!id || id.trim() === '') {
+      return NextResponse.json(
+        { error: 'Product ID is required' },
+        { status: 400 }
+      );
+    }
     
     if (!isValidObjectId(id)) {
       return NextResponse.json(
@@ -61,14 +68,23 @@ export async function GET(
   }
 }
 
-// PUT update product
+// PUT update product - FIXED for Next.js 15+
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> } // params is a Promise
 ) {
   try {
-    const { id } = await params; // Await the params
+    const { id } = await params; // MUST AWAIT params
     const body = await request.json();
+    
+    console.log('📝 PUT update product ID:', id);
+    
+    if (!id || id.trim() === '') {
+      return NextResponse.json(
+        { error: 'Product ID is required' },
+        { status: 400 }
+      );
+    }
     
     if (!isValidObjectId(id)) {
       return NextResponse.json(
@@ -187,35 +203,34 @@ export async function PUT(
   }
 }
 
-// DELETE product
+// DELETE product - FIXED for Next.js 15+
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> } // params is a Promise
 ) {
   try {
-    const { id } = await params; // Await the params
+    const { id } = await params; // MUST AWAIT params - THIS IS THE KEY FIX!
     
-    if (!isValidObjectId(id)) {
+    console.log('🗑️ DELETE handler received ID:', id);
+    
+    if (!id || id.trim() === '') {
       return NextResponse.json(
-        { error: 'Invalid product ID' },
+        { error: 'Product ID is required' },
         { status: 400 }
       );
     }
-    
-    // Check if product exists
-    const existingProduct = await MONGODB.collection('products').findOne({
-      _id: new ObjectId(id)
-    });
-    
-    if (!existingProduct) {
+
+    if (!isValidObjectId(id)) {
       return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
+        { error: 'Invalid product ID format' },
+        { status: 400 }
       );
     }
+
+    const objectId = new ObjectId(id);
     
     const result = await MONGODB.collection('products').deleteOne({
-      _id: new ObjectId(id)
+      _id: objectId
     });
     
     if (result.deletedCount === 0) {
@@ -227,11 +242,7 @@ export async function DELETE(
     
     return NextResponse.json({ 
       success: true,
-      message: 'Product deleted successfully',
-      deletedProduct: {
-        id,
-        name: existingProduct.name
-      }
+      message: 'Product deleted successfully'
     });
   } catch (error) {
     console.error('Error deleting product:', error);
