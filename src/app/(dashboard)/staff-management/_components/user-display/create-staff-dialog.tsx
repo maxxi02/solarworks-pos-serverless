@@ -15,8 +15,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { authClient } from "@/lib/auth-client";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+type UserRole = "user" | "staff" | "manager" | "admin";
 
 interface CreateStaffDialogProps {
     onSuccess: () => Promise<void>;
@@ -26,6 +33,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
     const [open, setOpen] = useState(false);
     const [email, setEmail] = useState("");
     const [name, setName] = useState("");
+    const [role, setRole] = useState<UserRole>("staff");
     const [loading, setLoading] = useState(false);
 
     const handleCreate = async () => {
@@ -40,27 +48,30 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
         setLoading(true);
         try {
             // Generate a secure random password
-            const randomPassword = Math.random().toString(36).slice(-12) +
+            const password = Math.random().toString(36).slice(-12) +
                 Math.random().toString(36).toUpperCase().slice(-4);
 
-            const { data: user, error } = await authClient.admin.createUser({
-                email: email.trim(),
-                name: name.trim(),
-                password: randomPassword,
+            const response = await fetch('/api/admin/create-user-with-verification', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email.trim(),
+                    name: name.trim() || undefined,
+                    password,
+                    role,
+                }),
             });
 
-            if (error) throw error;
+            const data = await response.json();
 
-            // Set role to "staff"
-            if (user?.user?.id) {
-                await authClient.admin.updateUser({
-                    userId: user.user.id,
-                    data: { customData: { role: "staff" } },
-                });
+            if (!response.ok) {
+                throw new Error(data.error || "Failed to create user");
             }
 
             toast.success(
-                `Staff member "${email}" created successfully. A temporary password has been generated.`,
+                `User "${email}" created successfully. Verification email sent with temporary password.`,
                 { duration: 5000 }
             );
 
@@ -68,7 +79,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
             setOpen(false);
             await onSuccess();
         } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : "Failed to create staff member";
+            const errorMessage = err instanceof Error ? err.message : "Failed to create user";
             toast.error(errorMessage);
         } finally {
             setLoading(false);
@@ -78,6 +89,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
     const resetForm = () => {
         setEmail("");
         setName("");
+        setRole("staff");
     };
 
     return (
@@ -85,26 +97,26 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
             <DialogTrigger asChild>
                 <Button size="sm">
                     <IconPlus className="size-4 mr-2" />
-                    Create New Staff
+                    Add User
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-106.25">
                 <DialogHeader>
-                    <DialogTitle>Create New Staff Member</DialogTitle>
+                    <DialogTitle>Add New User</DialogTitle>
                     <DialogDescription>
-                        Add a new staff member to your organization. The user will receive a temporary password.
+                        Create a new user account. They will receive a verification email with a temporary password.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="staff-email" className="required">
+                        <Label htmlFor="user-email" className="required">
                             Email Address
                         </Label>
                         <Input
-                            id="staff-email"
+                            id="user-email"
                             type="email"
-                            placeholder="staff@example.com"
+                            placeholder="user@example.com"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -113,9 +125,9 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="staff-name">Full Name</Label>
+                        <Label htmlFor="user-name">Full Name</Label>
                         <Input
-                            id="staff-name"
+                            id="user-name"
                             placeholder="John Doe"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
@@ -126,20 +138,48 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Role Assignment</Label>
-                        <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50">
-                            <Badge variant="secondary" className="px-3 py-1">
-                                Staff
-                            </Badge>
-                            <div className="flex-1">
-                                <p className="text-sm font-medium">Staff Permissions</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Can access staff dashboard and manage limited resources
-                                </p>
-                            </div>
-                        </div>
+                        <Label htmlFor="user-role">Role</Label>
+                        <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+                            <SelectTrigger id="user-role">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="user">
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-medium">User</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            Basic access and permissions
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="staff">
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-medium">Staff</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            Can manage limited resources
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="manager">
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-medium">Manager</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            Can manage staff and operations
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="admin">
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-medium">Admin</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            Full system access
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground">
-                            Role is automatically set to "Staff" for new staff members
+                            Assign the appropriate role for this user
                         </p>
                     </div>
                 </div>
@@ -158,7 +198,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
                     <Button
                         onClick={handleCreate}
                         disabled={loading || !email.trim()}
-                        className="min-w-[120px]"
+                        className="min-w-30"
                     >
                         {loading ? (
                             <>
@@ -166,7 +206,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
                                 Creating...
                             </>
                         ) : (
-                            "Create Staff"
+                            "Create User"
                         )}
                     </Button>
                 </DialogFooter>

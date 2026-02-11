@@ -194,7 +194,7 @@ export function BulkActions({
                                 <Button
                                     onClick={handleRoleChange}
                                     disabled={loading}
-                                    className="min-w-[100px]"
+                                    className="min-w-25"
                                 >
                                     {loading ? (
                                         <>

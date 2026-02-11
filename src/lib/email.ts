@@ -8,9 +8,11 @@ const mailerSend = new MailerSend({
 export async function sendVerificationEmail({
   user,
   url,
+  tempPassword,
 }: {
   user: { email: string; name?: string };
   url: string;
+  tempPassword?: string;
 }) {
   try {
     const sentFrom = new Sender(
@@ -30,6 +32,7 @@ export async function sendVerificationEmail({
         <p style="margin-top: 24px; color: #666; font-size: 14px;">
           If you didn't request this, you can safely ignore this email.
         </p>
+        ${tempPassword ? `<p style="margin-top: 12px; color: #666; font-size: 14px;">Temporary Password: ${tempPassword}</p>` : ""}
       `);
 
     await mailerSend.email.send(emailParams);

@@ -36,7 +36,7 @@ export function LoginForm({
     try {
       await authClient.sendVerificationEmail({
         email: userEmail,
-        callbackURL: "/login?verified=true",
+        callbackURL: "/?verified=true",
       });
 
       toast.success("Verification email sent! Please check your inbox.");

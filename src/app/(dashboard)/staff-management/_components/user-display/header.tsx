@@ -1,5 +1,4 @@
 import React from "react";
-import { AddUserDialog } from "./add-user-dialog";
 import { CreateStaffDialog } from "./create-staff-dialog";
 
 interface HeaderProps {
@@ -18,7 +17,6 @@ export function Header({ isAdmin, onRefresh }: HeaderProps) {
             </div>
             {isAdmin && (
                 <div className="flex gap-3">
-                    <AddUserDialog onSuccess={onRefresh} />
                     <CreateStaffDialog onSuccess={onRefresh} />
                 </div>
             )}

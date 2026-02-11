@@ -8,6 +8,7 @@ import { admin as adminPlugin, twoFactor } from "better-auth/plugins";
 import { sendVerificationEmail } from "./email";
 import { nextCookies } from "better-auth/next-js";
 import { ac, staff, manager, admin } from "./permissions";
+import { adminClient } from "better-auth/client/plugins";
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
@@ -27,7 +28,6 @@ export const auth = betterAuth({
       role: {
         type: "string",
         required: true, // or defaultValue: "staff"
-        input: false,
         defaultValue: "staff", // default to "staff" if not provided
       },
       isOnline: {
@@ -44,14 +44,30 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      try {
-        await sendVerificationEmail({ user, url });
-        console.log("✅ Verification email sent successfully");
-      } catch (error) {
-        console.error("❌ Failed to send verification email:", error);
-        throw error;
+    sendVerificationEmail: async ({ user, url }, request?: Request) => {
+      let tempPassword: string | undefined;
+
+      if (request) {
+        try {
+          const clonedReq = request.clone();
+          const body = await clonedReq.json();
+
+          // Check if this is an admin-created user with tempPassword
+          if (body?.tempPassword) {
+            tempPassword = body.tempPassword as string;
+          }
+        } catch (e: unknown) {
+          console.debug("No tempPassword in request:", e);
+        }
       }
+
+      await sendVerificationEmail({
+        user,
+        url,
+        tempPassword,
+      });
+
+      console.log("✅ Verification email sent successfully");
     },
     sendResetPassword: async ({
       user,
@@ -69,13 +85,14 @@ export const auth = betterAuth({
       }
     },
   },
+
   plugins: [
     adminPlugin({ ac, roles: { staff, manager, admin } }),
     twoFactor({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,
     }),
-
+    adminClient(),
     nextCookies(),
   ],
 });
