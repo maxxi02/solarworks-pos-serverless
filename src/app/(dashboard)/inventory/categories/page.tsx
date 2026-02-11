@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Package, Plus, X, Edit2, Trash2, Check, Loader2, Utensils, Coffee } from 'lucide-react';
+import { Package, Plus, X, Edit2, Trash2, Utensils, Coffee } from 'lucide-react';
 
 interface Ingredient {
   name: string;
