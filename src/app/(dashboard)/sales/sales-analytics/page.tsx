@@ -22,6 +22,7 @@ import {
   ReferenceLine
 } from 'recharts';
 
+// Types
 interface DailySales {
   date: string;
   revenue: number;
@@ -38,8 +39,10 @@ interface TopProduct {
 }
 
 type ChartType = 'line' | 'bar' | 'area';
+type MetricColor = 'blue' | 'green' | 'purple' | 'amber' | 'pink';
 
-const colors = {
+// Constants
+const COLORS = {
   primary: '#3b82f6',
   secondary: '#6b7280',
   success: '#10b981',
@@ -47,77 +50,16 @@ const colors = {
   warning: '#f59e0b',
   purple: '#8b5cf6',
   pink: '#ec4899',
-};
+} as const;
 
-const dailySales: DailySales[] = [
-  { date: 'Mon', revenue: 12500, transactions: 45, avgOrder: 278 },
-  { date: 'Tue', revenue: 14200, transactions: 52, avgOrder: 273 },
-  { date: 'Wed', revenue: 11800, transactions: 48, avgOrder: 246 },
-  { date: 'Thu', revenue: 16500, transactions: 58, avgOrder: 284 },
-  { date: 'Fri', revenue: 18900, transactions: 65, avgOrder: 291 },
-  { date: 'Sat', revenue: 21000, transactions: 72, avgOrder: 292 },
-  { date: 'Sun', revenue: 19500, transactions: 68, avgOrder: 287 },
+const TARGET_REVENUE = 11000;
+const REFERENCE_LINES = [
+  { value: 11000, label: 'Target ₱11k', color: COLORS.danger },
+  { value: 15000, label: '₱15,000', color: COLORS.warning },
+  { value: 18000, label: '₱18,000', color: COLORS.success },
 ];
 
-const topProducts: TopProduct[] = [
-  { name: 'Iced Coffee Jelly', sales: 42, quantity: 126, revenue: 21420, category: 'Coffee' },
-  { name: 'Spanish Latte', sales: 38, quantity: 114, revenue: 17100, category: 'Coffee' },
-  { name: 'Matcha Sea Foam', sales: 35, quantity: 105, revenue: 18795, category: 'Tea' },
-  { name: 'Caramel Macchiato', sales: 28, quantity: 84, revenue: 16380, category: 'Coffee' },
-  { name: 'Chocolate Frappe', sales: 25, quantity: 75, revenue: 11925, category: 'Frappe' },
-  { name: 'Croissant', sales: 22, quantity: 66, revenue: 9900, category: 'Pastry' },
-];
-
-const totalRevenue = dailySales.reduce((sum, day) => sum + day.revenue, 0);
-const totalTransactions = dailySales.reduce((sum, day) => sum + day.transactions, 0);
-const avgOrderValue = Math.round(totalRevenue / totalTransactions);
-const peakDay = dailySales.reduce((max, day) => day.revenue > max.revenue ? day : max);
-const bestSeller = topProducts.reduce((max, product) => product.revenue > max.revenue ? product : topProducts[0]);
-
-function MetricCard({ 
-  title, 
-  value, 
-  icon, 
-  color = 'blue' 
-}: { 
-  title: string; 
-  value: string; 
-  icon: React.ReactNode; 
-  color?: 'blue' | 'green' | 'purple' | 'amber' | 'pink'; 
-}) {
-  const bgColor = {
-    blue: 'bg-blue-100 dark:bg-blue-900/20',
-    green: 'bg-green-100 dark:bg-green-900/20',
-    purple: 'bg-purple-100 dark:bg-purple-900/20',
-    amber: 'bg-amber-100 dark:bg-amber-900/20',
-    pink: 'bg-pink-100 dark:bg-pink-900/20',
-  }[color];
-
-  const textColor = {
-    blue: 'text-blue-600 dark:text-blue-400',
-    green: 'text-green-600 dark:text-green-400',
-    purple: 'text-purple-600 dark:text-purple-400',
-    amber: 'text-amber-600 dark:text-amber-400',
-    pink: 'text-pink-600 dark:text-pink-400',
-  }[color];
-
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
-          </div>
-          <div className={`p-3 rounded-lg ${bgColor}`}>
-            <div className={`h-6 w-6 ${textColor}`}>{icon}</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
+// Custom Tooltip Component
 interface CustomTooltipProps extends TooltipProps<number, string> {
   active?: boolean;
   payload?: Array<{
@@ -131,8 +73,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload || !payload.length) return null;
 
   const revenue = payload[0].value;
-  const target = 11000;
-  const difference = revenue - target;
+  const difference = revenue - TARGET_REVENUE;
 
   return (
     <div className="bg-white dark:bg-gray-900 border rounded-lg p-3 shadow-lg">
@@ -144,100 +85,190 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
         </div>
         <div className="flex justify-between">
           <span>Transactions:</span>
-          <span className="font-bold">{dailySales.find(d => d.date === label)?.transactions}</span>
+          <span className="font-bold">{payload[0].payload.transactions}</span>
         </div>
         <div className="pt-2 border-t">
           <div className={`text-sm font-medium ${difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {difference >= 0 ? '✓ Above target' : '✗ Below target'} 
             <span className="ml-2">₱{Math.abs(difference).toLocaleString()}</span>
           </div>
-          <div className="text-xs text-gray-500 mt-1">Target: ₱11,000</div>
+          <div className="text-xs text-gray-500 mt-1">Target: ₱{TARGET_REVENUE.toLocaleString()}</div>
         </div>
       </div>
     </div>
   );
 }
 
-export default function SalesAnalyticsPage() {
+// Metric Card Component
+interface MetricCardProps {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  color?: MetricColor;
+}
+
+function MetricCard({ title, value, icon, color = 'blue' }: MetricCardProps) {
+  const colorClasses = {
+    blue: {
+      bg: 'bg-blue-100 dark:bg-blue-900/20',
+      text: 'text-blue-600 dark:text-blue-400'
+    },
+    green: {
+      bg: 'bg-green-100 dark:bg-green-900/20',
+      text: 'text-green-600 dark:text-green-400'
+    },
+    purple: {
+      bg: 'bg-purple-100 dark:bg-purple-900/20',
+      text: 'text-purple-600 dark:text-purple-400'
+    },
+    amber: {
+      bg: 'bg-amber-100 dark:bg-amber-900/20',
+      text: 'text-amber-600 dark:text-amber-400'
+    },
+    pink: {
+      bg: 'bg-pink-100 dark:bg-pink-900/20',
+      text: 'text-pink-600 dark:text-pink-400'
+    }
+  };
+
+  const { bg, text } = colorClasses[color];
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-2xl font-bold mt-1">{value}</p>
+          </div>
+          <div className={`p-3 rounded-lg ${bg}`}>
+            <div className={`h-6 w-6 ${text}`}>{icon}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Chart Renderer Component
+interface ChartRendererProps {
+  chartType: ChartType;
+  data: DailySales[];
+}
+
+function ChartRenderer({ chartType, data }: ChartRendererProps) {
+  const chartProps = {
+    data,
+    margin: { top: 10, right: 30, left: 0, bottom: 0 }
+  };
+
+  const referenceLines = REFERENCE_LINES.map((line, index) => (
+    <ReferenceLine
+      key={`${line.value}-${index}`}
+      y={line.value}
+      stroke={line.color}
+      strokeDasharray="3 3"
+      label={{ value: line.label, position: 'right' }}
+    />
+  ));
+
+  const commonElements = (
+    <>
+      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+      <XAxis dataKey="date" stroke="#666" />
+      <YAxis 
+        stroke="#666"
+        tickFormatter={(value: number) => `₱${value.toLocaleString()}`}
+      />
+      <Tooltip content={<CustomTooltip />} />
+      <Legend />
+      {referenceLines}
+    </>
+  );
+
+  switch (chartType) {
+    case 'line':
+      return (
+        <LineChart {...chartProps}>
+          {commonElements}
+          <Line 
+            type="monotone" 
+            dataKey="revenue" 
+            stroke={COLORS.primary} 
+            strokeWidth={3}
+            dot={{ 
+              r: 6,
+              fill: COLORS.primary,
+              stroke: '#fff',
+              strokeWidth: 2
+            }}
+            activeDot={{ 
+              r: 8,
+              stroke: '#fff',
+              strokeWidth: 3 
+            }}
+          />
+        </LineChart>
+      );
+    case 'bar':
+      return (
+        <BarChart {...chartProps}>
+          {commonElements}
+          <Bar 
+            dataKey="revenue" 
+            fill={COLORS.primary} 
+            radius={[4, 4, 0, 0]} 
+            fillOpacity={0.8}
+          />
+        </BarChart>
+      );
+    case 'area':
+      return (
+        <AreaChart {...chartProps}>
+          {commonElements}
+          <Area 
+            type="monotone" 
+            dataKey="revenue" 
+            stroke={COLORS.primary} 
+            fill={COLORS.primary} 
+            fillOpacity={0.3} 
+            strokeWidth={2}
+          />
+        </AreaChart>
+      );
+  }
+}
+
+// Sales Analytics Page
+interface SalesAnalyticsPageProps {
+  dailySales?: DailySales[];
+  topProducts?: TopProduct[];
+}
+
+export default function SalesAnalyticsPage({ 
+  dailySales = [],
+  topProducts = [] 
+}: SalesAnalyticsPageProps) {
   const [chartType, setChartType] = useState<ChartType>('line');
 
-  const renderChart = () => {
-    const chartProps = {
-      data: dailySales,
-      margin: { top: 10, right: 30, left: 0, bottom: 0 }
-    };
+  // Calculate metrics
+  const totalRevenue = dailySales.reduce((sum, day) => sum + day.revenue, 0);
+  const totalTransactions = dailySales.reduce((sum, day) => sum + day.transactions, 0);
+  const avgOrderValue = Math.round(totalRevenue / totalTransactions);
+  const bestSeller = topProducts.reduce((max, product) => 
+    product.revenue > max.revenue ? product : topProducts[0], 
+    topProducts[0] || { name: '', revenue: 0 }
+  );
 
-    const referenceLines = [
-      <ReferenceLine key="11k" y={11000} stroke={colors.danger} strokeDasharray="3 3" label={{ value: 'Target ₱11k', position: 'right' }} />,
-      <ReferenceLine key="15k" y={15000} stroke={colors.warning} strokeDasharray="3 3" />,
-      <ReferenceLine key="18k" y={18000} stroke={colors.success} strokeDasharray="3 3" />,
+  // Helper function to get rank styling
+  const getRankStyle = (index: number) => {
+    const styles = [
+      'bg-amber-100 text-amber-700',
+      'bg-gray-100 text-gray-700', 
+      'bg-green-100 text-green-700',
+      'bg-blue-100 text-blue-700'
     ];
-
-    const commonElements = (
-      <>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-        <XAxis dataKey="date" stroke="#666" />
-        <YAxis 
-          stroke="#666"
-          tickFormatter={(value: number) => `₱${value.toLocaleString()}`}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend />
-        {referenceLines}
-      </>
-    );
-
-    switch (chartType) {
-      case 'line':
-        return (
-          <LineChart {...chartProps}>
-            {commonElements}
-            <Line 
-              type="monotone" 
-              dataKey="revenue" 
-              stroke={colors.primary} 
-              strokeWidth={3}
-              dot={{ 
-                r: 6,
-                fill: colors.primary,
-                stroke: '#fff',
-                strokeWidth: 2
-              }}
-              activeDot={{ 
-                r: 8,
-                stroke: '#fff',
-                strokeWidth: 3 
-              }}
-            />
-          </LineChart>
-        );
-      case 'bar':
-        return (
-          <BarChart {...chartProps}>
-            {commonElements}
-            <Bar 
-              dataKey="revenue" 
-              fill={colors.primary} 
-              radius={[4, 4, 0, 0]} 
-              fillOpacity={0.8}
-            />
-          </BarChart>
-        );
-      case 'area':
-        return (
-          <AreaChart {...chartProps}>
-            {commonElements}
-            <Area 
-              type="monotone" 
-              dataKey="revenue" 
-              stroke={colors.primary} 
-              fill={colors.primary} 
-              fillOpacity={0.3} 
-              strokeWidth={2}
-            />
-          </AreaChart>
-        );
-    }
+    return styles[Math.min(index, 3)];
   };
 
   return (
@@ -277,7 +308,7 @@ export default function SalesAnalyticsPage() {
           />
           <MetricCard
             title="Best Seller"
-            value={bestSeller.name.split(' ')[0]}
+            value={bestSeller.name.split(' ')[0] || 'N/A'}
             icon={<Star />}
             color="pink"
           />
@@ -293,7 +324,7 @@ export default function SalesAnalyticsPage() {
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-0.5 bg-red-500"></div>
-                    <span className="text-xs">₱11k Target</span>
+                    <span className="text-xs">₱{TARGET_REVENUE.toLocaleString()} Target</span>
                   </div>
                   <Tabs value={chartType} onValueChange={(v: string) => setChartType(v as ChartType)}>
                     <TabsList>
@@ -308,22 +339,16 @@ export default function SalesAnalyticsPage() {
             <CardContent>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  {renderChart()}
+                  <ChartRenderer chartType={chartType} data={dailySales} />
                 </ResponsiveContainer>
               </div>
               <div className="flex flex-wrap justify-center gap-4 mt-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-0.5 bg-red-500"></div>
-                  <span className="text-xs">₱11,000 Target</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-0.5 bg-amber-500"></div>
-                  <span className="text-xs">₱15,000</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-0.5 bg-green-500"></div>
-                  <span className="text-xs">₱18,000</span>
-                </div>
+                {REFERENCE_LINES.map((line) => (
+                  <div key={line.value} className="flex items-center gap-2">
+                    <div className="w-3 h-0.5" style={{ backgroundColor: line.color }}></div>
+                    <span className="text-xs">{line.label}</span>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -338,12 +363,7 @@ export default function SalesAnalyticsPage() {
                 {topProducts.map((product, index) => (
                   <div key={product.name} className="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-900 rounded-lg transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        index === 0 ? 'bg-amber-100 text-amber-600' :
-                        index === 1 ? 'bg-gray-100 text-gray-600' :
-                        index === 2 ? 'bg-green-100 text-green-600' :
-                        'bg-blue-100 text-blue-600'
-                      }`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getRankStyle(index)}`}>
                         {index + 1}
                       </div>
                       <div>
@@ -360,21 +380,23 @@ export default function SalesAnalyticsPage() {
               </div>
               
               {/* Best Seller Highlight */}
-              <div className="mt-6 p-4 bg-linear-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Star className="h-5 w-5 text-pink-500" />
-                      <h3 className="font-bold text-lg">Best Seller</h3>
+              {bestSeller.name && (
+                <div className="mt-6 p-4 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Star className="h-5 w-5 text-pink-500" />
+                        <h3 className="font-bold text-lg">Best Seller</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">Highest revenue generator</p>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">Highest revenue generator</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-2xl text-pink-600">{bestSeller.name}</div>
-                    <div className="text-sm">₱{bestSeller.revenue.toLocaleString()}</div>
+                    <div className="text-right">
+                      <div className="font-bold text-2xl text-pink-600">{bestSeller.name}</div>
+                      <div className="text-sm">₱{bestSeller.revenue.toLocaleString()}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -387,8 +409,8 @@ export default function SalesAnalyticsPage() {
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-7 gap-4">
               {dailySales.map((day) => {
-                const aboveTarget = day.revenue > 11000;
-                const difference = day.revenue - 11000;
+                const aboveTarget = day.revenue > TARGET_REVENUE;
+                const difference = day.revenue - TARGET_REVENUE;
                 
                 return (
                   <div key={day.date} className="text-center">
@@ -413,57 +435,54 @@ export default function SalesAnalyticsPage() {
         </Card>
 
         {/* Product Performance Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Product Performance Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-3 text-sm font-medium">Rank</th>
-                    <th className="text-left p-3 text-sm font-medium">Product</th>
-                    <th className="text-left p-3 text-sm font-medium">Category</th>
-                    <th className="text-left p-3 text-sm font-medium">Units Sold</th>
-                    <th className="text-left p-3 text-sm font-medium">Revenue</th>
-                    <th className="text-left p-3 text-sm font-medium">Avg Daily</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topProducts.map((product, index) => (
-                    <tr key={product.name} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
-                      <td className="p-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          index === 0 ? 'bg-amber-100 text-amber-700' :
-                          index === 1 ? 'bg-gray-100 text-gray-700' :
-                          index === 2 ? 'bg-green-100 text-green-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {index + 1}
-                        </div>
-                      </td>
-                      <td className="p-3 font-medium">{product.name}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded-full">
-                          {product.category}
-                        </span>
-                      </td>
-                      <td className="p-3 font-bold">{product.quantity}</td>
-                      <td className="p-3 font-bold text-primary">₱{product.revenue.toLocaleString()}</td>
-                      <td className="p-3">
-                        <div className="font-semibold">
-                          ₱{Math.round(product.revenue / 7).toLocaleString()}
-                        </div>
-                        <div className="text-xs text-muted-foreground">per day</div>
-                      </td>
+        {topProducts.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Product Performance Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 text-sm font-medium">Rank</th>
+                      <th className="text-left p-3 text-sm font-medium">Product</th>
+                      <th className="text-left p-3 text-sm font-medium">Category</th>
+                      <th className="text-left p-3 text-sm font-medium">Units Sold</th>
+                      <th className="text-left p-3 text-sm font-medium">Revenue</th>
+                      <th className="text-left p-3 text-sm font-medium">Avg Daily</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {topProducts.map((product, index) => (
+                      <tr key={product.name} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
+                        <td className="p-3">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${getRankStyle(index)}`}>
+                            {index + 1}
+                          </div>
+                        </td>
+                        <td className="p-3 font-medium">{product.name}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded-full">
+                            {product.category}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold">{product.quantity}</td>
+                        <td className="p-3 font-bold text-primary">₱{product.revenue.toLocaleString()}</td>
+                        <td className="p-3">
+                          <div className="font-semibold">
+                            ₱{Math.round(product.revenue / 7).toLocaleString()}
+                          </div>
+                          <div className="text-xs text-muted-foreground">per day</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

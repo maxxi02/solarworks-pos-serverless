@@ -50,6 +50,7 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
+    "swipeable": "^1.0.5",
     "tailwind-merge": "^3.4.0",
     "ts-node": "^10.9.2",
     "vaul": "^1.1.2",

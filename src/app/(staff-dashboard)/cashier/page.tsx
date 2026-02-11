@@ -293,7 +293,7 @@ const CashierPage = () => {
         localStorage.setItem('savedCarts', JSON.stringify([newCart, ...savedCarts]));
         alert('Cart saved locally!');
       }
-    } catch (error) {
+    } catch {
       setSavedCarts(prev => [newCart, ...prev]);
       localStorage.setItem('savedCarts', JSON.stringify([newCart, ...savedCarts]));
       alert('Cart saved locally!');
@@ -353,7 +353,7 @@ const CashierPage = () => {
         alert(`Payment processed (local only)!\nOrder Total: ₱${total.toFixed(2)}`);
         clearCart();
       }
-    } catch (error) {
+    } catch {
       alert(`Payment processed (local only)!\nOrder Total: ₱${total.toFixed(2)}`);
       clearCart();
     }
@@ -470,7 +470,7 @@ const CashierPage = () => {
                           key={cat}
                           variant={selectedCategory === cat ? "default" : "outline"}
                           onClick={() => setSelectedCategory(cat)}
-                          className="whitespace-nowrap text-sm flex-shrink-0 px-3"
+                          className="whitespace-nowrap text-sm shrink-0 px-3"
                         >
                           {cat}
                         </Button>

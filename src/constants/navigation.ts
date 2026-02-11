@@ -27,8 +27,6 @@ export const PATHS = {
     SALES_ANALYTICS: "/sales/sales-analytics",
     SALES_REFUND_RETURN: "/sales/refund-and-return",
 
-    INVENTORY_PRODUCT: "/inventory/product",
-    INVENTORY_ADD_PRODUCT: "/inventory/addproduct",
     INVENTORY_CATEGORIES: "/inventory/categories",
     INVENTORY_STOCK_ALERT: "/inventory/stockalert",
     INVENTORY_REPORTS: "/inventory/reports",
@@ -99,8 +97,6 @@ export const adminNavigation: NavItem[] = [
     url: PATHS.INVENTORY,
     icon: Package,
     items: [
-      { title: "Products", url: PATHS.ADMIN.INVENTORY_PRODUCT },
-      { title: "Add Product", url: PATHS.ADMIN.INVENTORY_ADD_PRODUCT },
       { title: "Categories", url: PATHS.ADMIN.INVENTORY_CATEGORIES },
       { title: "Stock Alerts", url: PATHS.ADMIN.INVENTORY_STOCK_ALERT },
       { title: "Reports", url: PATHS.ADMIN.INVENTORY_REPORTS },

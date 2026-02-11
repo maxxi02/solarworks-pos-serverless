@@ -8,7 +8,7 @@ export default function ReceiptSettings() {
   // State for receipt settings
   const [settings, setSettings] = useState({
     businessName: 'Rendezvous Cafe',
-    locationAddress: 'Rendezvous Café, Talisay - Tanauan Road, Natataf, Tanauan City, Batangas, Philippines',
+    locationAddress: 'Rendezvous Café, Talisay - Tanauan Road, Natatas, Tanauan City, Batangas, Philippines',
     phoneNumber: '+63639660049893',
     taxPin: '123-456-789-000',
     
@@ -129,7 +129,7 @@ export default function ReceiptSettings() {
     if (confirm('Are you sure you want to reset all settings to default?')) {
       setSettings({
         businessName: 'Rendezvous Cafe',
-        locationAddress: 'Rendezvous Café, Talisay - Tanauan Road, Natataf, Tanauan City, Batangas, Philippines',
+        locationAddress: 'Rendezvous Café, Talisay - Tanauan Road, Natatas, Tanauan City, Batangas, Philippines',
         phoneNumber: '+63639660049893',
         taxPin: '123-456-789-000',
         showLogo: true,

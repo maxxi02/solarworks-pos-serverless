@@ -255,8 +255,8 @@ export default function CategoriesPage() {
       setError(null);
       
       const endpoint = editingProduct 
-        ? `/api/products/products${editingProduct._id}`
-        : '/api/products/products';
+        ? `/api/products/${editingProduct._id}`
+        : '/api/products';
       
       const method = editingProduct ? 'PUT' : 'POST';
 
@@ -354,7 +354,7 @@ export default function CategoriesPage() {
       setLoading(true);
       console.log(`🗑️ Deleting product ${productId}`);
       
-      const response = await fetch(`/api/products/products${productId}`, {
+      const response = await fetch(`/api/products/${productId}`, {
         method: 'DELETE'
       });
 
@@ -385,11 +385,11 @@ export default function CategoriesPage() {
       if (!product) return;
 
       // First get the full product data
-      const productResponse = await fetch(`/api/products/products${productId}`);
+      const productResponse = await fetch(`/api/products/${productId}`);
       if (!productResponse.ok) throw new Error('Failed to fetch product');
       const fullProduct = await productResponse.json();
 
-      const response = await fetch(`/api/products/products${productId}`, {
+      const response = await fetch(`/api/products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...fullProduct, available: !fullProduct.available })
