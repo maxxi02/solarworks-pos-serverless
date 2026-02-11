@@ -1,13 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Package, Plus, X, Edit2, Trash2, Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Package, Plus, X, Edit2, Trash2, Check, Loader2, AlertTriangle } from 'lucide-react';
+import { ProductIngredientsForm, ProductIngredient } from '@/components/forms/ProductIngredientsForm';
+import AlertModal from '@/components/ui/alertmodal'; // You'll need to create this component
 
-// Types
-interface Ingredient {
+// Updated Types
+interface InventoryItem {
+  _id: string;
   name: string;
-  quantity: string;
+  category: string;
+  currentStock: number;
+  minStock: number;
   unit: string;
+  pricePerUnit: number;
+  supplier?: string;
+  status: string;
 }
 
 interface Product {
@@ -15,7 +23,7 @@ interface Product {
   name: string;
   price: number;
   description: string;
-  ingredients: Ingredient[];
+  ingredients: ProductIngredient[];
   available: boolean;
   categoryId?: string;
   createdAt?: string;
@@ -30,7 +38,13 @@ interface Category {
   updatedAt?: string;
 }
 
-const UNITS = ['grams', 'kg', 'ml', 'liters', 'pieces', 'cups', 'tbsp', 'tsp', 'oz'];
+// Remove the duplicate Ingredient interface - keep only one
+interface Ingredient {
+  name: string;
+  quantity: number | string;
+  unit: string;
+  inventoryItemId?: string;
+}
 
 export default function CategoriesPage() {
   // States
@@ -38,6 +52,7 @@ export default function CategoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Form States
@@ -46,14 +61,23 @@ export default function CategoriesPage() {
   const [productForm, setProductForm] = useState({ 
     name: '', price: '', description: '', available: true 
   });
-  const [ingredientForm, setIngredientForm] = useState({ 
-    name: '', quantity: '', unit: 'grams' 
-  });
-  const [productIngredients, setProductIngredients] = useState<Ingredient[]>([]);
+  const [productIngredients, setProductIngredients] = useState<ProductIngredient[]>([]);
+  
+  // Inventory State
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
 
-  // Fetch categories on mount
+  // Modal States
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'warning'>('success');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
+  const [confirmMessage, setConfirmMessage] = useState('');
+
+  // Fetch data on mount
   useEffect(() => {
     fetchCategories();
+    fetchInventoryItems();
   }, []);
 
   // Utility Functions
@@ -69,6 +93,20 @@ export default function CategoriesPage() {
     });
   };
 
+  // Show alert modal
+  const showAlertModal = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
+
+  // Show confirmation modal
+  const showConfirmationModal = (message: string, onConfirm: () => void) => {
+    setConfirmMessage(message);
+    setConfirmAction(() => onConfirm);
+    setShowConfirmModal(true);
+  };
+
   // API Functions
   const fetchCategories = async () => {
     try {
@@ -81,6 +119,20 @@ export default function CategoriesPage() {
       setError(err instanceof Error ? err.message : 'Failed to fetch categories');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInventoryItems = async () => {
+    try {
+      setInventoryLoading(true);
+      const response = await fetch('/api/products/stocks');
+      if (!response.ok) throw new Error('Failed to fetch inventory');
+      const data = await response.json();
+      setInventoryItems(data);
+    } catch (err) {
+      console.error('Failed to fetch inventory:', err);
+    } finally {
+      setInventoryLoading(false);
     }
   };
 
@@ -118,22 +170,19 @@ export default function CategoriesPage() {
       setNewCategory({ name: '', description: '' });
       setShowCategoryForm(false);
       setSelectedCategory(category);
-      alert('Category added successfully!');
+      showAlertModal('Category added successfully!', 'success');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add category');
+      showAlertModal('Failed to add category', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const deleteCategory = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this category and all its products?')) return;
-
     try {
       setLoading(true);
       setError(null);
-
-      console.log(`🗑️ Attempting to delete category ${id}`);
 
       const response = await fetch(`/api/products/categories/${id}`, {
         method: 'DELETE',
@@ -141,18 +190,15 @@ export default function CategoriesPage() {
 
       if (!response.ok) {
         let errorMessage = `Delete failed: ${response.status}`;
-
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorData.message || errorMessage;
         } catch (e) {
-          // If not JSON → maybe empty body or HTML error page
           console.warn("Response was not JSON:", await response.text());
         }
 
         if (response.status === 404) {
           setError('Category not found. It may have already been deleted.');
-          // Auto-refresh list to sync UI with DB
           await fetchCategories();
           return;
         }
@@ -161,43 +207,22 @@ export default function CategoriesPage() {
       }
 
       const result = await response.json();
-      console.log('Delete success:', result);
-
+      
       // Update UI
       setCategories(prev => prev.filter(c => c._id !== id));
       if (selectedCategory?._id === id) {
         setSelectedCategory(null);
       }
 
-      alert(result.message || 'Category and its products deleted successfully');
+      showAlertModal(result.message || 'Category and its products deleted successfully', 'success');
       
     } catch (err: any) {
       console.error('❌ Delete failed:', err);
       setError(err.message || 'Failed to delete category');
+      showAlertModal('Failed to delete category', 'error');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Ingredient Functions
-  const addIngredient = () => {
-    if (!ingredientForm.name.trim() || !ingredientForm.quantity.trim()) {
-      setError('Ingredient name and quantity are required');
-      return;
-    }
-
-    const newIng: Ingredient = {
-      name: ingredientForm.name,
-      quantity: ingredientForm.quantity,
-      unit: ingredientForm.unit
-    };
-    
-    setProductIngredients(prev => [...prev, newIng]);
-    setIngredientForm({ name: '', quantity: '', unit: 'grams' });
-  };
-
-  const removeIngredient = (index: number) => {
-    setProductIngredients(prev => prev.filter((_, i) => i !== index));
   };
 
   // Product Functions
@@ -213,30 +238,30 @@ export default function CategoriesPage() {
       return;
     }
 
+    // Prepare product data with new ingredient structure
     const productData = {
       name: productForm.name,
       price: price,
       description: productForm.description,
-      ingredients: productIngredients.map(ing => ({
-        name: ing.name,
-        quantity: ing.quantity,
-        unit: ing.unit
-      })),
+      ingredients: productIngredients,
       available: productForm.available,
       categoryId: selectedCategory._id
     };
 
-    console.log('📤 Sending product:', productData);
+    console.log('📤 Sending product with inventory integration:', productData);
 
     try {
       setLoading(true);
       setError(null);
       
-      const endpoint = '/api/products/add';
-      console.log('📡 Calling endpoint:', endpoint);
+      const endpoint = editingProduct 
+        ? `/api/products/products${editingProduct._id}`
+        : '/api/products/products';
       
+      const method = editingProduct ? 'PUT' : 'POST';
+
       const response = await fetch(endpoint, {
-        method: 'POST',
+        method,
         headers: { 
           'Content-Type': 'application/json'
         },
@@ -245,9 +270,7 @@ export default function CategoriesPage() {
 
       console.log('📥 Response status:', response.status);
       
-      // Check if response is OK first
       if (!response.ok) {
-        // Try to get error message from response
         let errorMessage = `Server error: ${response.status}`;
         try {
           const errorText = await response.text();
@@ -262,7 +285,6 @@ export default function CategoriesPage() {
         throw new Error(errorMessage);
       }
       
-      // Parse successful response
       const result = await response.json();
       console.log('✅ Product saved:', result);
       
@@ -277,7 +299,7 @@ export default function CategoriesPage() {
         })
         .catch(err => {
           console.error('Error fetching updated categories:', err);
-          return categories; // Fallback to current categories
+          return categories;
         });
       
       const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
@@ -286,11 +308,12 @@ export default function CategoriesPage() {
       }
       
       resetProductForm();
-      alert('✅ Product added successfully!');
+      showAlertModal(`Product ${editingProduct ? 'updated' : 'added'} successfully!`, 'success');
       
     } catch (err) {
       console.error('❌ Error saving product:', err);
       setError(err instanceof Error ? err.message : 'Failed to save product');
+      showAlertModal('Failed to save product', 'error');
     } finally {
       setLoading(false);
     }
@@ -304,18 +327,34 @@ export default function CategoriesPage() {
       description: product.description,
       available: product.available
     });
-    setProductIngredients([...product.ingredients]);
+
+    // Convert ingredients to ProductIngredient format
+    const convertedIngredients = product.ingredients.map(ing => {
+      // Type guard to check if it's already a ProductIngredient
+      if ('inventoryItemId' in ing) {
+        return ing as ProductIngredient;
+      }
+      // Handle old format - convert to ProductIngredient
+      const oldIng = ing as unknown as { name: string; quantity: string | number; unit: string };
+      return {
+        inventoryItemId: '', // Will be filled by user
+        name: oldIng.name,
+        quantity: typeof oldIng.quantity === 'string' ? Number(oldIng.quantity) : oldIng.quantity,
+        unit: oldIng.unit
+      } as ProductIngredient;
+    });
+    
+    setProductIngredients(convertedIngredients);
   };
 
-  // Add debug logging sa deleteProduct function
   const deleteProduct = async (productId: string) => {
-    if (!selectedCategory || !confirm('Are you sure you want to delete this product?')) return;
+    if (!selectedCategory) return;
 
     try {
       setLoading(true);
-      console.log(`🗑️ Deleting product ${productId} from category ${selectedCategory._id}...`);
+      console.log(`🗑️ Deleting product ${productId}`);
       
-      const response = await fetch(`/api/products/categories/${selectedCategory._id}/products/${productId}`, {
+      const response = await fetch(`/api/products/products${productId}`, {
         method: 'DELETE'
       });
 
@@ -327,10 +366,11 @@ export default function CategoriesPage() {
       
       await fetchCategories();
       await updateSelectedCategory();
-      alert('Product deleted successfully!');
+      showAlertModal('Product deleted successfully!', 'success');
     } catch (err) {
       console.error('❌ Delete product error:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete product');
+      showAlertModal('Failed to delete product', 'error');
     } finally {
       setLoading(false);
     }
@@ -344,19 +384,25 @@ export default function CategoriesPage() {
       const product = selectedCategory.products.find(p => p._id === productId);
       if (!product) return;
 
-      const response = await fetch(`/api/products/categories/${selectedCategory._id}/products/${productId}`, {
+      // First get the full product data
+      const productResponse = await fetch(`/api/products/products${productId}`);
+      if (!productResponse.ok) throw new Error('Failed to fetch product');
+      const fullProduct = await productResponse.json();
+
+      const response = await fetch(`/api/products/products${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, available: !product.available })
+        body: JSON.stringify({ ...fullProduct, available: !fullProduct.available })
       });
 
       if (!response.ok) throw new Error('Failed to update product');
       
       await fetchCategories();
       await updateSelectedCategory();
-      alert(`Product ${!product.available ? 'activated' : 'deactivated'} successfully!`);
+      showAlertModal(`Product ${!fullProduct.available ? 'activated' : 'deactivated'} successfully!`, 'success');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update product');
+      showAlertModal('Failed to update product', 'error');
     } finally {
       setLoading(false);
     }
@@ -366,10 +412,13 @@ export default function CategoriesPage() {
     setEditingProduct(null);
     setProductForm({ name: '', price: '', description: '', available: true });
     setProductIngredients([]);
-    setIngredientForm({ name: '', quantity: '', unit: 'grams' });
   };
 
-  // Calculations - INALIS ANG AVG PRICE
+  const handleIngredientsChange = useCallback((ingredients: ProductIngredient[]) => {
+    setProductIngredients(ingredients);
+  }, []);
+
+  // Calculations
   const calculateStats = () => {
     const totalProducts = categories.reduce((sum, cat) => sum + (cat.products?.length || 0), 0);
     const activeProducts = categories.reduce((sum, cat) => 
@@ -381,14 +430,57 @@ export default function CategoriesPage() {
 
   const stats = calculateStats();
 
+  // Get inventory item name by ID
+  const getInventoryItemName = (inventoryItemId?: string) => {
+    if (!inventoryItemId) return 'Unknown Item';
+    const item = inventoryItems.find(item => item._id === inventoryItemId);
+    return item ? item.name : 'Unknown Item';
+  };
+
   return (
     <div className="min-h-screen p-4 md:p-8">
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={showAlert}
+        onClose={() => setShowAlert(false)}
+        title={alertType === 'success' ? 'Success' : alertType === 'error' ? 'Error' : 'Warning'}
+        message={alertMessage}
+        type={alertType}
+      />
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Confirm Action</h3>
+            <p className="text-gray-600 mb-6">{confirmMessage}</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  confirmAction();
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Menu Management</h1>
-            <p className="text-muted-foreground mt-1">Manage categories and products</p>
+            <p className="text-muted-foreground mt-1">Manage categories and products with inventory integration</p>
           </div>
           <button 
             onClick={() => setShowCategoryForm(true)}
@@ -407,8 +499,8 @@ export default function CategoriesPage() {
           </div>
         )}
 
-        {/* Stats Cards - 3 COLUMNS NA LANG */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-8">
           <div className="bg-card p-4 rounded-lg border">
             <p className="text-sm text-muted-foreground">Categories</p>
             <p className="text-xl font-bold">{categories.length}</p>
@@ -420,6 +512,10 @@ export default function CategoriesPage() {
           <div className="bg-card p-4 rounded-lg border">
             <p className="text-sm text-muted-foreground">Active Products</p>
             <p className="text-xl font-bold">{stats.activeProducts}</p>
+          </div>
+          <div className="bg-card p-4 rounded-lg border">
+            <p className="text-sm text-muted-foreground">Inventory Items</p>
+            <p className="text-xl font-bold">{inventoryItems.length}</p>
           </div>
         </div>
       </div>
@@ -507,6 +603,9 @@ export default function CategoriesPage() {
                         >
                           <td className="py-4 px-4">
                             <div className="font-medium">{category.name}</div>
+                            {category.description && (
+                              <div className="text-sm text-gray-500 mt-1">{category.description}</div>
+                            )}
                           </td>
                           <td className="py-4 px-4">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
@@ -520,7 +619,10 @@ export default function CategoriesPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteCategory(category._id!);
+                                showConfirmationModal(
+                                  'Are you sure you want to delete this category and all its products?',
+                                  () => deleteCategory(category._id!)
+                                );
                               }}
                               disabled={loading}
                               className="text-red-500 hover:text-red-700"
@@ -607,7 +709,7 @@ export default function CategoriesPage() {
                                 <div className="max-h-20 overflow-y-auto">
                                   {product.ingredients.map((ing, idx) => (
                                     <div key={idx} className="mb-1">
-                                      • {ing.name} ({ing.quantity} {ing.unit})
+                                      • {getInventoryItemName(ing.inventoryItemId)}: {ing.quantity} {ing.unit}
                                     </div>
                                   ))}
                                 </div>
@@ -627,7 +729,12 @@ export default function CategoriesPage() {
                                 <Edit2 className="h-4 w-4" />
                               </button>
                               <button
-                                onClick={() => deleteProduct(product._id!)}
+                                onClick={() => {
+                                  showConfirmationModal(
+                                    'Are you sure you want to delete this product?',
+                                    () => deleteProduct(product._id!)
+                                  );
+                                }}
                                 disabled={loading}
                                 className="text-red-500 hover:text-red-700"
                                 title="Delete"
@@ -665,172 +772,115 @@ export default function CategoriesPage() {
             </div>
 
             {selectedCategory ? (
-              <div>
-                {/* Product Form */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Product Name *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter product name"
-                      value={productForm.name}
-                      onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                      className="w-full px-3 py-2 border rounded"
-                      disabled={loading}
-                    />
-                  </div>
+              <div className="space-y-4">
+                {/* Basic Product Info */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Product Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter product name"
+                    value={productForm.name}
+                    onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                    className="w-full px-3 py-2 border rounded"
+                    disabled={loading}
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Price (₱) *
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={productForm.price}
-                      onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                      className="w-full px-3 py-2 border rounded"
-                      disabled={loading}
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price (₱) *
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    value={productForm.price}
+                    onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                    className="w-full px-3 py-2 border rounded"
+                    disabled={loading}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Description (Optional)
-                    </label>
-                    <textarea
-                      placeholder="Product description"
-                      value={productForm.description}
-                      onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                      className="w-full px-3 py-2 border rounded"
-                      rows={2}
-                      disabled={loading}
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    placeholder="Product description"
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                    className="w-full px-3 py-2 border rounded"
+                    rows={2}
+                    disabled={loading}
+                  />
+                </div>
 
-                  {/* Ingredients Section */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ingredients *
-                    </label>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-12 gap-2">
-                        <div className="col-span-5">
-                          <input
-                            type="text"
-                            placeholder="Ingredient"
-                            value={ingredientForm.name}
-                            onChange={(e) => setIngredientForm({...ingredientForm, name: e.target.value})}
-                            className="w-full px-3 py-2 border rounded text-sm"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <input
-                            type="text"
-                            placeholder="Qty"
-                            value={ingredientForm.quantity}
-                            onChange={(e) => setIngredientForm({...ingredientForm, quantity: e.target.value})}
-                            className="w-full px-3 py-2 border rounded text-sm"
-                            disabled={loading}
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <select
-                            value={ingredientForm.unit}
-                            onChange={(e) => setIngredientForm({...ingredientForm, unit: e.target.value})}
-                            className="w-full px-3 py-2 border rounded text-sm"
-                            disabled={loading}
-                          >
-                            {UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-span-1">
-                          <button 
-                            onClick={addIngredient}
-                            disabled={loading}
-                            className="w-full h-full bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        </div>
+                {/* Status Toggle */}
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="available"
+                    checked={productForm.available}
+                    onChange={(e) => setProductForm({...productForm, available: e.target.checked})}
+                    className="h-4 w-4 text-primary border-gray-300 rounded"
+                    disabled={loading}
+                  />
+                  <label htmlFor="available" className="ml-2 text-sm text-gray-700">
+                    Product is available for sale
+                  </label>
+                </div>
+
+                {/* Inventory Items Warning */}
+                {inventoryItems.length === 0 && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-yellow-800">No Inventory Items</p>
+                        <p className="text-xs text-yellow-700 mt-1">
+                          You need to add items to inventory first before creating products with ingredients.
+                        </p>
                       </div>
-                      
-                      {/* Ingredients List */}
-                      {productIngredients.length > 0 && (
-                        <div className="border rounded">
-                          <div className="p-2 bg-gray-50 border-b">
-                            <span className="text-xs font-medium text-gray-600">
-                              Added Ingredients ({productIngredients.length})
-                            </span>
-                          </div>
-                          <div className="max-h-48 overflow-y-auto">
-                            {productIngredients.map((ing, index) => (
-                              <div key={index} className="flex justify-between items-center px-3 py-2 border-b hover:bg-gray-50">
-                                <div>
-                                  <span className="text-sm font-medium text-gray-700">{ing.name}</span>
-                                  <span className="text-xs text-gray-500 ml-2">
-                                    {ing.quantity} {ing.unit}
-                                  </span>
-                                </div>
-                                <button 
-                                  onClick={() => removeIngredient(index)} 
-                                  disabled={loading}
-                                  className="text-red-500 hover:text-red-700"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
+                )}
 
-                  {/* Status Toggle */}
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="available"
-                      checked={productForm.available}
-                      onChange={(e) => setProductForm({...productForm, available: e.target.checked})}
-                      className="h-4 w-4 text-primary border-gray-300 rounded"
-                      disabled={loading}
-                    />
-                    <label htmlFor="available" className="ml-2 text-sm text-gray-700">
-                      Product is available for sale
-                    </label>
-                  </div>
+                {/* Ingredients Section */}
+                <div className="pt-2">
+                  <ProductIngredientsForm
+                    inventoryItems={inventoryItems}
+                    onIngredientsChange={handleIngredientsChange}
+                    initialIngredients={productIngredients}
+                    loading={inventoryLoading}
+                  />
+                </div>
 
-                  {/* Submit Buttons */}
-                  <div className="pt-4 border-t space-y-2">
+                {/* Submit Buttons */}
+                <div className="pt-4 border-t space-y-2">
+                  <button
+                    onClick={saveProduct}
+                    disabled={loading || !productForm.name || !productForm.price || productIngredients.length === 0}
+                    className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Saving...
+                      </>
+                    ) : editingProduct ? 'Update Product' : 'Add Product'}
+                  </button>
+                  
+                  {editingProduct && (
                     <button
-                      onClick={saveProduct}
-                      disabled={loading || !productForm.name || !productForm.price || productIngredients.length === 0}
-                      className="w-full bg-primary text-white py-2 rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      onClick={resetProductForm}
+                      className="w-full bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
                     >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Saving...
-                        </>
-                      ) : editingProduct ? 'Update Product' : 'Add Product'}
+                      Cancel Edit
                     </button>
-                    
-                    {editingProduct && (
-                      <button
-                        onClick={resetProductForm}
-                        className="w-full bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
-                      >
-                        Cancel Edit
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             ) : (

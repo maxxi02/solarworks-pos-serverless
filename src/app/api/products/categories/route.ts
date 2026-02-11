@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MONGODB } from '@/config/db';
 import { ObjectId } from 'mongodb';
 
-interface Ingredient {
-  name: string;
-  quantity: string;
-  unit: string;
+interface ProductIngredient {
+  inventoryItemId: string;     // Reference to stocks collection _id
+  name: string;               // Name of the inventory item (for display)
+  quantity: number;           // Amount needed per serving (as number, not string)
+  unit: string;               // Unit of measurement
 }
 
 interface MongoDBProduct {
@@ -13,7 +14,7 @@ interface MongoDBProduct {
   name: string;
   price: number;
   description: string;
-  ingredients: Ingredient[];
+  ingredients: ProductIngredient[];
   available: boolean;
   categoryId: string;
   createdAt?: Date;
@@ -24,7 +25,7 @@ interface MongoDBCategory {
   _id: ObjectId;
   name: string;
   description: string;
-  menuType: 'food' | 'drink'; // Added menuType
+  menuType: 'food' | 'drink';  
   createdAt?: Date;
   updatedAt?: Date;
 }
