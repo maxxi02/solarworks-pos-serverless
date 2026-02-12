@@ -3,10 +3,22 @@ import {
   batchAdjustStock, 
   checkStockAvailability, 
   rollbackTransaction,
-  getInventoryItemByName,
   getInventoryByNames
 } from '@/lib/inventoryService';
-import { BatchAdjustmentResult, StockCheckResult, BatchStockAdjustment } from '@/types';
+import { 
+  BatchAdjustmentResult, 
+  StockCheckResult, 
+  BatchStockAdjustment 
+} from '@/types';
+import { 
+  Unit,
+  smartConvert,
+  areUnitsCompatible,
+  hasDensity,
+  formatQuantity,
+  getUnitCategory,
+  UnitCategory
+} from '@/lib/unit-conversion';
 import { toast } from 'sonner';
 
 interface ProductIngredient {
@@ -22,11 +34,33 @@ interface OrderItem {
   ingredients: ProductIngredient[];
 }
 
+interface IngredientRequirement {
+  name: string;
+  quantity: number;
+  unit: Unit;
+  originalQuantity: number;
+  originalUnit: Unit;
+}
+
+interface StockCheckWithConversion {
+  itemId?: string;
+  itemName: string;
+  quantity: number;
+  unit: Unit;
+  originalQuantity?: number;
+  originalUnit?: Unit;
+  conversionNote?: string;
+  skip?: boolean;
+  error?: string;
+}
+
 interface UseInventoryOrderOptions {
   onSuccess?: (result: BatchAdjustmentResult) => void;
   onError?: (error: Error) => void;
   onInsufficientStock?: (insufficientItems: StockCheckResult[]) => void;
+  onUnitMismatch?: (mismatches: Array<{ ingredient: string; recipeUnit: string; inventoryUnit: string; message: string }>) => void;
   autoRollback?: boolean;
+  strictUnitCheck?: boolean;
 }
 
 export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
@@ -35,61 +69,274 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
   const [lastTransactionId, setLastTransactionId] = useState<string | null>(null);
   const [stockCheckResults, setStockCheckResults] = useState<StockCheckResult[]>([]);
   const [insufficientItems, setInsufficientItems] = useState<StockCheckResult[]>([]);
+  const [unitMismatches, setUnitMismatches] = useState<Array<{
+    ingredient: string;
+    recipeUnit: string;
+    inventoryUnit: string;
+    message: string;
+  }>>([]);
 
-  // Check stock availability for an order
+  const flattenIngredientRequirements = useCallback((items: OrderItem[]): Map<string, IngredientRequirement> => {
+    const requirements = new Map<string, IngredientRequirement>();
+    
+    items.forEach(item => {
+      item.ingredients?.forEach(ingredient => {
+        const requiredQty = parseFloat(ingredient.quantity) * item.quantity;
+        const key = ingredient.name;
+        
+        if (requirements.has(key)) {
+          const current = requirements.get(key)!;
+          current.quantity += requiredQty;
+        } else {
+          requirements.set(key, {
+            name: ingredient.name,
+            quantity: requiredQty,
+            unit: ingredient.unit as Unit,
+            originalQuantity: requiredQty,
+            originalUnit: ingredient.unit as Unit
+          });
+        }
+      });
+    });
+    
+    return requirements;
+  }, []);
+
+  const validateUnits = useCallback((
+    requirements: Map<string, IngredientRequirement>,
+    inventoryMap: Map<string, any>
+  ): {
+    valid: boolean;
+    mismatches: Array<{ ingredient: string; recipeUnit: string; inventoryUnit: string; message: string }>;
+  } => {
+    const mismatches = [];
+    
+    for (const [name, requirement] of requirements.entries()) {
+      const inventoryItem = inventoryMap.get(name);
+      
+      if (!inventoryItem) {
+        mismatches.push({
+          ingredient: name,
+          recipeUnit: requirement.unit,
+          inventoryUnit: 'N/A',
+          message: `No inventory item found for ${name}`
+        });
+        continue;
+      }
+      
+      const recipeUnit = requirement.unit;
+      const inventoryUnit = inventoryItem.displayUnit || inventoryItem.unit;
+      
+      if (!areUnitsCompatible(recipeUnit, inventoryUnit)) {
+        const recipeCategory = getUnitCategory(recipeUnit);
+        const inventoryCategory = getUnitCategory(inventoryUnit);
+        
+        if (options.strictUnitCheck) {
+          mismatches.push({
+            ingredient: name,
+            recipeUnit,
+            inventoryUnit,
+            message: `Cannot convert ${recipeUnit} (${recipeCategory}) to ${inventoryUnit} (${inventoryCategory}). Please use same unit type.`
+          });
+          continue;
+        }
+        
+        if ((recipeCategory === 'weight' && inventoryCategory === 'volume') ||
+            (recipeCategory === 'volume' && inventoryCategory === 'weight')) {
+          
+          if (!hasDensity(name) && !inventoryItem.density) {
+            mismatches.push({
+              ingredient: name,
+              recipeUnit,
+              inventoryUnit,
+              message: `Cannot convert ${recipeUnit} to ${inventoryUnit}. No density data for ${name}.`
+            });
+          }
+        } else {
+          mismatches.push({
+            ingredient: name,
+            recipeUnit,
+            inventoryUnit,
+            message: `Cannot convert ${recipeUnit} (${recipeCategory}) to ${inventoryUnit} (${inventoryCategory}).`
+          });
+        }
+      }
+    }
+    
+    return {
+      valid: mismatches.length === 0,
+      mismatches
+    };
+  }, [options.strictUnitCheck]);
+
+  const convertToInventoryUnit = useCallback((
+    quantity: number,
+    fromUnit: Unit,
+    inventoryItem: any
+  ): { quantity: number; unit: Unit; conversionNote?: string } => {
+    try {
+      const inventoryUnit = inventoryItem.unit as Unit;
+      
+      if (fromUnit === inventoryUnit) {
+        return {
+          quantity: formatQuantity(quantity, inventoryUnit),
+          unit: inventoryUnit
+        };
+      }
+      
+      const converted = smartConvert(
+        quantity,
+        fromUnit,
+        inventoryUnit,
+        inventoryItem.name
+      );
+      
+      const formattedQuantity = formatQuantity(converted, inventoryUnit);
+      
+      return {
+        quantity: formattedQuantity,
+        unit: inventoryUnit,
+        conversionNote: `${quantity} ${fromUnit} = ${formattedQuantity} ${inventoryUnit}`
+      };
+    } catch (error) {
+      console.error(`Conversion failed for ${inventoryItem?.name}:`, error);
+      throw error;
+    }
+  }, []);
+
   const checkOrderStock = useCallback(async (
     items: OrderItem[]
   ): Promise<{
     allAvailable: boolean;
     results: StockCheckResult[];
     insufficientItems: StockCheckResult[];
+    unitMismatches: typeof unitMismatches;
   }> => {
     setIsChecking(true);
+    setUnitMismatches([]);
     
     try {
-      // Flatten all ingredients with their required quantities
-      const ingredientRequirements = new Map<string, number>();
+      const requirements = flattenIngredientRequirements(items);
+      const ingredientNames = Array.from(requirements.keys());
       
-      items.forEach(item => {
-        item.ingredients?.forEach(ingredient => {
-          const requiredQty = parseFloat(ingredient.quantity) * item.quantity;
-          const key = ingredient.name;
-          
-          ingredientRequirements.set(
-            key, 
-            (ingredientRequirements.get(key) || 0) + requiredQty
-          );
-        });
-      });
-
-      // Convert to array format for API check
-      const stockChecks = Array.from(ingredientRequirements.entries()).map(
-        ([name, quantity]) => ({
-          itemName: name,
-          quantity: Math.ceil(quantity * 100) / 100 // Round to 2 decimal places
-        })
-      );
-
-      // Check availability with inventory service
-      const result = await checkStockAvailability(stockChecks);
+      // ✅ Get inventory items - should be a plain array now
+      const inventoryItems = await getInventoryByNames(ingredientNames);
       
-      setStockCheckResults(result.results);
-      setInsufficientItems(result.insufficientItems);
+      // ✅ Ensure we have an array
+      const itemsArray = Array.isArray(inventoryItems) ? inventoryItems : [];
       
-      if (!result.allAvailable && options.onInsufficientStock) {
-        options.onInsufficientStock(result.insufficientItems);
+      // ✅ Create map from the array
+      const inventoryMap = new Map(itemsArray.map(item => [item.name, item]));
+      
+      const unitValidation = validateUnits(requirements, inventoryMap);
+      setUnitMismatches(unitValidation.mismatches);
+      
+      if (!unitValidation.valid && options.onUnitMismatch) {
+        options.onUnitMismatch(unitValidation.mismatches);
       }
       
-      return result;
+      if (options.strictUnitCheck && !unitValidation.valid) {
+        throw new Error('Unit compatibility check failed');
+      }
+
+      const stockChecks: StockCheckWithConversion[] = [];
+      
+      for (const [name, requirement] of requirements.entries()) {
+        const inventoryItem = inventoryMap.get(name);
+        
+        if (!inventoryItem) {
+          stockChecks.push({
+            itemName: name,
+            quantity: requirement.quantity,
+            unit: requirement.unit,
+            skip: true,
+            error: 'Item not found in inventory'
+          });
+          continue;
+        }
+        
+        try {
+          const converted = convertToInventoryUnit(
+            requirement.quantity,
+            requirement.unit,
+            inventoryItem
+          );
+          
+          // Convert ObjectId to string
+          const itemId = inventoryItem._id?.toString();
+          
+          stockChecks.push({
+            itemId,
+            itemName: name,
+            quantity: converted.quantity,
+            unit: converted.unit,
+            originalQuantity: requirement.quantity,
+            originalUnit: requirement.unit,
+            conversionNote: converted.conversionNote
+          });
+        } catch (error) {
+          stockChecks.push({
+            itemName: name,
+            quantity: requirement.quantity,
+            unit: requirement.unit,
+            skip: true,
+            error: error instanceof Error ? error.message : 'Conversion failed'
+          });
+        }
+      }
+
+      const validStockChecks = stockChecks
+        .filter(check => !check.skip)
+        .map(check => ({
+          itemName: check.itemName,
+          quantity: check.quantity,
+          unit: check.unit
+        }));
+
+      const result = await checkStockAvailability(validStockChecks);
+      
+      const enhancedResults = result.results.map(res => {
+        const check = stockChecks.find(c => c.itemName === res.name);
+        return {
+          ...res,
+          originalQuantity: check?.originalQuantity,
+          originalUnit: check?.originalUnit,
+          conversionNote: check?.conversionNote
+        } as StockCheckResult;
+      });
+      
+      const enhancedInsufficient = result.insufficientItems.map(res => {
+        const check = stockChecks.find(c => c.itemName === res.name);
+        return {
+          ...res,
+          originalQuantity: check?.originalQuantity,
+          originalUnit: check?.originalUnit,
+          conversionNote: check?.conversionNote
+        } as StockCheckResult;
+      });
+      
+      setStockCheckResults(enhancedResults);
+      setInsufficientItems(enhancedInsufficient);
+      
+      if (!result.allAvailable && options.onInsufficientStock) {
+        options.onInsufficientStock(enhancedInsufficient);
+      }
+      
+      return {
+        allAvailable: result.allAvailable,
+        results: enhancedResults,
+        insufficientItems: enhancedInsufficient,
+        unitMismatches: unitValidation.mismatches
+      };
+      
     } catch (error) {
       console.error('Error checking stock:', error);
       throw error;
     } finally {
       setIsChecking(false);
     }
-  }, [options]);
+  }, [flattenIngredientRequirements, validateUnits, convertToInventoryUnit, options]);
 
-  // Process order - deduct ingredients from inventory
   const processOrderDeductions = useCallback(async (
     orderId: string,
     orderNumber: string,
@@ -98,24 +345,15 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
     setIsProcessing(true);
     
     try {
-      // First check if all ingredients are available
       const stockCheck = await checkOrderStock(items);
       
       if (!stockCheck.allAvailable) {
         const error = new Error('Insufficient stock for some ingredients');
         (error as any).insufficientItems = stockCheck.insufficientItems;
+        (error as any).unitMismatches = stockCheck.unitMismatches;
         throw error;
       }
 
-      // Calculate total ingredient deductions
-      const ingredientDeductions = new Map<string, {
-        itemId?: string;
-        name: string;
-        quantity: number;
-        unit: string;
-      }>();
-
-      // First, get all unique ingredient names
       const allIngredientNames = new Set<string>();
       items.forEach(item => {
         item.ingredients?.forEach(ingredient => {
@@ -123,47 +361,85 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
         });
       });
 
-      // Batch lookup inventory items by name
+      // ✅ Get inventory items - should be a plain array now
       const inventoryItems = await getInventoryByNames(Array.from(allIngredientNames));
-      const inventoryMap = new Map(inventoryItems.map(item => [item.name, item]));
+      
+      // ✅ Ensure we have an array
+      const itemsArray = Array.isArray(inventoryItems) ? inventoryItems : [];
+      
+      // ✅ Create map from the array
+      const inventoryMap = new Map(itemsArray.map(item => [item.name, item]));
 
-      // Calculate total quantities needed
+      const ingredientDeductions = new Map<string, {
+        itemId: string;
+        name: string;
+        quantity: number;
+        unit: Unit;
+        originalQuantity: number;
+        originalUnit: Unit;
+        conversionNote?: string;
+      }>();
+
       items.forEach(item => {
         item.ingredients?.forEach(ingredient => {
           const requiredQty = parseFloat(ingredient.quantity) * item.quantity;
           const key = ingredient.name;
           
-          if (ingredientDeductions.has(key)) {
-            const current = ingredientDeductions.get(key)!;
-            current.quantity += requiredQty;
-          } else {
-            const inventoryItem = inventoryMap.get(ingredient.name);
-            ingredientDeductions.set(key, {
-              itemId: inventoryItem?._id,
-              name: ingredient.name,
-              quantity: requiredQty,
-              unit: ingredient.unit
-            });
+          const inventoryItem = inventoryMap.get(ingredient.name);
+          if (!inventoryItem) {
+            console.warn(`No inventory item found for ingredient: ${ingredient.name}`);
+            return;
+          }
+          
+          try {
+            const converted = convertToInventoryUnit(
+              requiredQty,
+              ingredient.unit as Unit,
+              inventoryItem
+            );
+            
+            // Convert ObjectId to string
+            const itemId = inventoryItem._id?.toString();
+            
+            if (!itemId) {
+              console.warn(`No ID found for inventory item: ${ingredient.name}`);
+              return;
+            }
+            
+            if (ingredientDeductions.has(key)) {
+              const current = ingredientDeductions.get(key)!;
+              current.quantity += converted.quantity;
+              current.quantity = formatQuantity(current.quantity, current.unit);
+            } else {
+              ingredientDeductions.set(key, {
+                itemId,
+                name: ingredient.name,
+                quantity: converted.quantity,
+                unit: converted.unit,
+                originalQuantity: requiredQty,
+                originalUnit: ingredient.unit as Unit,
+                conversionNote: converted.conversionNote
+              });
+            }
+          } catch (error) {
+            console.error(`Failed to convert ${ingredient.name}:`, error);
+            throw new Error(`Cannot convert ${ingredient.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         });
       });
 
-      // Prepare batch adjustments
       const adjustments: BatchStockAdjustment[] = [];
       
       ingredientDeductions.forEach((deduction) => {
-        if (!deduction.itemId) {
-          console.warn(`No inventory item found for ingredient: ${deduction.name}`);
-          return;
-        }
-        
         adjustments.push({
           itemId: deduction.itemId,
           itemName: deduction.name,
           quantity: deduction.quantity,
           type: 'deduction',
           unit: deduction.unit,
-          notes: `Deducted for order #${orderNumber} - ${orderId}`
+          notes: deduction.conversionNote 
+            ? `Deducted for order #${orderNumber}: ${deduction.conversionNote}`
+            : `Deducted for order #${orderNumber} - ${orderId}`
         });
       });
 
@@ -171,7 +447,6 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
         throw new Error('No valid inventory items found for ingredients');
       }
 
-      // Process batch deduction
       const result = await batchAdjustStock(
         adjustments,
         { type: 'order', id: orderId, number: orderNumber }
@@ -179,11 +454,9 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
 
       setLastTransactionId(result.transactionId);
 
-      // Handle failed adjustments
       if (result.failed && result.failed.length > 0) {
         console.error('Failed stock adjustments:', result.failed);
         
-        // Trigger rollback if auto-rollback is enabled
         if (options.autoRollback !== false) {
           await rollbackOrderDeductions(result.transactionId, adjustments);
           result.rollbackPerformed = true;
@@ -197,6 +470,7 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
       }
 
       return result;
+      
     } catch (error) {
       console.error('Error processing order deductions:', error);
       
@@ -208,9 +482,8 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
     } finally {
       setIsProcessing(false);
     }
-  }, [checkOrderStock, options]);
+  }, [checkOrderStock, convertToInventoryUnit, options]);
 
-  // Rollback order deductions
   const rollbackOrderDeductions = useCallback(async (
     transactionId: string,
     adjustments: BatchStockAdjustment[]
@@ -231,10 +504,10 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
     }
   }, []);
 
-  // Clear stock check results
   const clearStockCheck = useCallback(() => {
     setStockCheckResults([]);
     setInsufficientItems([]);
+    setUnitMismatches([]);
   }, []);
 
   return {
@@ -243,6 +516,7 @@ export function useInventoryOrder(options: UseInventoryOrderOptions = {}) {
     lastTransactionId,
     stockCheckResults,
     insufficientItems,
+    unitMismatches,
     checkOrderStock,
     processOrderDeductions,
     rollbackOrderDeductions,
