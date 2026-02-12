@@ -16,16 +16,20 @@ import {
   X,
   Save,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  History
 } from 'lucide-react';
 import {
   fetchInventory,
   createInventoryItem,
   deleteInventoryItem,
-  adjustStock
+  adjustStock,
+  getLowStockAlerts,
+  getCriticalStockAlerts
 } from '@/lib/inventoryService';
 import { InventoryItem } from '@/types';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 // Delete Confirm Modal Component
 function DeleteConfirmModal({
@@ -129,7 +133,7 @@ export default function InventoryPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState<InventoryItem | null>(null);
-  const [adjustmentType, setAdjustmentType] = useState<'restock' | 'usage' | 'waste' | 'correction'>('restock');
+  const [adjustmentType, setAdjustmentType] = useState<'restock' | 'usage' | 'waste' | 'correction' | 'deduction'>('restock');
   const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
   const [newItem, setNewItem] = useState({
@@ -153,11 +157,35 @@ export default function InventoryPage() {
     itemId: null,
     itemName: ''
   });
+  const [alerts, setAlerts] = useState({
+    critical: 0,
+    low: 0,
+    warning: 0
+  });
 
   // Load inventory on mount and when filters change
   useEffect(() => {
     loadInventory();
+    loadAlerts();
   }, [categoryFilter, statusFilter, searchQuery]);
+
+  // Load alerts
+  const loadAlerts = async () => {
+    try {
+      const [critical, lowStock] = await Promise.all([
+        getCriticalStockAlerts(),
+        getLowStockAlerts()
+      ]);
+      
+      setAlerts({
+        critical: critical.length,
+        low: lowStock.filter(a => a.status === 'low').length,
+        warning: lowStock.filter(a => a.status === 'warning').length
+      });
+    } catch (error) {
+      console.error('Error loading alerts:', error);
+    }
+  };
 
   // Load inventory with filters
   const loadInventory = async () => {
@@ -212,7 +240,11 @@ export default function InventoryPage() {
         type: adjustmentType,
         quantity,
         notes: adjustmentNotes,
-        performedBy: 'Admin'
+        performedBy: 'Admin',
+        reference: {
+          type: 'manual',
+          id: `manual-${Date.now()}`
+        }
       });
 
       // Update local state immediately for better UX
@@ -221,12 +253,15 @@ export default function InventoryPage() {
           return {
             ...item,
             currentStock: result.newStock,
-            status: result.status,
+            status: result.status as any,
             lastRestocked: adjustmentType === 'restock' ? new Date() : item.lastRestocked
           };
         }
         return item;
       }));
+
+      // Refresh alerts
+      loadAlerts();
 
       toast.success(`Stock ${adjustmentType === 'restock' ? 'Restocked' : 'Adjusted'}`, {
         description: `${adjustmentQuantity} ${showAdjustModal.unit} ${adjustmentType === 'restock' ? 'added to' : adjustmentType === 'usage' ? 'used from' : 'adjusted for'} ${showAdjustModal.name}`
@@ -291,7 +326,12 @@ export default function InventoryPage() {
       const result = await createInventoryItem(inventoryItem);
       
       // Add to local state immediately
-      setInventory(prev => [...prev, { ...inventoryItem, _id: result._id, createdAt: new Date(), updatedAt: new Date() }]);
+      setInventory(prev => [...prev, { 
+        ...inventoryItem, 
+        _id: result._id, 
+        createdAt: new Date(), 
+        updatedAt: new Date() 
+      }]);
       
       setShowAddModal(false);
       resetNewItemForm();
@@ -332,6 +372,9 @@ export default function InventoryPage() {
         itemName: ''
       });
       
+      // Refresh alerts
+      loadAlerts();
+      
       toast.success('Item Deleted', {
         description: `${deleteModal.itemName} has been removed from inventory`
       });
@@ -359,7 +402,7 @@ export default function InventoryPage() {
     });
   };
 
-  // Get status color - updated for black/white dark mode
+  // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'critical': return 'bg-red-100 dark:bg-red-900/10 text-red-800 dark:text-red-500 border-red-200 dark:border-red-900/30';
@@ -393,21 +436,11 @@ export default function InventoryPage() {
     }
   };
 
-  // Apply filters
-  const applyFilters = () => {
-    toast.info('Filters Applied', {
-      description: 'Inventory list updated with current filters'
-    });
-  };
-
   // Clear filters
   const clearFilters = () => {
     setSearchQuery('');
     setCategoryFilter('all');
     setStatusFilter('all');
-    toast.info('Filters Cleared', {
-      description: 'All filters have been cleared'
-    });
   };
 
   // Format number with limits
@@ -416,6 +449,11 @@ export default function InventoryPage() {
     if (isNaN(num)) return '';
     if (num > max) return max.toString();
     return value;
+  };
+
+  // View audit trail
+  const viewAuditTrail = (itemId: string) => {
+    window.location.href = `/inventory/audit?id=${itemId}`;
   };
 
   return (
@@ -428,6 +466,14 @@ export default function InventoryPage() {
             <p className="text-gray-600 dark:text-gray-400 mt-2">Track and manage all ingredients and supplies</p>
           </div>
           <div className="flex gap-2 mt-4 sm:mt-0">
+            <Link href="/inventory/audit">
+              <button
+                className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+              >
+                <History className="h-4 w-4" />
+                Audit Trail
+              </button>
+            </Link>
             <button
               onClick={loadInventory}
               className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
@@ -526,7 +572,7 @@ export default function InventoryPage() {
                   >
                     {categories.map(category => (
                       <option key={category} value={category}>
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                        {category === 'all' ? 'All Categories' : category}
                       </option>
                     ))}
                   </select>
@@ -547,21 +593,13 @@ export default function InventoryPage() {
                   </select>
                 </div>
 
-                {/* Apply/Clear Filters */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={applyFilters}
-                    className="rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:hover:bg-blue-600"
-                  >
-                    Apply
-                  </button>
-                  <button
-                    onClick={clearFilters}
-                    className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
-                  >
-                    Clear
-                  </button>
-                </div>
+                {/* Clear Filters */}
+                <button
+                  onClick={clearFilters}
+                  className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+                >
+                  Clear
+                </button>
               </div>
             </div>
           </div>
@@ -638,7 +676,7 @@ export default function InventoryPage() {
                                 />
                               </div>
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                {Math.round(stockPercentage)}% of max stock
+                                {Math.round(stockPercentage)}% of max
                               </div>
                             </div>
                           </div>
@@ -650,7 +688,7 @@ export default function InventoryPage() {
                           </div>
                           {needsRestock && (
                             <div className="mt-1 text-xs text-red-600 dark:text-red-500">
-                              Reorder point: {item.reorderPoint} {item.unit}
+                              Reorder at {item.reorderPoint} {item.unit}
                             </div>
                           )}
                         </td>
@@ -674,7 +712,14 @@ export default function InventoryPage() {
                               onClick={() => setShowAdjustModal(item)}
                               className="rounded-lg bg-blue-100 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-500 hover:bg-blue-200 dark:hover:bg-blue-900/20"
                             >
-                              Adjust Stock
+                              Adjust
+                            </button>
+                            <button
+                              onClick={() => viewAuditTrail(item._id!)}
+                              className="rounded-lg bg-purple-100 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-900/30 px-3 py-1.5 text-sm font-medium text-purple-700 dark:text-purple-500 hover:bg-purple-200 dark:hover:bg-purple-900/20"
+                              title="View Audit Trail"
+                            >
+                              <History className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteClick(item._id!, item.name)}
@@ -718,17 +763,19 @@ export default function InventoryPage() {
             <div className="mt-8">
               <div className="mb-4 flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-500" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Critical Stock Alerts</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Critical Stock Alerts ({criticalItems.length})
+                </h3>
               </div>
               <div className="rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 p-4">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {criticalItems.map(item => (
+                  {criticalItems.slice(0, 4).map(item => (
                     <div key={item._id} className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-4">
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white">{item.name}</h4>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Stock: {item.currentStock} {item.unit} • Min: {item.minStock} {item.unit}
+                            Stock: {item.currentStock} {item.unit}
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-500">{item.location}</p>
                         </div>
@@ -742,6 +789,11 @@ export default function InventoryPage() {
                     </div>
                   ))}
                 </div>
+                {criticalItems.length > 4 && (
+                  <p className="mt-4 text-sm text-gray-600 dark:text-gray-400 text-center">
+                    +{criticalItems.length - 4} more critical items
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -819,7 +871,6 @@ export default function InventoryPage() {
                     className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     placeholder="0"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Max: 100,000 units</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Min Stock *</label>
@@ -843,7 +894,6 @@ export default function InventoryPage() {
                     className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     placeholder="50"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Max: 100,000 units</p>
                 </div>
               </div>
               
@@ -860,7 +910,6 @@ export default function InventoryPage() {
                     className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     placeholder="0.00"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Max: ₱1,000,000</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Reorder Point</label>
@@ -1024,7 +1073,6 @@ export default function InventoryPage() {
                     <span className="text-sm text-gray-700 dark:text-gray-300">{showAdjustModal.unit}</span>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Max: 100,000 units</p>
                 {adjustmentType === 'correction' && (
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     This will replace the current stock value

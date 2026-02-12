@@ -12,9 +12,11 @@ import {
   DollarSign, Smartphone, Receipt,
   X, Loader2, Utensils, Coffee,
   ChevronLeft, ChevronRight, GripVertical,
-  Save, History, Download, Printer
+  Save, History, Download, Printer,
+  AlertCircle, PackageX, RefreshCw, Bell
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useInventoryOrder } from '@/hooks/useInventoryOrder';
 
 // Types
 interface Product {
@@ -55,6 +57,18 @@ interface SavedOrder {
   status: 'pending' | 'completed' | 'cancelled';
 }
 
+interface StockAlert {
+  itemId: string;
+  itemName: string;
+  currentStock: number;
+  minStock: number;
+  reorderPoint: number;
+  unit: string;
+  status: 'critical' | 'low' | 'warning';
+  location: string;
+  outOfStock?: boolean;
+}
+
 const CashierPage = () => {
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
@@ -76,6 +90,13 @@ const CashierPage = () => {
   const [showSavedOrders, setShowSavedOrders] = useState(false);
   const [orderNote, setOrderNote] = useState('');
   
+  // Inventory State
+  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
+  const [showStockAlerts, setShowStockAlerts] = useState(false);
+  const [isCheckingStock, setIsCheckingStock] = useState(false);
+  const [showInsufficientStockModal, setShowInsufficientStockModal] = useState(false);
+  const [insufficientStockItems, setInsufficientStockItems] = useState<any[]>([]);
+  
   // Categories scroll ref and touch state
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
@@ -87,6 +108,32 @@ const CashierPage = () => {
   // Drop zone ref
   const cartDropZoneRef = useRef<HTMLDivElement>(null);
   const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
+
+  // Initialize inventory order hook
+  const {
+    isProcessing: isInventoryProcessing,
+    isChecking,
+    checkOrderStock,
+    processOrderDeductions,
+    insufficientItems,
+    clearStockCheck
+  } = useInventoryOrder({
+    onSuccess: (result) => {
+      console.log('Inventory updated successfully:', result);
+      fetchStockAlerts(); // Refresh alerts after successful deduction
+    },
+    onError: (error) => {
+      console.error('Inventory update failed:', error);
+      toast.error('Failed to update inventory', {
+        description: error.message
+      });
+    },
+    onInsufficientStock: (items) => {
+      setInsufficientStockItems(items);
+      setShowInsufficientStockModal(true);
+    },
+    autoRollback: true
+  });
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -103,32 +150,54 @@ const CashierPage = () => {
     return `ORD-${year}${month}${day}-${random}`;
   }, []);
 
-useEffect(() => {
-  const loadSavedOrders = () => {
+  // Fetch stock alerts
+  const fetchStockAlerts = useCallback(async () => {
     try {
-      const saved = localStorage.getItem('pos_saved_orders');
-      if (saved) {
-        const parsed: SavedOrder[] = JSON.parse(saved);
+      const [criticalRes, lowStockRes] = await Promise.all([
+        fetch('/api/products/stocks/alerts/critical'),
+        fetch('/api/products/stocks/alerts/low-stock')
+      ]);
 
-        const ordersWithDates = parsed.map(order => ({
-          ...order,
-          timestamp: new Date(order.timestamp)
-        }));
-
-        setSavedOrders(ordersWithDates);
+      if (criticalRes.ok && lowStockRes.ok) {
+        const critical = await criticalRes.json();
+        const lowStock = await lowStockRes.json();
+        setStockAlerts([...critical, ...lowStock]);
       }
     } catch (error) {
-      console.error('Failed to load saved orders:', error);
+      console.error('Failed to fetch stock alerts:', error);
     }
-  };
+  }, []);
 
-  loadSavedOrders();
-}, []);
+  // Load saved orders from localStorage
+  useEffect(() => {
+    const loadSavedOrders = () => {
+      try {
+        const saved = localStorage.getItem('pos_saved_orders');
+        if (saved) {
+          const parsed: SavedOrder[] = JSON.parse(saved);
+          const ordersWithDates = parsed.map(order => ({
+            ...order,
+            timestamp: new Date(order.timestamp)
+          }));
+          setSavedOrders(ordersWithDates);
+        }
+      } catch (error) {
+        console.error('Failed to load saved orders:', error);
+      }
+    };
+
+    loadSavedOrders();
+    fetchStockAlerts(); // Initial fetch of stock alerts
+    
+    // Refresh alerts every 60 seconds
+    const interval = setInterval(fetchStockAlerts, 60000);
+    return () => clearInterval(interval);
+  }, [fetchStockAlerts]);
 
   // Save order to localStorage
   const saveOrderToLocal = useCallback((order: SavedOrder) => {
     try {
-      const updatedOrders = [order, ...savedOrders].slice(0, 50); // Keep last 50 orders
+      const updatedOrders = [order, ...savedOrders].slice(0, 50);
       setSavedOrders(updatedOrders);
       localStorage.setItem('pos_saved_orders', JSON.stringify(updatedOrders));
     } catch (error) {
@@ -137,7 +206,7 @@ useEffect(() => {
     }
   }, [savedOrders]);
 
-  // Fetch data - Products and Categories
+  // Fetch products data
   const fetchProductsData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -195,33 +264,23 @@ useEffect(() => {
       .map(p => p.category || 'Uncategorized')
   ))];
 
-  // Check scroll position for showing/hiding scroll buttons
+  // Check scroll position for categories
   const checkScrollPosition = useCallback(() => {
     if (categoriesContainerRef.current) {
       const container = categoriesContainerRef.current;
       const { scrollLeft, scrollWidth, clientWidth } = container;
-      
       setShowLeftScroll(scrollLeft > 10);
       setShowRightScroll(scrollLeft < scrollWidth - clientWidth - 10);
     }
   }, []);
 
-  // Check scroll position on mount and when categories change
   useEffect(() => {
     setTimeout(checkScrollPosition, 100);
-    
-    const handleResize = () => {
-      checkScrollPosition();
-    };
-    
+    const handleResize = () => checkScrollPosition();
     window.addEventListener('resize', handleResize);
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('resize', handleResize);
   }, [categories, selectedMenuType, checkScrollPosition]);
 
-  // Add scroll event listener
   useEffect(() => {
     const container = categoriesContainerRef.current;
     if (container) {
@@ -230,21 +289,15 @@ useEffect(() => {
     }
   }, [checkScrollPosition]);
 
-  // Scroll categories function with buttons
   const scrollCategories = useCallback((direction: 'left' | 'right') => {
     if (categoriesContainerRef.current) {
       const container = categoriesContainerRef.current;
       const scrollAmount = 200;
-      
-      if (direction === 'left') {
-        container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-      } else {
-        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-      }
+      container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
     }
   }, []);
 
-  // Categories swipe handlers
+  // Category swipe handlers
   const handleCategoryMouseDown = useCallback((e: React.MouseEvent) => {
     if (!categoriesContainerRef.current) return;
     setIsDragging(true);
@@ -255,35 +308,26 @@ useEffect(() => {
   const handleCategoryMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging || !categoriesContainerRef.current) return;
     e.preventDefault();
-    
     const x = e.pageX - categoriesContainerRef.current.offsetLeft;
     const walk = (x - startX) * 2;
     categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
   }, [isDragging, startX, scrollLeft]);
 
-  const handleCategoryMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
+  const handleCategoryMouseUp = useCallback(() => setIsDragging(false), []);
   const handleCategoryTouchStart = useCallback((e: React.TouchEvent) => {
     if (!categoriesContainerRef.current) return;
     setIsDragging(true);
     setStartX(e.touches[0].pageX - categoriesContainerRef.current.offsetLeft);
     setScrollLeft(categoriesContainerRef.current.scrollLeft);
   }, []);
-
   const handleCategoryTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isDragging || !categoriesContainerRef.current) return;
     e.preventDefault();
-    
     const x = e.touches[0].pageX - categoriesContainerRef.current.offsetLeft;
     const walk = (x - startX) * 2;
     categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
   }, [isDragging, startX, scrollLeft]);
-
-  const handleCategoryTouchEnd = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const handleCategoryTouchEnd = useCallback(() => setIsDragging(false), []);
 
   // Drag and Drop Handlers
   const handleDragStart = useCallback((e: React.DragEvent, product: Product) => {
@@ -317,41 +361,26 @@ useEffect(() => {
     setTimeout(() => document.body.removeChild(dragPreview), 0);
   }, []);
 
-  const handleDragEnd = useCallback(() => {
-    setDraggedItem(null);
-  }, []);
-
+  const handleDragEnd = useCallback(() => setDraggedItem(null), []);
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
-    
-    if (cartDropZoneRef.current) {
-      cartDropZoneRef.current.classList.add('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
-    }
+    cartDropZoneRef.current?.classList.add('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
   }, []);
-
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    
-    if (cartDropZoneRef.current) {
-      cartDropZoneRef.current.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
-    }
+    cartDropZoneRef.current?.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
   }, []);
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    
-    if (cartDropZoneRef.current) {
-      cartDropZoneRef.current.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
-    }
-    
+    cartDropZoneRef.current?.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
     if (draggedItem) {
       addToCart(draggedItem);
       setDraggedItem(null);
     }
   }, [draggedItem]);
 
-  // Touch-based drag and drop handlers
+  // Touch drag and drop
   const handleTouchStart = useCallback((e: React.TouchEvent, product: Product) => {
     e.preventDefault();
     setDraggedItem(product);
@@ -376,14 +405,11 @@ useEffect(() => {
     document.body.appendChild(preview);
     setTouchPreview(preview);
     
-    if (window.navigator.vibrate) {
-      window.navigator.vibrate(20);
-    }
+    if (window.navigator.vibrate) window.navigator.vibrate(20);
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    
     if (touchPreview) {
       touchPreview.style.left = `${e.touches[0].clientX - 70}px`;
       touchPreview.style.top = `${e.touches[0].clientY - 50}px`;
@@ -401,7 +427,6 @@ useEffect(() => {
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    
     if (touchPreview) {
       touchPreview.remove();
       setTouchPreview(null);
@@ -412,10 +437,7 @@ useEffect(() => {
     
     if (cartDropZoneRef.current?.contains(element) && draggedItem) {
       addToCart(draggedItem);
-      
-      if (window.navigator.vibrate) {
-        window.navigator.vibrate([20, 20, 20]);
-      }
+      if (window.navigator.vibrate) window.navigator.vibrate([20, 20, 20]);
     }
     
     cartDropZoneRef.current?.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
@@ -431,9 +453,7 @@ useEffect(() => {
         : [...prev, { ...product, quantity: 1 }];
     });
     
-    toast.success(`${product.name} added to cart`, {
-      duration: 1500
-    });
+    toast.success(`${product.name} added to cart`, { duration: 1500 });
   }, []);
 
   const updateCartQuantity = useCallback((itemId: string, change: number) => {
@@ -449,11 +469,7 @@ useEffect(() => {
   const removeFromCart = useCallback((itemId: string) => {
     setCart(prev => {
       const item = prev.find(i => i._id === itemId);
-      if (item) {
-        toast.info(`${item.name} removed from cart`, {
-          duration: 1500
-        });
-      }
+      if (item) toast.info(`${item.name} removed from cart`, { duration: 1500 });
       return prev.filter(item => item._id !== itemId);
     });
   }, []);
@@ -465,18 +481,14 @@ useEffect(() => {
     setPaymentMethod('cash');
     setSelectedTable('');
     setOrderNote('');
-    
-    toast.info('Cart cleared', {
-      duration: 1500
-    });
-  }, []);
+    clearStockCheck();
+    toast.info('Cart cleared', { duration: 1500 });
+  }, [clearStockCheck]);
 
-  // SAVE ORDER FUNCTION - nasa sidebar/gilid
+  // Save order
   const saveOrder = useCallback(() => {
     if (cart.length === 0) {
-      toast.error('Cannot save empty cart', {
-        description: 'Add items to cart first'
-      });
+      toast.error('Cannot save empty cart', { description: 'Add items to cart first' });
       return;
     }
 
@@ -503,9 +515,6 @@ useEffect(() => {
       duration: 3000,
       icon: <Save className="h-4 w-4" />
     });
-
-    // Optional: Clear cart after save?
-    // clearCart();
   }, [cart, customerName, subtotal, tax, total, paymentMethod, splitPayment, orderType, selectedTable, generateOrderNumber, saveOrderToLocal]);
 
   // Load saved order
@@ -513,9 +522,7 @@ useEffect(() => {
     setCart(order.items);
     setCustomerName(order.customerName);
     setPaymentMethod(order.paymentMethod);
-    if (order.splitPayment) {
-      setSplitPayment(order.splitPayment);
-    }
+    if (order.splitPayment) setSplitPayment(order.splitPayment);
     setOrderType(order.orderType);
     setSelectedTable(order.tableNumber || '');
     
@@ -527,19 +534,54 @@ useEffect(() => {
     setShowSavedOrders(false);
   }, []);
 
-  // Process payment
-  const processPayment = async () => {
-    if (cart.length === 0) {
-      toast.error('Cart is empty!');
-      return;
-    }
-    if (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total) {
-      toast.error('Split payment amounts must equal total!');
-      return;
-    }
+  // Process payment with inventory integration
+// Process payment with local-only mode
+const processPayment = async () => {
+  if (cart.length === 0) {
+    toast.error('Cart is empty!');
+    return;
+  }
+  if (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total) {
+    toast.error('Split payment amounts must equal total!');
+    return;
+  }
+  
+  setIsCheckingStock(true);
+  
+  try {
+    const orderId = `order-${Date.now()}`;
+    const orderNumber = generateOrderNumber();
     
-    const orderData = {
-      orderNumber: generateOrderNumber(),
+    // Prepare order items with ingredients for stock check
+    const orderItems = cart.map(item => ({
+      productId: item._id,
+      productName: item.name,
+      quantity: item.quantity,
+      ingredients: item.ingredients || []
+    }));
+
+    // Check stock availability first
+    const stockCheck = await checkOrderStock(orderItems);
+    
+    if (!stockCheck.allAvailable) {
+      setInsufficientStockItems(stockCheck.insufficientItems);
+      setShowInsufficientStockModal(true);
+      setIsCheckingStock(false);
+      return;
+    }
+
+    // Deduct ingredients from inventory
+    await processOrderDeductions(orderId, orderNumber, orderItems);
+    
+    toast.success('Payment Successful!', {
+      description: `Order Total: ₱${total.toFixed(2)}`,
+      duration: 4000
+    });
+    
+    // Save completed order to local storage
+    const completedOrder: SavedOrder = {
+      id: orderId,
+      orderNumber,
       customerName: customerName || 'Walk-in Customer',
       items: cart,
       subtotal,
@@ -549,54 +591,35 @@ useEffect(() => {
       splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
       orderType,
       tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
-      notes: orderNote,
+      
       timestamp: new Date(),
+      status: 'completed'
     };
+    saveOrderToLocal(completedOrder);
     
-    try {
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData)
+    clearCart();
+    
+    toast.success('Order completed!', {
+      description: `Order #${orderNumber} has been saved locally`,
+      duration: 3000
+    });
+    
+  } catch (error: any) {
+    console.error('Payment processing error:', error);
+    
+    // Check if it's an insufficient stock error
+    if (error.insufficientItems) {
+      setInsufficientStockItems(error.insufficientItems);
+      setShowInsufficientStockModal(true);
+    } else {
+      toast.error('Payment Failed', {
+        description: error.message || 'An error occurred during payment processing'
       });
-      
-      if (response.ok) {
-        toast.success('Payment Successful!', {
-          description: `Order Total: ₱${total.toFixed(2)}`,
-          duration: 4000
-        });
-        clearCart();
-      } else {
-        // Local only mode
-        const savedOrder: SavedOrder = {
-          ...orderData,
-          id: `order-${Date.now()}`,
-          status: 'completed'
-        };
-        saveOrderToLocal(savedOrder);
-        
-        toast.success('Payment Processed (Local Mode)', {
-          description: `Order Total: ₱${total.toFixed(2)}`,
-          duration: 4000
-        });
-        clearCart();
-      }
-    } catch {
-      // Local only mode
-      const savedOrder: SavedOrder = {
-        ...orderData,
-        id: `order-${Date.now()}`,
-        status: 'completed'
-      };
-      saveOrderToLocal(savedOrder);
-      
-      toast.success('Payment Processed (Local Mode)', {
-        description: `Order Total: ₱${total.toFixed(2)}`,
-        duration: 4000
-      });
-      clearCart();
     }
-  };
+  } finally {
+    setIsCheckingStock(false);
+  }
+};
 
   const autoSplit = useCallback((type: 'half' | 'cash' | 'gcash') => {
     const splits = {
@@ -617,6 +640,186 @@ useEffect(() => {
     }).format(date);
   };
 
+  // Insufficient Stock Modal Component
+  const InsufficientStockModal = () => {
+    if (!showInsufficientStockModal) return null;
+    
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
+        <div className="w-full max-w-lg rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
+              <PackageX className="h-6 w-6 text-red-600 dark:text-red-500" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Insufficient Stock
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Some items cannot be fulfilled due to low inventory
+              </p>
+            </div>
+          </div>
+          
+          <div className="mb-6 max-h-64 overflow-y-auto">
+            <div className="space-y-3">
+              {insufficientStockItems.map((item, index) => (
+                <div 
+                  key={index}
+                  className="rounded-lg border border-red-200 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 p-3"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">{item.name}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Required: {item.requiredQuantity} {item.unit}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Available: {item.currentStock} {item.unit}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-medium text-red-600 dark:text-red-500">
+                        Short by: {item.shortBy} {item.unit}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setShowInsufficientStockModal(false);
+                setInsufficientStockItems([]);
+              }}
+              className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                // Remove items with insufficient stock from cart
+                const insufficientItemNames = new Set(
+                  insufficientStockItems.map(item => item.name)
+                );
+                setCart(prev => prev.filter(item => 
+                  !item.ingredients?.some(ing => 
+                    insufficientItemNames.has(ing.name)
+                  )
+                ));
+                setShowInsufficientStockModal(false);
+                setInsufficientStockItems([]);
+                toast.info('Removed items with insufficient stock from cart');
+              }}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Remove Unavailable Items
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Stock Alerts Badge Component
+  const StockAlertsBadge = () => {
+    const criticalCount = stockAlerts.filter(a => a.status === 'critical').length;
+    const lowCount = stockAlerts.filter(a => a.status === 'low' || a.status === 'warning').length;
+    const totalAlerts = stockAlerts.length;
+    
+    if (totalAlerts === 0) return null;
+    
+    return (
+      <div className="relative">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowStockAlerts(!showStockAlerts)}
+          className={`h-8 text-xs gap-1 relative ${
+            criticalCount > 0 
+              ? 'border-red-500 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400' 
+              : 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400'
+          }`}
+        >
+          <Bell className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Stock Alerts</span>
+          <Badge className={`ml-1 h-5 px-1.5 ${
+            criticalCount > 0 
+              ? 'bg-red-600 text-white' 
+              : 'bg-yellow-600 text-white'
+          }`}>
+            {totalAlerts}
+          </Badge>
+        </Button>
+        
+        {showStockAlerts && (
+          <div className="absolute right-0 mt-2 w-80 rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 shadow-lg z-50">
+            <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+              <h4 className="font-medium text-gray-900 dark:text-white">Low Stock Alerts</h4>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setShowStockAlerts(false)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="max-h-96 overflow-y-auto p-2">
+              {stockAlerts.length === 0 ? (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  No stock alerts at this time
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {stockAlerts.map((alert, index) => (
+                    <div 
+                      key={index}
+                      className={`p-3 rounded-lg ${
+                        alert.status === 'critical'
+                          ? 'bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30'
+                          : 'bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/30'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {alert.itemName}
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            Stock: {alert.currentStock} {alert.unit} • Min: {alert.minStock} {alert.unit}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                            Location: {alert.location}
+                          </p>
+                        </div>
+                        <Badge className={
+                          alert.status === 'critical'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        }>
+                          {alert.status}
+                        </Badge>
+                      </div>
+                      {alert.outOfStock && (
+                        <p className="text-xs text-red-600 dark:text-red-500 mt-2 font-medium">
+                          ⚠️ Out of stock - Reorder immediately
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background p-4 relative">
       <div className="max-w-7xl mx-auto">
@@ -628,6 +831,9 @@ useEffect(() => {
               <p className="text-xs text-muted-foreground mt-1">Swipe categories - Drag items to cart</p>
             </div>
             <div className="flex items-center gap-3">
+              {/* Stock Alerts Badge */}
+              <StockAlertsBadge />
+              
               <Button
                 variant="outline"
                 size="sm"
@@ -793,9 +999,9 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Right Panel - Checkout (DROP ZONE) with SAVE BUTTON ON THE SIDE */}
+          {/* Right Panel - Checkout */}
           <div className="lg:w-5/12 h-full flex gap-2">
-            {/* Cart Drop Zone */}
+            {/* Cart */}
             <div 
               ref={cartDropZoneRef}
               className="flex-1 transition-all duration-200"
@@ -814,7 +1020,7 @@ useEffect(() => {
                       variant="outline" 
                       size="sm" 
                       onClick={clearCart} 
-                      disabled={!cart.length}
+                      disabled={!cart.length || isInventoryProcessing || isCheckingStock}
                       className="h-7 text-xs"
                     >
                       <Trash2 className="w-3 h-3 mr-1" /> Clear
@@ -843,6 +1049,7 @@ useEffect(() => {
                         variant={orderType === 'dine-in' ? 'default' : 'outline'}
                         onClick={() => setOrderType('dine-in')}
                         className="flex-1 h-7 text-xs"
+                        disabled={isInventoryProcessing || isCheckingStock}
                       >
                         Dine In
                       </Button>
@@ -850,6 +1057,7 @@ useEffect(() => {
                         variant={orderType === 'takeaway' ? 'default' : 'outline'}
                         onClick={() => setOrderType('takeaway')}
                         className="flex-1 h-7 text-xs"
+                        disabled={isInventoryProcessing || isCheckingStock}
                       >
                         Take Away
                       </Button>
@@ -876,14 +1084,32 @@ useEffect(() => {
                               </p>
                             </div>
                             <div className="flex items-center gap-1 ml-2">
-                              <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, -1)} className="h-6 w-6 p-0">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => updateCartQuantity(item._id, -1)} 
+                                className="h-6 w-6 p-0"
+                                disabled={isInventoryProcessing || isCheckingStock}
+                              >
                                 <Minus className="w-2.5 h-2.5" />
                               </Button>
                               <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                              <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, 1)} className="h-6 w-6 p-0">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => updateCartQuantity(item._id, 1)} 
+                                className="h-6 w-6 p-0"
+                                disabled={isInventoryProcessing || isCheckingStock}
+                              >
                                 <Plus className="w-2.5 h-2.5" />
                               </Button>
-                              <Button size="sm" variant="destructive" onClick={() => removeFromCart(item._id)} className="h-6 w-6 p-0">
+                              <Button 
+                                size="sm" 
+                                variant="destructive" 
+                                onClick={() => removeFromCart(item._id)} 
+                                className="h-6 w-6 p-0"
+                                disabled={isInventoryProcessing || isCheckingStock}
+                              >
                                 <Trash2 className="w-2.5 h-2.5" />
                               </Button>
                             </div>
@@ -925,6 +1151,7 @@ useEffect(() => {
                         variant={paymentMethod === 'cash' ? 'default' : 'outline'}
                         onClick={() => setPaymentMethod('cash')}
                         className="h-7 text-xs"
+                        disabled={isInventoryProcessing || isCheckingStock}
                       >
                         <DollarSign className="w-3 h-3 mr-1" /> Cash
                       </Button>
@@ -932,6 +1159,7 @@ useEffect(() => {
                         variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
                         onClick={() => setPaymentMethod('gcash')}
                         className="h-7 text-xs"
+                        disabled={isInventoryProcessing || isCheckingStock}
                       >
                         <Smartphone className="w-3 h-3 mr-1" /> GCash
                       </Button>
@@ -939,6 +1167,7 @@ useEffect(() => {
                         variant={paymentMethod === 'split' ? 'default' : 'outline'}
                         onClick={() => setPaymentMethod('split')}
                         className="h-7 text-xs"
+                        disabled={isInventoryProcessing || isCheckingStock}
                       >
                         <Receipt className="w-3 h-3 mr-1" /> Split
                       </Button>
@@ -950,13 +1179,31 @@ useEffect(() => {
                     <div className="space-y-1">
                       <Label className="text-xs">Split Amounts</Label>
                       <div className="grid grid-cols-3 gap-1">
-                        <Button size="sm" variant="outline" onClick={() => autoSplit('half')} className="h-6 text-xs">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => autoSplit('half')} 
+                          className="h-6 text-xs"
+                          disabled={isInventoryProcessing || isCheckingStock}
+                        >
                           50/50
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => autoSplit('cash')} className="h-6 text-xs">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => autoSplit('cash')} 
+                          className="h-6 text-xs"
+                          disabled={isInventoryProcessing || isCheckingStock}
+                        >
                           Cash
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => autoSplit('gcash')} className="h-6 text-xs">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => autoSplit('gcash')} 
+                          className="h-6 text-xs"
+                          disabled={isInventoryProcessing || isCheckingStock}
+                        >
                           GCash
                         </Button>
                       </div>
@@ -981,6 +1228,7 @@ useEffect(() => {
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       className="h-7 text-xs mt-1"
+                      disabled={isInventoryProcessing || isCheckingStock}
                     />
                   </div>
 
@@ -992,6 +1240,7 @@ useEffect(() => {
                       value={orderNote}
                       onChange={(e) => setOrderNote(e.target.value)}
                       className="h-7 text-xs mt-1"
+                      disabled={isInventoryProcessing || isCheckingStock}
                     />
                   </div>
 
@@ -1004,6 +1253,7 @@ useEffect(() => {
                         value={selectedTable}
                         onChange={(e) => setSelectedTable(e.target.value)}
                         className="h-7 text-xs mt-1"
+                        disabled={isInventoryProcessing || isCheckingStock}
                       />
                     </div>
                   )}
@@ -1011,22 +1261,31 @@ useEffect(() => {
                   {/* Process Payment Button */}
                   <Button
                     onClick={processPayment}
-                    disabled={!cart.length}
+                    disabled={!cart.length || isInventoryProcessing || isCheckingStock}
                     className="w-full h-9 text-sm font-semibold"
                     size="lg"
                   >
-                    <Receipt className="w-4 h-4 mr-2" />
-                    Pay ₱{total.toFixed(2)}
+                    {isInventoryProcessing || isCheckingStock ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        {isCheckingStock ? 'Checking Stock...' : 'Updating Inventory...'}
+                      </>
+                    ) : (
+                      <>
+                        <Receipt className="w-4 h-4 mr-2" />
+                        Pay ₱{total.toFixed(2)}
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </Card>
             </div>
 
-            {/* SAVE BUTTON SIDEBAR - Nasa gilid mismo */}
+            {/* Sidebar Buttons */}
             <div className="flex flex-col gap-2 w-10">
               <Button
                 onClick={saveOrder}
-                disabled={!cart.length}
+                disabled={!cart.length || isInventoryProcessing || isCheckingStock}
                 variant="default"
                 size="icon"
                 className="h-10 w-10 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg"
@@ -1049,20 +1308,10 @@ useEffect(() => {
                 variant="outline"
                 size="icon"
                 className="h-10 w-10 rounded-full"
-                title="Print Receipt"
-                disabled={!cart.length}
+                title="Refresh Stock Alerts"
+                onClick={fetchStockAlerts}
               >
-                <Printer className="h-4 w-4" />
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 rounded-full"
-                title="Download Order"
-                disabled={!cart.length}
-              >
-                <Download className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -1118,15 +1367,9 @@ useEffect(() => {
                         variant="default"
                         className="h-7 text-xs flex-1"
                         onClick={() => loadSavedOrder(order)}
+                        disabled={isInventoryProcessing || isCheckingStock}
                       >
                         Load Order
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 w-7 p-0"
-                      >
-                        <Printer className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
@@ -1136,6 +1379,9 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <InsufficientStockModal />
     </div>
   );
 };
