@@ -40,8 +40,6 @@ type PendingAttendance = {
     };
 };
 
-// SocketAttendanceData interface removed - not used
-
 const ManagerAttendancePage = () => {
     const { data: session, isPending } = useSession();
     const [pendingRequests, setPendingRequests] = useState<PendingAttendance[]>([]);
@@ -52,14 +50,37 @@ const ManagerAttendancePage = () => {
     const fetchPendingRequests = async () => {
         try {
             const response = await fetch("/api/attendance/pending");
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
 
             if (data.success) {
-                // Filter out any requests that don't have valid user data
-                const validAttendances = (data.attendances || []).filter(
-                    (attendance: PendingAttendance) => attendance && attendance.user
-                );
-                setPendingRequests(validAttendances);
+                // Transform the data to match our interface
+                const transformedAttendances = (data.attendances || []).map((attendance: any) => ({
+                    id: attendance._id?.toString() || attendance.id,
+                    userId: attendance.userId?.toString(),
+                    status: attendance.status,
+                    requestedCheckInAt: attendance.requestedCheckInAt,
+                    requestedCheckOutAt: attendance.requestedCheckOutAt,
+                    checkInLocation: attendance.checkInLocation,
+                    checkOutLocation: attendance.checkOutLocation,
+                    workSummary: attendance.workSummary,
+                    user: attendance.user ? {
+                        name: attendance.user.name || null,
+                        email: attendance.user.email || "unknown@example.com"
+                    } : {
+                        name: null,
+                        email: "unknown@example.com"
+                    }
+                }));
+
+                console.log("Fetched pending requests:", transformedAttendances.length);
+                setPendingRequests(transformedAttendances);
+            } else {
+                console.error("API returned success: false", data);
             }
         } catch (error) {
             console.error("Failed to fetch pending requests:", error);
@@ -80,25 +101,21 @@ const ManagerAttendancePage = () => {
         });
     };
 
-    // Socket listeners removed - using manual refresh instead
+    // Set up polling - check every 10 seconds for better responsiveness
     useEffect(() => {
         if (session?.user?.id && ["manager", "admin"].includes(session.user.role || "")) {
             fetchPendingRequests();
 
-            // Set up polling as fallback (optional - every 30 seconds)
+            // Poll every 10 seconds for better real-time feel
             const pollInterval = setInterval(() => {
                 fetchPendingRequests();
-            }, 30000);
+            }, 10000); // Changed from 30000 to 10000
 
-            // Cleanup function - clear interval and socket cleanup removed
             return () => {
                 clearInterval(pollInterval);
-                // Socket cleanup removed
             };
         }
     }, [session]);
-
-    // Socket listener setup functions removed
 
     // Handle approve
     const handleApprove = async (attendanceId: string, approveCheckIn: boolean, approveCheckOut: boolean) => {
@@ -125,8 +142,11 @@ const ManagerAttendancePage = () => {
                 description: "The attendance request has been approved.",
             });
 
-            // Remove from list
+            // Remove from list and refresh
             setPendingRequests((prev) => prev.filter((req) => req.id !== attendanceId));
+
+            // Fetch again to ensure we have the latest data
+            setTimeout(() => fetchPendingRequests(), 1000);
         } catch (error: unknown) {
             const err = error as Error;
             toast.error("Error", {
@@ -170,8 +190,11 @@ const ManagerAttendancePage = () => {
                 description: "The attendance request has been rejected.",
             });
 
-            // Remove from list
+            // Remove from list and refresh
             setPendingRequests((prev) => prev.filter((req) => req.id !== attendanceId));
+
+            // Fetch again to ensure we have the latest data
+            setTimeout(() => fetchPendingRequests(), 1000);
         } catch (error: unknown) {
             const err = error as Error;
             toast.error("Error", {
@@ -222,7 +245,7 @@ const ManagerAttendancePage = () => {
                 <div>
                     <h1 className="text-3xl font-bold">Staff Attendance Management</h1>
                     <p className="text-muted-foreground">
-                        Review and approve staff clock-in/out requests
+                        Review and approve staff clock-in/out requests (Auto-refresh every 10s)
                     </p>
                 </div>
                 <Button

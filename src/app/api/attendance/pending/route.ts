@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Optional: restrict to managers/admins only
+    // Restrict to managers/admins only
     const role = session.user.role;
     if (!["manager", "admin"].includes(role)) {
       return NextResponse.json(
@@ -42,19 +42,21 @@ export async function GET(request: NextRequest) {
       {
         $match: {
           status: { $in: statusFilter },
-          // Optional: only today's records (uncomment if desired)
-          // createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
         },
       },
       {
         $lookup: {
-          from: "users", // ← change if your users collection has different name
+          from: "users",
           localField: "userId",
           foreignField: "_id",
-          as: "user",
+          as: "userArray",
         },
       },
-      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          user: { $arrayElemAt: ["$userArray", 0] },
+        },
+      },
       {
         $project: {
           _id: 1,
@@ -64,18 +66,22 @@ export async function GET(request: NextRequest) {
           requestedCheckOutAt: 1,
           checkInLocation: 1,
           checkOutLocation: 1,
+          workSummary: 1,
           "user.name": 1,
           "user.email": 1,
-          // "user.department": 1,       // ← add if you have this field
           createdAt: 1,
           updatedAt: 1,
         },
       },
       { $sort: { createdAt: -1 } }, // newest first
-      { $limit: 100 }, // safety limit — add pagination later if needed
+      { $limit: 100 }, // safety limit
     ];
 
     const attendances = await attendanceColl.aggregate(pipeline).toArray();
+
+    console.log(
+      `[attendance:pending] Found ${attendances.length} pending requests`,
+    );
 
     return NextResponse.json({
       success: true,
