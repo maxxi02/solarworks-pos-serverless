@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  Package, 
-  Plus, 
-  X, 
-  Edit2, 
-  Trash2, 
+import {
+  Package,
+  Plus,
+  X,
+  Edit2,
+  Trash2,
   AlertTriangle,
   Save,
   RefreshCw,
@@ -115,7 +115,7 @@ function DeleteConfirmModal({
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 text-red-600 dark:text-red-500" />
               <p className="text-sm text-red-700 dark:text-red-400">
-                {itemType === 'category' 
+                {itemType === 'category'
                   ? 'This will permanently delete the category and ALL products within it.'
                   : 'This will permanently remove this product from your menu.'}
               </p>
@@ -206,7 +206,7 @@ function AddCategoryModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        
+
         <div className="space-y-4">
           {/* Menu Type Selection */}
           <div>
@@ -217,11 +217,10 @@ function AddCategoryModal({
               <button
                 type="button"
                 onClick={() => setMenuType('food')}
-                className={`flex items-center justify-center gap-2 rounded-lg border p-3 transition-all ${
-                  menuType === 'food'
-                    ? 'bg-blue-600 dark:bg-blue-700 border-blue-600 dark:border-blue-700 text-white'
-                    : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
-                }`}
+                className={`flex items-center justify-center gap-2 rounded-lg border p-3 transition-all ${menuType === 'food'
+                  ? 'bg-blue-600 dark:bg-blue-700 border-blue-600 dark:border-blue-700 text-white'
+                  : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
+                  }`}
               >
                 <Utensils className="h-4 w-4" />
                 <span>Food</span>
@@ -229,11 +228,10 @@ function AddCategoryModal({
               <button
                 type="button"
                 onClick={() => setMenuType('drink')}
-                className={`flex items-center justify-center gap-2 rounded-lg border p-3 transition-all ${
-                  menuType === 'drink'
-                    ? 'bg-blue-600 dark:bg-blue-700 border-blue-600 dark:border-blue-700 text-white'
-                    : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
-                }`}
+                className={`flex items-center justify-center gap-2 rounded-lg border p-3 transition-all ${menuType === 'drink'
+                  ? 'bg-blue-600 dark:bg-blue-700 border-blue-600 dark:border-blue-700 text-white'
+                  : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
+                  }`}
               >
                 <Coffee className="h-4 w-4" />
                 <span>Drink</span>
@@ -256,7 +254,7 @@ function AddCategoryModal({
               autoFocus
             />
           </div>
-          
+
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -272,7 +270,7 @@ function AddCategoryModal({
             />
           </div>
         </div>
-        
+
         <div className="mt-6 flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -311,17 +309,17 @@ export default function CategoriesPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [inventoryLoading, setInventoryLoading] = useState(false);
-  
+
   // Form States
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [productForm, setProductForm] = useState({ 
-    name: '', price: '', description: '', available: true 
+  const [productForm, setProductForm] = useState({
+    name: '', price: '', description: '', available: true
   });
   const [productIngredients, setProductIngredients] = useState<ProductIngredient[]>([]);
-  
+
   // Filter State for Categories Table
   const [menuTypeFilter, setMenuTypeFilter] = useState<'all' | MenuType>('all');
-  
+
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
 
@@ -345,7 +343,7 @@ export default function CategoriesPage() {
   }, []);
 
   // Utility Functions
-  const formatCurrency = (amount: number) => 
+  const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount);
 
   const formatDate = (dateString?: string) => {
@@ -406,7 +404,7 @@ export default function CategoriesPage() {
 
   const updateSelectedCategory = async () => {
     if (!selectedCategory?._id) return;
-    
+
     try {
       const updatedCategories = await fetch('/api/products/categories').then(res => res.json());
       const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
@@ -429,11 +427,11 @@ export default function CategoriesPage() {
         const error = await response.json();
         throw new Error(error.message || 'Failed to add category');
       }
-      
+
       const category = await response.json();
       setCategories(prev => [...prev, category]);
       setSelectedCategory(category);
-      
+
       toast.success('Category Added', {
         description: `${name} has been added to ${menuType} categories`
       });
@@ -458,12 +456,12 @@ export default function CategoriesPage() {
       }
 
       const result = await response.json();
-      
+
       setCategories(prev => prev.filter(c => c._id !== id));
       if (selectedCategory?._id === id) {
         setSelectedCategory(null);
       }
-      
+
       toast.success('Category Deleted', {
         description: result.message || 'Category has been deleted successfully'
       });
@@ -505,16 +503,16 @@ export default function CategoriesPage() {
 
     try {
       setLoading(true);
-      
-      const endpoint = editingProduct 
+
+      const endpoint = editingProduct
         ? `/api/products/category-products/${editingProduct._id}`
         : '/api/products/category-products';
-      
+
       const method = editingProduct ? 'PUT' : 'POST';
 
       const response = await fetch(endpoint, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(productData)
@@ -524,19 +522,19 @@ export default function CategoriesPage() {
         const error = await response.json();
         throw new Error(error.message || `Failed to ${editingProduct ? 'update' : 'create'} product`);
       }
-      
+
       const updatedCategories = await fetch('/api/products/categories').then(res => res.json());
       const updatedCategory = updatedCategories.find((c: Category) => c._id === selectedCategory._id);
       if (updatedCategory) {
         setSelectedCategory(updatedCategory);
       }
-      
+
       resetProductForm();
-      
+
       toast.success(editingProduct ? 'Product Updated' : 'Product Added', {
         description: `${productForm.name} has been ${editingProduct ? 'updated' : 'added'} successfully`
       });
-      
+
     } catch (err) {
       console.error('Failed to save product:', err);
       toast.error(`Failed to ${editingProduct ? 'update' : 'add'} product`, {
@@ -568,7 +566,7 @@ export default function CategoriesPage() {
         unit: oldIng.unit
       } as ProductIngredient;
     });
-    
+
     setProductIngredients(convertedIngredients);
   };
 
@@ -584,12 +582,12 @@ export default function CategoriesPage() {
         const error = await response.json();
         throw new Error(error.message || 'Failed to delete product');
       }
-      
+
       const result = await response.json();
-      
+
       await fetchCategories();
       await updateSelectedCategory();
-      
+
       toast.success('Product Deleted', {
         description: result.message || 'Product has been deleted successfully'
       });
@@ -620,10 +618,10 @@ export default function CategoriesPage() {
       });
 
       if (!response.ok) throw new Error('Failed to update product');
-      
+
       await fetchCategories();
       await updateSelectedCategory();
-      
+
       toast.success('Product Status Updated', {
         description: `${product.name} is now ${!fullProduct.available ? 'available' : 'unavailable'} for sale`
       });
@@ -683,12 +681,12 @@ export default function CategoriesPage() {
   // Calculations
   const calculateStats = () => {
     const totalProducts = categories.reduce((sum, cat) => sum + (cat.products?.length || 0), 0);
-    const activeProducts = categories.reduce((sum, cat) => 
+    const activeProducts = categories.reduce((sum, cat) =>
       sum + (cat.products?.filter(p => p.available).length || 0), 0
     );
     const foodCategories = categories.filter(cat => cat.menuType === 'food').length;
     const drinkCategories = categories.filter(cat => cat.menuType === 'drink').length;
-    
+
     return { totalProducts, activeProducts, foodCategories, drinkCategories };
   };
 
@@ -703,7 +701,7 @@ export default function CategoriesPage() {
 
   // Get status color
   const getStatusColor = (available: boolean) => {
-    return available 
+    return available
       ? 'bg-green-100 dark:bg-green-900/10 text-green-800 dark:text-green-500 border-green-200 dark:border-green-900/30'
       : 'bg-red-100 dark:bg-red-900/10 text-red-800 dark:text-red-500 border-red-200 dark:border-red-900/30';
   };
@@ -814,37 +812,34 @@ export default function CategoriesPage() {
                     Click on a category to view its products
                   </p>
                 </div>
-                
+
                 {/* Menu Type Filter */}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setMenuTypeFilter('all')}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                      menuTypeFilter === 'all'
-                        ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
-                        : 'border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
-                    }`}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${menuTypeFilter === 'all'
+                      ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                      : 'border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
+                      }`}
                   >
                     All
                   </button>
                   <button
                     onClick={() => setMenuTypeFilter('food')}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                      menuTypeFilter === 'food'
-                        ? 'bg-orange-600 dark:bg-orange-700 text-white'
-                        : 'border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
-                    }`}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${menuTypeFilter === 'food'
+                      ? 'bg-orange-600 dark:bg-orange-700 text-white'
+                      : 'border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
+                      }`}
                   >
                     <Utensils className="h-3.5 w-3.5" />
                     Food
                   </button>
                   <button
                     onClick={() => setMenuTypeFilter('drink')}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                      menuTypeFilter === 'drink'
-                        ? 'bg-blue-600 dark:bg-blue-700 text-white'
-                        : 'border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
-                    }`}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${menuTypeFilter === 'drink'
+                      ? 'bg-blue-600 dark:bg-blue-700 text-white'
+                      : 'border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
+                      }`}
                   >
                     <Coffee className="h-3.5 w-3.5" />
                     Drink
@@ -887,12 +882,12 @@ export default function CategoriesPage() {
                           <td colSpan={5} className="px-6 py-12 text-center">
                             <Package className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600" />
                             <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-                              {menuTypeFilter === 'all' 
-                                ? 'No categories yet' 
+                              {menuTypeFilter === 'all'
+                                ? 'No categories yet'
                                 : `No ${menuTypeFilter} categories yet`}
                             </h3>
                             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                              {menuTypeFilter === 'all' 
+                              {menuTypeFilter === 'all'
                                 ? 'Add your first category to get started'
                                 : `Add your first ${menuTypeFilter} category to get started`}
                             </p>
@@ -907,13 +902,12 @@ export default function CategoriesPage() {
                         </tr>
                       ) : (
                         filteredCategories.map((category) => (
-                          <tr 
-                            key={category._id} 
-                            className={`hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-all ${
-                              selectedCategory?._id === category._id 
-                                ? 'bg-blue-50 dark:bg-blue-900/10 border-l-4 border-l-blue-600 dark:border-l-blue-500' 
-                                : ''
-                            }`}
+                          <tr
+                            key={category._id}
+                            className={`hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-all ${selectedCategory?._id === category._id
+                              ? 'bg-blue-50 dark:bg-blue-900/10 border-l-4 border-l-blue-600 dark:border-l-blue-500'
+                              : ''
+                              }`}
                             onClick={() => setSelectedCategory(category)}
                           >
                             <td className="px-6 py-4">
@@ -929,11 +923,10 @@ export default function CategoriesPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                category.products?.length > 0 
-                                  ? 'bg-blue-100 dark:bg-blue-900/10 text-blue-800 dark:text-blue-500 border border-blue-200 dark:border-blue-900/30'
-                                  : 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${category.products?.length > 0
+                                ? 'bg-blue-100 dark:bg-blue-900/10 text-blue-800 dark:text-blue-500 border border-blue-200 dark:border-blue-900/30'
+                                : 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-800'
+                                }`}>
                                 {category.products?.length || 0} products
                               </span>
                             </td>
@@ -982,7 +975,7 @@ export default function CategoriesPage() {
                       {selectedCategory.products?.length || 0} product(s) in this category
                     </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSelectedCategory(null)}
                     className="text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
                   >
@@ -1098,7 +1091,7 @@ export default function CategoriesPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {selectedCategory 
+                  {selectedCategory
                     ? `${selectedCategory.name} - Product Form`
                     : 'Product Management'
                   }
@@ -1111,7 +1104,7 @@ export default function CategoriesPage() {
                 )}
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {selectedCategory 
+                {selectedCategory
                   ? editingProduct ? 'Edit existing product' : 'Add new product to this category'
                   : 'Select a category first'
                 }
@@ -1129,7 +1122,7 @@ export default function CategoriesPage() {
                     type="text"
                     placeholder="Enter product name"
                     value={productForm.name}
-                    onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     disabled={loading}
                   />
@@ -1143,7 +1136,7 @@ export default function CategoriesPage() {
                     type="number"
                     placeholder="0.00"
                     value={productForm.price}
-                    onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     disabled={loading}
                     min="0"
@@ -1158,7 +1151,7 @@ export default function CategoriesPage() {
                   <textarea
                     placeholder="Product description"
                     value={productForm.description}
-                    onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     rows={2}
                     disabled={loading}
@@ -1171,7 +1164,7 @@ export default function CategoriesPage() {
                     type="checkbox"
                     id="available"
                     checked={productForm.available}
-                    onChange={(e) => setProductForm({...productForm, available: e.target.checked})}
+                    onChange={(e) => setProductForm({ ...productForm, available: e.target.checked })}
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-black"
                     disabled={loading}
                   />
@@ -1217,7 +1210,8 @@ export default function CategoriesPage() {
                 {/* Ingredients Section */}
                 <div className="pt-2">
                   <ProductIngredientsForm
-                    inventoryItems={inventoryItems}
+                    inventoryItems={inventoryItems as any}
+                    // inventoryItems={inventoryItems}
                     onIngredientsChange={handleIngredientsChange}
                     initialIngredients={productIngredients}
                     loading={inventoryLoading}
@@ -1243,7 +1237,7 @@ export default function CategoriesPage() {
                       </>
                     )}
                   </button>
-                  
+
                   {editingProduct && (
                     <button
                       onClick={resetProductForm}

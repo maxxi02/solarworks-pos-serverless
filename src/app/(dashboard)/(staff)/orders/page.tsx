@@ -321,7 +321,7 @@ const OrdersPage = () => {
         const Icon = config?.icon || Clock;
 
         return (
-            <Badge variant={config?.variant} className="gap-1">
+            <Badge variant={config?.variant as any} className="gap-1">
                 <Icon className="h-3 w-3" />
                 {config?.label || status}
             </Badge>
