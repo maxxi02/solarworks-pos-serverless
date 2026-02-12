@@ -40,6 +40,16 @@ export const auth = betterAuth({
         defaultValue: () => new Date(),
         required: false,
       },
+
+      // ─── STAFF FIELDS ────────────────────────────────
+      salaryPerHour: { type: "number", required: false },
+      dailyTargetHours: { type: "number", required: false, defaultValue: 8 },
+      employmentType: {
+        type: "string",
+        required: false,
+        defaultValue: "full-time",
+        // you can also use enum if better-auth supports it in future
+      },
     },
   },
   emailVerification: {
@@ -103,7 +113,9 @@ export type UserRole = "staff" | "manager" | "admin";
 export type ExtendedUser = typeof auth.$Infer.Session.user & {
   role?: UserRole;
   phoneNumber?: string;
-  twoFactorEnabled?: boolean;
+  salaryPerHour?: number;
+  dailyTargetHours?: number;
+  employmentType?: "full-time" | "part-time" | "contractual";
   isOnline?: boolean;
   lastSeen?: Date;
 };

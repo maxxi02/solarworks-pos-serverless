@@ -51,10 +51,10 @@ export const PATHS = {
 
   // Staff-specific
   STAFF_NAV: {
-    POS: "/pos",
+    ORDERS: "/orders",
     MY_SALES: "/my-sales",
-    MY_SALES_HISTORY: "/my-sales/history",
-    MY_SALES_PERFORMANCE: "/my-sales/performance",
+    MY_SALES_HISTORY: "/history",
+    MY_SALES_PERFORMANCE: "/performance",
 
     INVENTORY_VIEW_PRODUCTS: "/inventory/product",
     INVENTORY_STOCK_LEVELS: "/inventory/stock",
@@ -122,7 +122,7 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "Financial Reports", url: PATHS.ADMIN.REPORTS_FINANCIAL },
       { title: "Inventory Reports", url: PATHS.ADMIN.REPORTS_INVENTORY },
-      { title: "Customer Reports", url: PATHS.ADMIN.REPORTS_CUSTOM },
+      { title: "Custom Reports", url: PATHS.ADMIN.REPORTS_CUSTOM },
     ],
   },
   {
@@ -138,7 +138,7 @@ export const adminNavigation: NavItem[] = [
   },
 ];
 
-// Staff navigation items
+// Staff navigation items – clock in/out removed (embed in POS/cashier screen instead)
 export const staffNavigation: NavItem[] = [
   {
     title: "Dashboard",
@@ -147,8 +147,8 @@ export const staffNavigation: NavItem[] = [
     isActive: true,
   },
   {
-    title: "Point of Sale",
-    url: PATHS.STAFF_NAV.POS,
+    title: "Orders",
+    url: PATHS.STAFF_NAV.ORDERS,
     icon: ShoppingCart,
   },
   {
