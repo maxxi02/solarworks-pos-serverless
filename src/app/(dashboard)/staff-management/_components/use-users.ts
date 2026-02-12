@@ -16,7 +16,7 @@ export function useUsers() {
         query: { limit: 100, offset: 0 },
       });
       const mapped = (data?.users ?? []).map((user) =>
-        transformToTableUser(user as any),
+        transformToTableUser(user as TableUser),
       );
       setUsers(mapped);
     } catch {

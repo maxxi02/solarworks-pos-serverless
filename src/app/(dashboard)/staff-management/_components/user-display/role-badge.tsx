@@ -8,25 +8,25 @@ interface RoleBadgeProps {
 }
 
 export function RoleBadge({ role }: RoleBadgeProps) {
-    const variantMap: Record<UserRole, "destructive" | "default" | "secondary" | "outline"> = {
+    const variantMap: Record<UserRole | "user", "destructive" | "default" | "secondary" | "outline"> = {
         admin: "destructive",
         manager: "default",
         staff: "secondary",
-        user: "outline",
+        user: "outline",           // ← added this (or "secondary", "default", whatever fits "default/unknown user")
     };
 
-    const icons: Record<string, React.ReactNode> = {
+    const icons: Record<UserRole | "user", React.ReactNode> = {
         admin: <IconShield className="size-3" />,
         manager: <IconUserCheck className="size-3" />,
         staff: <IconUserX className="size-3" />,
-        user: null,
+        user: null,                // already good
     };
 
     const display = role ?? "user";
 
     return (
         <Badge
-            variant={variantMap[display] ?? "outline"}
+            variant={variantMap[display]}  // now always defined
             className="gap-1.5 capitalize"
         >
             {icons[display]}
