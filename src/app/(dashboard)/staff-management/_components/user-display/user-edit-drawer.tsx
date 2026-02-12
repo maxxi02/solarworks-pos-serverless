@@ -34,40 +34,39 @@ export function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
     const isMobile = useIsMobile();
     const [open, setOpen] = useState(false);
     const [name, setName] = useState(user.name ?? "");
-    const [role, setRole] = useState<UserRole>(user.role ?? "user");
+    const [role, setRole] = useState<UserRole>(user.role ?? "staff");
     const [saving, setSaving] = useState(false);
 
     const handleSave = async () => {
         setSaving(true);
         try {
             const promises = [];
-            if (name.trim() !== (user.name ?? "")) {
+
+            // Name and role change via updateUser (stores role in metadata/custom field)
+            if (name.trim() !== (user.name ?? "") || role !== user.role) {
                 promises.push(
                     authClient.admin.updateUser({
                         userId: user.id,
-                        data: { name: name.trim() || null },
+                        data: {
+                            name: name.trim() || null,
+                            role: role, // Store custom role in user data
+                        },
                     })
                 );
             }
-            if (role !== user.role) {
-                promises.push(
-                    authClient.admin.updateUser({
-                        userId: user.id,
-                        data: { customData: { role } },
-                    })
-                );
-            }
+
             await Promise.all(promises);
             toast.success("User updated successfully");
             setOpen(false);
             await onRefresh();
-        } catch {
+        } catch (err) {
+            console.error(err);
             toast.error("Failed to update user");
         } finally {
             setSaving(false);
         }
     };
-
+    
     return (
         <Drawer
             open={open}
@@ -79,7 +78,7 @@ export function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
                     {user.name || user.email.split("@")[0]}
                 </Button>
             </DrawerTrigger>
-            <DrawerContent className="max-h-[90vh]">
+            <DrawerContent className="max-h-screen">
                 <DrawerHeader className="border-b">
                     <DrawerTitle>Edit User</DrawerTitle>
                 </DrawerHeader>
@@ -115,12 +114,14 @@ export function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="user">User</SelectItem>
                                 <SelectItem value="staff">Staff</SelectItem>
                                 <SelectItem value="manager">Manager</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                         </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Staff: Basic access • Manager: Enhanced permissions • Admin: Full access
+                        </p>
                     </div>
 
                     <div className="space-y-2 pt-4 border-t">
@@ -138,6 +139,22 @@ export function UserEditDrawer({ user, onRefresh }: UserEditDrawerProps) {
                                     {new Date(user.createdAt).toLocaleDateString()}
                                 </p>
                             </div>
+                            {user.emailVerified !== undefined && (
+                                <div>
+                                    <p className="font-medium">Email Verified</p>
+                                    <p className="text-muted-foreground">
+                                        {user.emailVerified ? "Yes" : "No"}
+                                    </p>
+                                </div>
+                            )}
+                            {user.phoneNumber && (
+                                <div>
+                                    <p className="font-medium">Phone</p>
+                                    <p className="text-muted-foreground">
+                                        {user.phoneNumber}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
