@@ -1,4 +1,6 @@
-export type UserRole = "admin" | "manager" | "staff" | "user";
+// staffManagement.types.ts
+
+export type UserRole = "staff" | "manager" | "admin";
 
 export interface BetterAuthUser {
   id: string;
@@ -14,6 +16,7 @@ export interface BetterAuthUser {
   role?: UserRole;
   image?: string | null;
   isOnline?: boolean;
+  phoneNumber?: string | null;
 }
 
 export interface TableUser extends Omit<BetterAuthUser, "banned"> {

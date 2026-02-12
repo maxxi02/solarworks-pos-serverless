@@ -46,7 +46,7 @@ export function BulkActions({
 }: BulkActionsProps) {
     const [roleOpen, setRoleOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
-    const [newRole, setNewRole] = useState<UserRole>("user");
+    const [newRole, setNewRole] = useState<UserRole>("staff");
     const [loading, setLoading] = useState(false);
 
     const handleRoleChange = async () => {

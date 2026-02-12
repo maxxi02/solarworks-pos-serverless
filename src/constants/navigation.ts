@@ -56,12 +56,10 @@ export const PATHS = {
     MY_SALES_HISTORY: "/my-sales/history",
     MY_SALES_PERFORMANCE: "/my-sales/performance",
 
-    INVENTORY_VIEW_PRODUCTS: "/inventory/product", // note: fixed from your original /src/... typo
+    INVENTORY_VIEW_PRODUCTS: "/inventory/product",
     INVENTORY_STOCK_LEVELS: "/inventory/stock",
 
-    PROFILE_PERSONAL_INFO: "/profile/info",
-    PROFILE_CHANGE_PASSWORD: "/profile/password",
-    PROFILE_ACTIVITY_LOG: "/profile/activity",
+    SETTINGS_PROFILE: "/settings/profile",
   },
 } as const;
 
@@ -115,9 +113,7 @@ export const adminNavigation: NavItem[] = [
     title: "Staff Management",
     url: PATHS.ADMIN.STAFF,
     icon: UserCog,
-    items: [
-      { title: "Manage Staff", url: PATHS.ADMIN.STAFF_ACCESS_CONTROL },
-    ],
+    items: [{ title: "Manage Staff", url: PATHS.ADMIN.STAFF_ACCESS_CONTROL }],
   },
   {
     title: "Reports & Analytics",
@@ -174,16 +170,9 @@ export const staffNavigation: NavItem[] = [
     ],
   },
   {
-    title: "Profile",
-    url: PATHS.PROFILE,
+    title: "Settings",
+    url: PATHS.SETTINGS,
     icon: Settings,
-    items: [
-      { title: "Personal Info", url: PATHS.STAFF_NAV.PROFILE_PERSONAL_INFO },
-      {
-        title: "Change Password",
-        url: PATHS.STAFF_NAV.PROFILE_CHANGE_PASSWORD,
-      },
-      { title: "Activity Log", url: PATHS.STAFF_NAV.PROFILE_ACTIVITY_LOG },
-    ],
+    items: [{ title: "Profile", url: PATHS.STAFF_NAV.SETTINGS_PROFILE }],
   },
 ];

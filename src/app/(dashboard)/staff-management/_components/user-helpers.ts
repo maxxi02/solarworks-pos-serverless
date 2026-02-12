@@ -7,8 +7,8 @@ export function transformToTableUser(user: BetterAuthUser): TableUser {
     ...user,
     banned,
     status,
-    role: user.role ?? "user",
-    payRange: getPayRange(user.role ?? "user"),
+    role: user.role ?? "staff",
+    payRange: getPayRange(user.role ?? "staff"),
     isOnline: user.isOnline ?? false,
   };
 }
@@ -28,7 +28,6 @@ export function getPayRange(role: UserRole): string {
     admin: "$8,000 – $15,000",
     manager: "$5,500 – $10,000",
     staff: "$3,500 – $7,000",
-    user: "$2,000 – $4,500",
   };
   return map[role] ?? "—";
 }

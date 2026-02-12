@@ -7,8 +7,8 @@ import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { admin as adminPlugin, twoFactor } from "better-auth/plugins";
 import { sendVerificationEmail } from "./email";
 import { nextCookies } from "better-auth/next-js";
-import { ac, staff, manager, admin } from "./permissions";
 import { adminClient } from "better-auth/client/plugins";
+
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
@@ -27,8 +27,8 @@ export const auth = betterAuth({
       },
       role: {
         type: "string",
-        required: true, // or defaultValue: "staff"
-        defaultValue: "staff", // default to "staff" if not provided
+        required: true,
+        defaultValue: "staff", // default to "staff" for all new users
       },
       isOnline: {
         type: "boolean",
@@ -87,7 +87,7 @@ export const auth = betterAuth({
   },
 
   plugins: [
-    adminPlugin({ ac, roles: { staff, manager, admin } }),
+    adminPlugin(), // No roles config - we handle roles via custom field
     twoFactor({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,
@@ -97,10 +97,15 @@ export const auth = betterAuth({
   ],
 });
 
+// Type definitions
+export type UserRole = "staff" | "manager" | "admin";
+
 export type ExtendedUser = typeof auth.$Infer.Session.user & {
-  role?: string;
+  role?: UserRole;
   phoneNumber?: string;
   twoFactorEnabled?: boolean;
+  isOnline?: boolean;
+  lastSeen?: Date;
 };
 
 export type ExtendedSession = {
