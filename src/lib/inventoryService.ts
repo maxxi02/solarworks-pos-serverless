@@ -283,10 +283,23 @@ export async function getInventoryByNames(names: string[]): Promise<Inventory[]>
       body: JSON.stringify({ names })
     });
     
-    return handleResponse<Inventory[]>(response);
+    const result = await handleResponse<any>(response);
+    
+    // ✅ Handle both array and object responses
+    if (Array.isArray(result)) {
+      return result;
+    } else if (result && result.items && Array.isArray(result.items)) {
+      return result.items;
+    } else if (result && typeof result === 'object') {
+      // If it's an object but not the expected format, return empty array
+      console.warn('Unexpected response format from batch-lookup:', result);
+      return [];
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error in getInventoryByNames:', error);
-    throw error;
+    return []; // ✅ Return empty array on error instead of throwing
   }
 }
 
