@@ -11,8 +11,10 @@ import {
   ShoppingCart, Plus, Minus, Trash2,
   DollarSign, Smartphone, Receipt,
   X, Loader2, Utensils, Coffee,
-  ChevronLeft, ChevronRight, GripVertical
+  ChevronLeft, ChevronRight, GripVertical,
+  Save, History, Download, Printer
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Types
 interface Product {
@@ -37,10 +39,27 @@ interface CategoryData {
   menuType: 'food' | 'drink';
 }
 
+interface SavedOrder {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  items: CartItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  paymentMethod: 'cash' | 'gcash' | 'split';
+  splitPayment?: { cash: number; gcash: number };
+  orderType: 'dine-in' | 'takeaway';
+  tableNumber?: string;
+  timestamp: Date;
+  status: 'pending' | 'completed' | 'cancelled';
+}
+
 const CashierPage = () => {
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [savedOrders, setSavedOrders] = useState<SavedOrder[]>([]);
   
   // Cart & Order State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -54,22 +73,69 @@ const CashierPage = () => {
   const [selectedMenuType, setSelectedMenuType] = useState<'food' | 'drink' | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [draggedItem, setDraggedItem] = useState<Product | null>(null);
+  const [showSavedOrders, setShowSavedOrders] = useState(false);
+  const [orderNote, setOrderNote] = useState('');
   
   // Categories scroll ref and touch state
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
-  const [showRightScroll, setShowRightScroll] = useState(true);
+  const [showRightScroll, setShowRightScroll] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   
   // Drop zone ref
   const cartDropZoneRef = useRef<HTMLDivElement>(null);
+  const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = subtotal * 0.10;
   const total = subtotal + tax;
+
+  // Generate Order Number
+  const generateOrderNumber = useCallback(() => {
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `ORD-${year}${month}${day}-${random}`;
+  }, []);
+
+useEffect(() => {
+  const loadSavedOrders = () => {
+    try {
+      const saved = localStorage.getItem('pos_saved_orders');
+      if (saved) {
+        const parsed: SavedOrder[] = JSON.parse(saved);
+
+        const ordersWithDates = parsed.map(order => ({
+          ...order,
+          timestamp: new Date(order.timestamp)
+        }));
+
+        setSavedOrders(ordersWithDates);
+      }
+    } catch (error) {
+      console.error('Failed to load saved orders:', error);
+    }
+  };
+
+  loadSavedOrders();
+}, []);
+
+  // Save order to localStorage
+  const saveOrderToLocal = useCallback((order: SavedOrder) => {
+    try {
+      const updatedOrders = [order, ...savedOrders].slice(0, 50); // Keep last 50 orders
+      setSavedOrders(updatedOrders);
+      localStorage.setItem('pos_saved_orders', JSON.stringify(updatedOrders));
+    } catch (error) {
+      console.error('Failed to save order:', error);
+      toast.error('Failed to save order');
+    }
+  }, [savedOrders]);
 
   // Fetch data - Products and Categories
   const fetchProductsData = useCallback(async () => {
@@ -96,6 +162,7 @@ const CashierPage = () => {
       setProducts(productsList);
     } catch (error) {
       console.error('Error fetching products:', error);
+      toast.error('Failed to load products');
     } finally {
       setIsLoading(false);
     }
@@ -128,17 +195,106 @@ const CashierPage = () => {
       .map(p => p.category || 'Uncategorized')
   ))];
 
-  // Drag and Drop Handlers - WITH SMALL PREVIEW
-  const handleDragStart = (e: React.DragEvent, product: Product) => {
+  // Check scroll position for showing/hiding scroll buttons
+  const checkScrollPosition = useCallback(() => {
+    if (categoriesContainerRef.current) {
+      const container = categoriesContainerRef.current;
+      const { scrollLeft, scrollWidth, clientWidth } = container;
+      
+      setShowLeftScroll(scrollLeft > 10);
+      setShowRightScroll(scrollLeft < scrollWidth - clientWidth - 10);
+    }
+  }, []);
+
+  // Check scroll position on mount and when categories change
+  useEffect(() => {
+    setTimeout(checkScrollPosition, 100);
+    
+    const handleResize = () => {
+      checkScrollPosition();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [categories, selectedMenuType, checkScrollPosition]);
+
+  // Add scroll event listener
+  useEffect(() => {
+    const container = categoriesContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', checkScrollPosition);
+      return () => container.removeEventListener('scroll', checkScrollPosition);
+    }
+  }, [checkScrollPosition]);
+
+  // Scroll categories function with buttons
+  const scrollCategories = useCallback((direction: 'left' | 'right') => {
+    if (categoriesContainerRef.current) {
+      const container = categoriesContainerRef.current;
+      const scrollAmount = 200;
+      
+      if (direction === 'left') {
+        container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+      } else {
+        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+      }
+    }
+  }, []);
+
+  // Categories swipe handlers
+  const handleCategoryMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!categoriesContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - categoriesContainerRef.current.offsetLeft);
+    setScrollLeft(categoriesContainerRef.current.scrollLeft);
+  }, []);
+
+  const handleCategoryMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !categoriesContainerRef.current) return;
+    e.preventDefault();
+    
+    const x = e.pageX - categoriesContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2;
+    categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
+  }, [isDragging, startX, scrollLeft]);
+
+  const handleCategoryMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleCategoryTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!categoriesContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.touches[0].pageX - categoriesContainerRef.current.offsetLeft);
+    setScrollLeft(categoriesContainerRef.current.scrollLeft);
+  }, []);
+
+  const handleCategoryTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging || !categoriesContainerRef.current) return;
+    e.preventDefault();
+    
+    const x = e.touches[0].pageX - categoriesContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2;
+    categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
+  }, [isDragging, startX, scrollLeft]);
+
+  const handleCategoryTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Drag and Drop Handlers
+  const handleDragStart = useCallback((e: React.DragEvent, product: Product) => {
     setDraggedItem(product);
     e.dataTransfer.setData('text/plain', product._id);
     e.dataTransfer.effectAllowed = 'copy';
     
-    // Create SMALL drag preview - kasing laki ng card
     const dragPreview = document.createElement('div');
     dragPreview.className = 'fixed top-0 left-0 w-[140px] bg-card border-2 border-primary shadow-lg rounded-lg p-2';
     dragPreview.style.position = 'absolute';
-    dragPreview.style.top = '-1000px'; // Hide it off screen
+    dragPreview.style.top = '-1000px';
     
     dragPreview.innerHTML = `
       <div class="space-y-1">
@@ -159,30 +315,30 @@ const CashierPage = () => {
     document.body.appendChild(dragPreview);
     e.dataTransfer.setDragImage(dragPreview, 70, 40);
     setTimeout(() => document.body.removeChild(dragPreview), 0);
-  };
+  }, []);
 
-  const handleDragEnd = (e: React.DragEvent) => {
+  const handleDragEnd = useCallback(() => {
     setDraggedItem(null);
-  };
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     
     if (cartDropZoneRef.current) {
       cartDropZoneRef.current.classList.add('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
     }
-  };
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     
     if (cartDropZoneRef.current) {
       cartDropZoneRef.current.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
     }
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     
     if (cartDropZoneRef.current) {
@@ -193,16 +349,13 @@ const CashierPage = () => {
       addToCart(draggedItem);
       setDraggedItem(null);
     }
-  };
+  }, [draggedItem]);
 
-  // Touch-based drag and drop for mobile - WITH SMALL PREVIEW
-  const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent, product: Product) => {
+  // Touch-based drag and drop handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent, product: Product) => {
     e.preventDefault();
     setDraggedItem(product);
     
-    // Create touch preview - maliit lang
     const preview = document.createElement('div');
     preview.className = 'fixed z-50 w-[140px] bg-card border-2 border-primary shadow-lg rounded-lg p-2';
     preview.style.left = `${e.touches[0].clientX - 70}px`;
@@ -226,18 +379,16 @@ const CashierPage = () => {
     if (window.navigator.vibrate) {
       window.navigator.vibrate(20);
     }
-  };
+  }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     
-    // Update preview position
     if (touchPreview) {
       touchPreview.style.left = `${e.touches[0].clientX - 70}px`;
       touchPreview.style.top = `${e.touches[0].clientY - 50}px`;
     }
     
-    // Check if touch is over cart area
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
     
@@ -246,18 +397,16 @@ const CashierPage = () => {
     } else {
       cartDropZoneRef.current?.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
     }
-  };
+  }, [touchPreview]);
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     
-    // Remove preview
     if (touchPreview) {
       touchPreview.remove();
       setTouchPreview(null);
     }
     
-    // Check if touch ended over cart area
     const touch = e.changedTouches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
     
@@ -271,101 +420,7 @@ const CashierPage = () => {
     
     cartDropZoneRef.current?.classList.remove('bg-primary/5', 'border-2', 'border-primary', 'border-dashed');
     setDraggedItem(null);
-  };
-
-  // Manual swipe/hand drag functions for categories
-  const handleCategoryMouseDown = (e: React.MouseEvent) => {
-    if (!categoriesContainerRef.current) return;
-    
-    setIsDragging(true);
-    setStartX(e.pageX - categoriesContainerRef.current.offsetLeft);
-    setScrollLeft(categoriesContainerRef.current.scrollLeft);
-  };
-
-  const handleCategoryMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !categoriesContainerRef.current) return;
-    e.preventDefault();
-    
-    const x = e.pageX - categoriesContainerRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleCategoryMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleCategoryTouchStart = (e: React.TouchEvent) => {
-    if (!categoriesContainerRef.current) return;
-    
-    setIsDragging(true);
-    setStartX(e.touches[0].pageX - categoriesContainerRef.current.offsetLeft);
-    setScrollLeft(categoriesContainerRef.current.scrollLeft);
-  };
-
-  const handleCategoryTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || !categoriesContainerRef.current) return;
-    
-    const x = e.touches[0].pageX - categoriesContainerRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleCategoryTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  // Scroll categories function with buttons
-  const scrollCategories = useCallback((direction: 'left' | 'right') => {
-    if (categoriesContainerRef.current) {
-      const container = categoriesContainerRef.current;
-      const scrollAmount = 200;
-      
-      if (direction === 'left') {
-        container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-      } else {
-        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-      }
-      
-      setTimeout(checkScrollPosition, 300);
-    }
-  }, []);
-
-  // Check scroll position for showing/hiding scroll buttons
-  const checkScrollPosition = useCallback(() => {
-    if (categoriesContainerRef.current) {
-      const container = categoriesContainerRef.current;
-      const { scrollLeft, scrollWidth, clientWidth } = container;
-      
-      setShowLeftScroll(scrollLeft > 10);
-      setShowRightScroll(scrollLeft < scrollWidth - clientWidth - 10);
-    }
-  }, []);
-
-  // Check scroll position on mount and when categories change
-  useEffect(() => {
-    setTimeout(checkScrollPosition, 100);
-  }, [categories, selectedMenuType, checkScrollPosition]);
-
-  // Listen for window resize and scroll
-  useEffect(() => {
-    const handleResize = () => {
-      checkScrollPosition();
-    };
-    
-    window.addEventListener('resize', handleResize);
-    
-    if (categoriesContainerRef.current) {
-      categoriesContainerRef.current.addEventListener('scroll', checkScrollPosition);
-    }
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (categoriesContainerRef.current) {
-        categoriesContainerRef.current.removeEventListener('scroll', checkScrollPosition);
-      }
-    };
-  }, [checkScrollPosition]);
+  }, [touchPreview, draggedItem]);
 
   // Cart functions
   const addToCart = useCallback((product: Product) => {
@@ -374,6 +429,10 @@ const CashierPage = () => {
       return existing 
         ? prev.map(i => i._id === product._id ? { ...i, quantity: i.quantity + 1 } : i)
         : [...prev, { ...product, quantity: 1 }];
+    });
+    
+    toast.success(`${product.name} added to cart`, {
+      duration: 1500
     });
   }, []);
 
@@ -388,7 +447,15 @@ const CashierPage = () => {
   }, []);
 
   const removeFromCart = useCallback((itemId: string) => {
-    setCart(prev => prev.filter(item => item._id !== itemId));
+    setCart(prev => {
+      const item = prev.find(i => i._id === itemId);
+      if (item) {
+        toast.info(`${item.name} removed from cart`, {
+          duration: 1500
+        });
+      }
+      return prev.filter(item => item._id !== itemId);
+    });
   }, []);
 
   const clearCart = useCallback(() => {
@@ -397,16 +464,83 @@ const CashierPage = () => {
     setSplitPayment({ cash: 0, gcash: 0 });
     setPaymentMethod('cash');
     setSelectedTable('');
+    setOrderNote('');
+    
+    toast.info('Cart cleared', {
+      duration: 1500
+    });
   }, []);
 
+  // SAVE ORDER FUNCTION - nasa sidebar/gilid
+  const saveOrder = useCallback(() => {
+    if (cart.length === 0) {
+      toast.error('Cannot save empty cart', {
+        description: 'Add items to cart first'
+      });
+      return;
+    }
+
+    const newOrder: SavedOrder = {
+      id: `save-${Date.now()}`,
+      orderNumber: generateOrderNumber(),
+      customerName: customerName || 'Walk-in Customer',
+      items: [...cart],
+      subtotal,
+      tax,
+      total,
+      paymentMethod,
+      splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+      orderType,
+      tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
+      timestamp: new Date(),
+      status: 'pending'
+    };
+
+    saveOrderToLocal(newOrder);
+    
+    toast.success('Order Saved Successfully!', {
+      description: `Order #${newOrder.orderNumber} has been saved`,
+      duration: 3000,
+      icon: <Save className="h-4 w-4" />
+    });
+
+    // Optional: Clear cart after save?
+    // clearCart();
+  }, [cart, customerName, subtotal, tax, total, paymentMethod, splitPayment, orderType, selectedTable, generateOrderNumber, saveOrderToLocal]);
+
+  // Load saved order
+  const loadSavedOrder = useCallback((order: SavedOrder) => {
+    setCart(order.items);
+    setCustomerName(order.customerName);
+    setPaymentMethod(order.paymentMethod);
+    if (order.splitPayment) {
+      setSplitPayment(order.splitPayment);
+    }
+    setOrderType(order.orderType);
+    setSelectedTable(order.tableNumber || '');
+    
+    toast.success('Order Loaded', {
+      description: `Order #${order.orderNumber} loaded to cart`,
+      duration: 2000
+    });
+    
+    setShowSavedOrders(false);
+  }, []);
+
+  // Process payment
   const processPayment = async () => {
-    if (cart.length === 0) return alert('Cart is empty!');
+    if (cart.length === 0) {
+      toast.error('Cart is empty!');
+      return;
+    }
     if (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total) {
-      return alert('Split payment amounts must equal total!');
+      toast.error('Split payment amounts must equal total!');
+      return;
     }
     
     const orderData = {
-      customerName,
+      orderNumber: generateOrderNumber(),
+      customerName: customerName || 'Walk-in Customer',
       items: cart,
       subtotal,
       tax,
@@ -415,6 +549,7 @@ const CashierPage = () => {
       splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
       orderType,
       tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
+      notes: orderNote,
       timestamp: new Date(),
     };
     
@@ -426,19 +561,43 @@ const CashierPage = () => {
       });
       
       if (response.ok) {
-        alert(`Payment processed successfully!\nOrder Total: ₱${total.toFixed(2)}`);
+        toast.success('Payment Successful!', {
+          description: `Order Total: ₱${total.toFixed(2)}`,
+          duration: 4000
+        });
         clearCart();
       } else {
-        alert(`Payment processed (local only)!\nOrder Total: ₱${total.toFixed(2)}`);
+        // Local only mode
+        const savedOrder: SavedOrder = {
+          ...orderData,
+          id: `order-${Date.now()}`,
+          status: 'completed'
+        };
+        saveOrderToLocal(savedOrder);
+        
+        toast.success('Payment Processed (Local Mode)', {
+          description: `Order Total: ₱${total.toFixed(2)}`,
+          duration: 4000
+        });
         clearCart();
       }
     } catch {
-      alert(`Payment processed (local only)!\nOrder Total: ₱${total.toFixed(2)}`);
+      // Local only mode
+      const savedOrder: SavedOrder = {
+        ...orderData,
+        id: `order-${Date.now()}`,
+        status: 'completed'
+      };
+      saveOrderToLocal(savedOrder);
+      
+      toast.success('Payment Processed (Local Mode)', {
+        description: `Order Total: ₱${total.toFixed(2)}`,
+        duration: 4000
+      });
       clearCart();
     }
   };
 
-  // Auto split functions
   const autoSplit = useCallback((type: 'half' | 'cash' | 'gcash') => {
     const splits = {
       half: { cash: total / 2, gcash: total / 2 },
@@ -448,19 +607,40 @@ const CashierPage = () => {
     setSplitPayment(splits[type]);
   }, [total]);
 
+  // Format date for display
+  const formatOrderDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-4 relative">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <header className="bg-card rounded-xl shadow-sm p-4 mb-4 border">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-foreground">POS System</h1>
-              <p className="text-xs text-muted-foreground mt-1">Drag and drop items to cart</p>
+              <p className="text-xs text-muted-foreground mt-1">Swipe categories - Drag items to cart</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-semibold text-foreground">Cashier #04</p>
-              <p className="text-xs text-muted-foreground">Active</p>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSavedOrders(!showSavedOrders)}
+                className="h-8 text-xs gap-1"
+              >
+                <History className="w-3.5 h-3.5" />
+                Saved Orders ({savedOrders.length})
+              </Button>
+              <div className="text-right">
+                <p className="text-sm font-semibold text-foreground">Cashier #04</p>
+                <p className="text-xs text-muted-foreground">Active</p>
+              </div>
             </div>
           </div>
         </header>
@@ -487,21 +667,21 @@ const CashierPage = () => {
               ))}
             </div>
 
-            {/* Categories Section */}
+            {/* Categories Section - WITH SWIPE */}
             <div className="mb-4 relative">
               <div className="flex justify-between items-center mb-1">
                 <Label className="text-xs font-medium text-foreground">Categories</Label>
                 <div className="flex items-center text-[10px] text-muted-foreground">
-                  <span>Swipe to browse</span>
+                  <span>← Swipe →</span>
                 </div>
               </div>
               
-              <div className="relative">
+              <div className="relative group">
                 {showLeftScroll && (
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="icon"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-background shadow-md hover:bg-muted h-6 w-6"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-6 w-6 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => scrollCategories('left')}
                   >
                     <ChevronLeft className="w-3 h-3" />
@@ -510,14 +690,13 @@ const CashierPage = () => {
                 
                 <div 
                   ref={categoriesContainerRef}
-                  className="flex gap-1 overflow-x-auto scrollbar-hide px-6 py-1 select-none"
+                  className="flex gap-1 overflow-x-auto scrollbar-hide px-1 py-1 select-none"
                   style={{ 
-                    scrollbarWidth: 'none' as const, 
+                    scrollbarWidth: 'none',
                     msOverflowStyle: 'none',
                     WebkitOverflowScrolling: 'touch',
                     cursor: isDragging ? 'grabbing' : 'grab',
-                    userSelect: 'none',
-                    touchAction: 'pan-x'
+                    userSelect: 'none'
                   }}
                   onMouseDown={handleCategoryMouseDown}
                   onMouseMove={handleCategoryMouseMove}
@@ -531,12 +710,12 @@ const CashierPage = () => {
                     <Button
                       key={cat}
                       variant={selectedCategory === cat ? "default" : "outline"}
-                      onClick={(e) => {
+                      onClick={() => {
                         if (!isDragging) {
                           setSelectedCategory(cat);
                         }
                       }}
-                      className="whitespace-nowrap text-xs shrink-0 px-2 py-1 h-7"
+                      className="whitespace-nowrap text-xs shrink-0 px-3 py-1 h-8"
                     >
                       {cat}
                     </Button>
@@ -545,9 +724,9 @@ const CashierPage = () => {
                 
                 {showRightScroll && (
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="icon"
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-background shadow-md hover:bg-muted h-6 w-6"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-6 w-6 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => scrollCategories('right')}
                   >
                     <ChevronRight className="w-3 h-3" />
@@ -578,7 +757,7 @@ const CashierPage = () => {
                   {filteredProducts.map(product => (
                     <Card 
                       key={product._id} 
-                      className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing ${
+                      className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none ${
                         draggedItem?._id === product._id ? 'opacity-50 scale-95' : ''
                       }`}
                       draggable
@@ -614,181 +793,349 @@ const CashierPage = () => {
             </div>
           </div>
 
-          {/* Right Panel - Checkout (DROP ZONE) */}
-          <div 
-            ref={cartDropZoneRef}
-            className="lg:w-5/12 h-full transition-all duration-200"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <Card className="h-full flex flex-col border">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="flex items-center gap-1 text-sm">
-                    <ShoppingCart className="w-4 h-4" />
-                    Order ({cart.length})
-                  </CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={clearCart} 
-                    disabled={!cart.length}
-                    className="h-7 text-xs"
-                  >
-                    <Trash2 className="w-3 h-3 mr-1" /> Clear
-                  </Button>
-                </div>
-                
-                {/* Drop zone hint - mas maliit */}
-                {cart.length === 0 && (
-                  <div className="mt-1 p-2 border border-dashed rounded text-center">
-                    <p className="text-xs text-muted-foreground">
-                      ↓ Drop products here ↓
-                    </p>
-                  </div>
-                )}
-              </CardHeader>
-
-              <CardContent 
-                className="flex-1 overflow-y-auto space-y-3 p-3 pt-0"
-                style={{ WebkitOverflowScrolling: 'touch' }}
-              >
-                {/* Order Type - mas compact */}
-                <div>
-                  <Label className="text-xs">Order Type</Label>
-                  <div className="flex gap-1 mt-1">
-                    <Button
-                      variant={orderType === 'dine-in' ? 'default' : 'outline'}
-                      onClick={() => setOrderType('dine-in')}
-                      className="flex-1 h-7 text-xs"
-                    >
-                      Dine In
-                    </Button>
-                    <Button
-                      variant={orderType === 'takeaway' ? 'default' : 'outline'}
-                      onClick={() => setOrderType('takeaway')}
-                      className="flex-1 h-7 text-xs"
-                    >
-                      Take Away
-                    </Button>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Cart Items - mas compact */}
-                <div>
-                  <Label className="text-xs">Items</Label>
-                  <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
-                    {cart.length === 0 ? (
-                      <div className="text-center py-2 text-muted-foreground">
-                        <p className="text-xs">No items in cart</p>
-                      </div>
-                    ) : (
-                      cart.map(item => (
-                        <div key={item._id} className="flex justify-between items-center p-1.5 border rounded">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-xs truncate">{item.name}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {item.quantity} × ₱{item.price.toFixed(2)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 ml-2">
-                            <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, -1)} className="h-6 w-6 p-0">
-                              <Minus className="w-2.5 h-2.5" />
-                            </Button>
-                            <span className="w-5 text-center text-xs">{item.quantity}</span>
-                            <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, 1)} className="h-6 w-6 p-0">
-                              <Plus className="w-2.5 h-2.5" />
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => removeFromCart(item._id)} className="h-6 w-6 p-0">
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Order Summary - mas compact */}
-                <div>
-                  <Label className="text-xs">Order Summary</Label>
-                  <div className="space-y-0.5 mt-1">
-                    <div className="flex justify-between text-xs">
-                      <span>Subtotal:</span>
-                      <span>₱{subtotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span>Tax (10%):</span>
-                      <span>₱{tax.toFixed(2)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold text-sm">
-                      <span>Total:</span>
-                      <span className="text-primary">₱{total.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Payment Method - mas compact */}
-                <div>
-                  <Label className="text-xs">Payment</Label>
-                  <div className="grid grid-cols-3 gap-1 mt-1">
-                    <Button
-                      variant={paymentMethod === 'cash' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('cash')}
+          {/* Right Panel - Checkout (DROP ZONE) with SAVE BUTTON ON THE SIDE */}
+          <div className="lg:w-5/12 h-full flex gap-2">
+            {/* Cart Drop Zone */}
+            <div 
+              ref={cartDropZoneRef}
+              className="flex-1 transition-all duration-200"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <Card className="h-full flex flex-col border">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="flex items-center gap-1 text-sm">
+                      <ShoppingCart className="w-4 h-4" />
+                      Order ({cart.length})
+                    </CardTitle>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={clearCart} 
+                      disabled={!cart.length}
                       className="h-7 text-xs"
                     >
-                      <DollarSign className="w-3 h-3 mr-1" /> Cash
-                    </Button>
-                    <Button
-                      variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('gcash')}
-                      className="h-7 text-xs"
-                    >
-                      <Smartphone className="w-3 h-3 mr-1" /> GCash
-                    </Button>
-                    <Button
-                      variant={paymentMethod === 'split' ? 'default' : 'outline'}
-                      onClick={() => setPaymentMethod('split')}
-                      className="h-7 text-xs"
-                    >
-                      <Receipt className="w-3 h-3 mr-1" /> Split
+                      <Trash2 className="w-3 h-3 mr-1" /> Clear
                     </Button>
                   </div>
-                </div>
+                  
+                  {/* Drop zone hint */}
+                  {cart.length === 0 && (
+                    <div className="mt-1 p-2 border border-dashed rounded text-center bg-muted/30">
+                      <p className="text-xs text-muted-foreground">
+                        ↓ Drop or touch & drag products here ↓
+                      </p>
+                    </div>
+                  )}
+                </CardHeader>
 
-                {/* Customer Name - mas compact */}
-                <div>
-                  <Label className="text-xs">Customer</Label>
-                  <Input
-                    placeholder="Name (optional)"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="h-7 text-xs mt-1"
-                  />
-                </div>
-
-                {/* Process Payment Button */}
-                <Button
-                  onClick={processPayment}
-                  disabled={!cart.length}
-                  className="w-full h-9 text-sm"
+                <CardContent 
+                  className="flex-1 overflow-y-auto space-y-3 p-3 pt-0"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
                 >
-                  <Receipt className="w-4 h-4 mr-2" />
-                  Pay ₱{total.toFixed(2)}
-                </Button>
-              </CardContent>
-            </Card>
+                  {/* Order Type */}
+                  <div>
+                    <Label className="text-xs">Order Type</Label>
+                    <div className="flex gap-1 mt-1">
+                      <Button
+                        variant={orderType === 'dine-in' ? 'default' : 'outline'}
+                        onClick={() => setOrderType('dine-in')}
+                        className="flex-1 h-7 text-xs"
+                      >
+                        Dine In
+                      </Button>
+                      <Button
+                        variant={orderType === 'takeaway' ? 'default' : 'outline'}
+                        onClick={() => setOrderType('takeaway')}
+                        className="flex-1 h-7 text-xs"
+                      >
+                        Take Away
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Cart Items */}
+                  <div>
+                    <Label className="text-xs">Items</Label>
+                    <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
+                      {cart.length === 0 ? (
+                        <div className="text-center py-2 text-muted-foreground">
+                          <p className="text-xs">No items in cart</p>
+                        </div>
+                      ) : (
+                        cart.map(item => (
+                          <div key={item._id} className="flex justify-between items-center p-1.5 border rounded hover:bg-muted/30">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-xs truncate">{item.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                ₱{item.price.toFixed(2)} × {item.quantity}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 ml-2">
+                              <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, -1)} className="h-6 w-6 p-0">
+                                <Minus className="w-2.5 h-2.5" />
+                              </Button>
+                              <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                              <Button size="sm" variant="outline" onClick={() => updateCartQuantity(item._id, 1)} className="h-6 w-6 p-0">
+                                <Plus className="w-2.5 h-2.5" />
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => removeFromCart(item._id)} className="h-6 w-6 p-0">
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Order Summary */}
+                  <div>
+                    <Label className="text-xs">Order Summary</Label>
+                    <div className="space-y-0.5 mt-1">
+                      <div className="flex justify-between text-xs">
+                        <span>Subtotal:</span>
+                        <span>₱{subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span>Tax (10%):</span>
+                        <span>₱{tax.toFixed(2)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-bold text-sm">
+                        <span>Total:</span>
+                        <span className="text-primary">₱{total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Payment Method */}
+                  <div>
+                    <Label className="text-xs">Payment Method</Label>
+                    <div className="grid grid-cols-3 gap-1 mt-1">
+                      <Button
+                        variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+                        onClick={() => setPaymentMethod('cash')}
+                        className="h-7 text-xs"
+                      >
+                        <DollarSign className="w-3 h-3 mr-1" /> Cash
+                      </Button>
+                      <Button
+                        variant={paymentMethod === 'gcash' ? 'default' : 'outline'}
+                        onClick={() => setPaymentMethod('gcash')}
+                        className="h-7 text-xs"
+                      >
+                        <Smartphone className="w-3 h-3 mr-1" /> GCash
+                      </Button>
+                      <Button
+                        variant={paymentMethod === 'split' ? 'default' : 'outline'}
+                        onClick={() => setPaymentMethod('split')}
+                        className="h-7 text-xs"
+                      >
+                        <Receipt className="w-3 h-3 mr-1" /> Split
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Split Payment Options */}
+                  {paymentMethod === 'split' && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Split Amounts</Label>
+                      <div className="grid grid-cols-3 gap-1">
+                        <Button size="sm" variant="outline" onClick={() => autoSplit('half')} className="h-6 text-xs">
+                          50/50
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => autoSplit('cash')} className="h-6 text-xs">
+                          Cash
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => autoSplit('gcash')} className="h-6 text-xs">
+                          GCash
+                        </Button>
+                      </div>
+                      <div className="space-y-1 mt-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">Cash:</span>
+                          <span className="text-xs font-medium">₱{splitPayment.cash.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs">GCash:</span>
+                          <span className="text-xs font-medium">₱{splitPayment.gcash.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer Name */}
+                  <div>
+                    <Label className="text-xs">Customer Name</Label>
+                    <Input
+                      placeholder="Enter customer name (optional)"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="h-7 text-xs mt-1"
+                    />
+                  </div>
+
+                  {/* Order Notes */}
+                  <div>
+                    <Label className="text-xs">Order Notes</Label>
+                    <Input
+                      placeholder="Special instructions..."
+                      value={orderNote}
+                      onChange={(e) => setOrderNote(e.target.value)}
+                      className="h-7 text-xs mt-1"
+                    />
+                  </div>
+
+                  {/* Table Number for Dine-in */}
+                  {orderType === 'dine-in' && (
+                    <div>
+                      <Label className="text-xs">Table Number</Label>
+                      <Input
+                        placeholder="e.g., Table 5"
+                        value={selectedTable}
+                        onChange={(e) => setSelectedTable(e.target.value)}
+                        className="h-7 text-xs mt-1"
+                      />
+                    </div>
+                  )}
+
+                  {/* Process Payment Button */}
+                  <Button
+                    onClick={processPayment}
+                    disabled={!cart.length}
+                    className="w-full h-9 text-sm font-semibold"
+                    size="lg"
+                  >
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Pay ₱{total.toFixed(2)}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* SAVE BUTTON SIDEBAR - Nasa gilid mismo */}
+            <div className="flex flex-col gap-2 w-10">
+              <Button
+                onClick={saveOrder}
+                disabled={!cart.length}
+                variant="default"
+                size="icon"
+                className="h-10 w-10 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                title="Save Order"
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                onClick={() => setShowSavedOrders(!showSavedOrders)}
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                title="Saved Orders"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                title="Print Receipt"
+                disabled={!cart.length}
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                title="Download Order"
+                disabled={!cart.length}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Saved Orders Side Panel */}
+      {showSavedOrders && (
+        <div className="fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl z-50 overflow-hidden flex flex-col">
+          <div className="p-4 border-b flex justify-between items-center">
+            <h3 className="font-semibold flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Saved Orders ({savedOrders.length})
+            </h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowSavedOrders(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {savedOrders.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <History className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">No saved orders</p>
+              </div>
+            ) : (
+              savedOrders.map((order) => (
+                <Card key={order.id} className="p-3 hover:shadow-md transition-shadow">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-xs font-mono font-medium">{order.orderNumber}</p>
+                        <p className="text-xs text-muted-foreground">{formatOrderDate(order.timestamp)}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">
+                        {order.status}
+                      </Badge>
+                    </div>
+                    
+                    <div className="text-xs">
+                      <p className="font-medium">{order.customerName}</p>
+                      <p className="text-muted-foreground">{order.items.length} items • ₱{order.total.toFixed(2)}</p>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 text-xs flex-1"
+                        onClick={() => loadSavedOrder(order)}
+                      >
+                        Load Order
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 w-7 p-0"
+                      >
+                        <Printer className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

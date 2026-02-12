@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Printer, Mail, Upload, Save, Trash2, Eye, Check, X, Settings } from 'lucide-react';
+import { Printer, Mail, Upload, Save, Trash2, Eye, X, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ReceiptSettings() {
