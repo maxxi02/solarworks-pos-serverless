@@ -1,726 +1,179 @@
+// OrdersPage.tsx
+
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useSession } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "sonner";
-import {
-    Clock,
-    MapPin,
-    CheckCircle2,
-    XCircle,
-    AlertCircle,
-    Loader2,
-    LogOut,
-    Coffee,
-    ShoppingCart,
-    Users,
-    Utensils,
-} from "lucide-react";
-
-type AttendanceStatus =
-    | "PENDING_CHECKIN"
-    | "CLOCKED_IN"
-    | "PENDING_CHECKOUT"
-    | "CLOCKED_OUT"
-    | "REJECTED"
-    | "CANCELLED";
-
-type AttendanceRecord = {
-    id: string;
-    status: AttendanceStatus;
-    requestedCheckInAt?: string;
-    approvedCheckInAt?: string;
-    requestedCheckOutAt?: string;
-    approvedCheckOutAt?: string;
-    workSummary?: string;
-    rejectionReason?: string;
-    totalHours?: number;
-    checkInLocation?: { latitude: number; longitude: number };
-    checkOutLocation?: { latitude: number; longitude: number };
-};
-
-interface GeolocationError {
-    code?: number;
-    message: string;
-}
+import { useAttendance } from "@/hooks/useAttendance";
+import { ClockInCard } from "./_components/ClockInCard";
+import { AlertTriangle, ShoppingCart, CheckCircle2, Clock } from "lucide-react";
 
 const OrdersPage = () => {
-    const { data: session, isPending } = useSession();
-    const [location, setLocation] = useState<GeolocationPosition | null>(null);
-    const [locationError, setLocationError] = useState<string | null>(null);
-    const [currentAttendance, setCurrentAttendance] = useState<AttendanceRecord | null>(null);
-    const [workSummary, setWorkSummary] = useState("");
-    const [isClockingIn, setIsClockingIn] = useState(false);
-    const [isClockingOut, setIsClockingOut] = useState(false);
-    const [timeElapsed, setTimeElapsed] = useState<string>("00:00:00");
-    const [activeTab, setActiveTab] = useState<string>("attendance");
+    const { isClockedIn, isLoading, attendance } = useAttendance();
 
-    // Get user location
-    const getLocation = (): Promise<GeolocationPosition> => {
-        return new Promise((resolve, reject) => {
-            if (!navigator.geolocation) {
-                reject(new Error("Geolocation is not supported by your browser"));
-                return;
-            }
-
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0,
-            });
-        });
-    };
-
-    // Request location permission
-    const requestLocation = async () => {
-        try {
-            setLocationError(null);
-            const position = await getLocation();
-            setLocation(position);
-            toast.success("Location accessed", {
-                description: "Your location has been captured successfully.",
-            });
-            return position;
-        } catch (error: unknown) {
-            const geoError = error as GeolocationError;
-            let message = "Failed to get your location";
-            if (geoError.code === 1) {
-                message =
-                    "Location permission denied. Please enable location access to clock in/out.";
-            } else if (geoError.code === 2) {
-                message = "Location unavailable. Please try again.";
-            } else if (geoError.code === 3) {
-                message = "Location request timed out. Please try again.";
-            }
-            setLocationError(message);
-            toast.error("Location error", {
-                description: message,
-            });
-            throw error;
-        }
-    };
-
-    // Check today's attendance on mount
-    useEffect(() => {
-        if (session?.user?.id) {
-            checkTodayAttendance();
-            // Socket listeners removed - debugging
-            requestLocation().catch(() => { }); // Request location but don't block
-
-            // Cleanup function - socket cleanup removed
-            return () => {
-                // Socket cleanup removed
-            };
-        }
-    }, [session]);
-
-    // Timer for tracking clock-in duration
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-
-        if (
-            currentAttendance?.status === "CLOCKED_IN" &&
-            currentAttendance.approvedCheckInAt
-        ) {
-            interval = setInterval(() => {
-                const start = new Date(currentAttendance.approvedCheckInAt!).getTime();
-                const now = new Date().getTime();
-                const diff = now - start;
-
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-                setTimeElapsed(
-                    `${hours.toString().padStart(2, "0")}:${minutes
-                        .toString()
-                        .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-                );
-            }, 1000);
-        }
-
-        return () => clearInterval(interval);
-    }, [currentAttendance?.status, currentAttendance?.approvedCheckInAt]);
-
-    // Check if user has any attendance record today
-    const checkTodayAttendance = async () => {
-        try {
-            const response = await fetch("/api/attendance/today");
-            const data = await response.json();
-
-            if (data.success && data.attendance) {
-                setCurrentAttendance(data.attendance);
-                setWorkSummary(data.attendance.workSummary || "");
-
-                // Auto-switch to orders tab if clocked in
-                if (data.attendance.status === "CLOCKED_IN") {
-                    setActiveTab("orders");
-                }
-            }
-        } catch (error) {
-            console.error("Failed to check attendance:", error);
-        }
-    };
-
-    // Socket listeners removed - now using manual refresh or polling
-
-    // Handle clock in
-    const handleClockIn = async () => {
-        if (!session?.user?.id) {
-            toast.error("Authentication required", {
-                description: "Please log in to clock in.",
-            });
-            return;
-        }
-
-        setIsClockingIn(true);
-
-        try {
-            // Get fresh location
-            const position = await requestLocation();
-
-            const response = await fetch("/api/attendance/clock-in", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userId: session.user.id,
-                    requestedCheckInAt: new Date().toISOString(),
-                    checkInLocation: {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                    },
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to clock in");
-            }
-
-            setCurrentAttendance(data.attendance);
-
-            toast.success("⏳ Clock-in request sent", {
-                description: "Your clock-in request has been submitted and is pending approval.",
-            });
-
-            // Refresh attendance data after a delay to check for approval
-            setTimeout(() => {
-                checkTodayAttendance();
-            }, 5000);
-        } catch (error: unknown) {
-            const err = error as Error;
-            toast.error("Clock-in failed", {
-                description: err.message,
-            });
-        } finally {
-            setIsClockingIn(false);
-        }
-    };
-
-    // Handle clock out
-    const handleClockOut = async () => {
-        if (!currentAttendance?.id) return;
-
-        if (!workSummary.trim()) {
-            toast.error("Work summary required", {
-                description: "Please provide a summary of your work today.",
-            });
-            return;
-        }
-
-        setIsClockingOut(true);
-
-        try {
-            const position = await requestLocation();
-
-            const response = await fetch("/api/attendance/clock-out", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    attendanceId: currentAttendance.id,
-                    workSummary: workSummary.trim(),
-                    requestedCheckOutAt: new Date().toISOString(),
-                    checkOutLocation: {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                    },
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to clock out");
-            }
-
-            setCurrentAttendance((prev) => ({
-                ...prev!,
-                status: "PENDING_CHECKOUT",
-            }));
-
-            toast.success("⏳ Clock-out request sent", {
-                description: "Your clock-out request has been submitted and is pending approval.",
-            });
-
-            // Refresh attendance data after a delay to check for approval
-            setTimeout(() => {
-                checkTodayAttendance();
-            }, 5000);
-        } catch (error: unknown) {
-            const err = error as Error;
-            toast.error("Clock-out failed", {
-                description: err.message,
-            });
-        } finally {
-            setIsClockingOut(false);
-        }
-    };
-
-    // Get status badge
-    const getStatusBadge = (status: AttendanceStatus) => {
-        const statusConfig = {
-            PENDING_CHECKIN: {
-                label: "Pending Clock-in",
-                variant: "warning" as const,
-                icon: AlertCircle,
-            },
-            CLOCKED_IN: {
-                label: "Clocked In",
-                variant: "success" as const,
-                icon: CheckCircle2,
-            },
-            PENDING_CHECKOUT: {
-                label: "Pending Clock-out",
-                variant: "warning" as const,
-                icon: AlertCircle,
-            },
-            CLOCKED_OUT: {
-                label: "Clocked Out",
-                variant: "secondary" as const,
-                icon: LogOut,
-            },
-            REJECTED: {
-                label: "Rejected",
-                variant: "destructive" as const,
-                icon: XCircle,
-            },
-            CANCELLED: {
-                label: "Cancelled",
-                variant: "secondary" as const,
-                icon: XCircle,
-            },
-        };
-
-        const config = statusConfig[status];
-        const Icon = config?.icon || Clock;
-
+    if (isLoading) {
         return (
-            <Badge variant={config?.variant as any} className="gap-1">
-                <Icon className="h-3 w-3" />
-                {config?.label || status}
-            </Badge>
-        );
-    };
-
-    if (isPending) {
-        return (
-            <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="min-h-screen bg-gray-50 p-6">
+                <div className="max-w-7xl mx-auto">
+                    <div className="animate-pulse space-y-4">
+                        <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                        <div className="h-64 bg-gray-200 rounded"></div>
+                    </div>
+                </div>
             </div>
         );
     }
 
-    if (!session?.user) {
+    // If not clocked in, show the clock-in requirement
+    if (!isClockedIn) {
         return (
-            <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
-                <Card className="w-full max-w-md">
-                    <CardHeader>
-                        <CardTitle>Authentication Required</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-muted-foreground">
-                            Please log in to access the orders system.
+            <div className="min-h-screen bg-gray-50 p-6">
+                <div className="max-w-2xl mx-auto mt-12">
+                    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-8 text-center mb-6 shadow-lg">
+                        <AlertTriangle className="h-20 w-20 text-yellow-600 mx-auto mb-4 animate-bounce" />
+                        <h2 className="text-3xl font-bold text-gray-800 mb-3">
+                            Clock In Required
+                        </h2>
+                        <p className="text-gray-600 text-lg mb-2">
+                            You must clock in before accessing the Orders page
                         </p>
-                    </CardContent>
-                </Card>
+                        <p className="text-sm text-gray-500">
+                            This ensures accurate time tracking for your shift
+                        </p>
+                    </div>
+                    <ClockInCard />
+                </div>
             </div>
         );
     }
 
+    // User is clocked in - show the full OrdersPage
     return (
-        <div className="container mx-auto max-w-7xl p-6">
-            {/* Header */}
-            <div className="mb-8 flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold">Orders & Attendance</h1>
-                    <p className="text-muted-foreground">
-                        Welcome, {session.user.name || session.user.email}
+        <div className="min-h-screen bg-gray-50">
+            {/* Top Status Bar - Compact */}
+            <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+                <div className="max-w-7xl mx-auto px-6 py-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                <span className="text-sm font-medium text-gray-700">
+                                    Clocked In
+                                </span>
+                            </div>
+
+                            {attendance && (
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <Clock className="h-4 w-4" />
+                                    <span>
+                                        Since {new Date(attendance.clockInTime).toLocaleTimeString("en-US", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                        })}
+                                    </span>
+                                </div>
+                            )}
+
+                            {attendance?.status === "pending" && (
+                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                                    Pending Approval
+                                </span>
+                            )}
+
+                            {attendance?.status === "confirmed" && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Confirmed
+                                </span>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                // You can add a modal or expand to show full attendance details
+                                const elem = document.getElementById("attendance-details");
+                                elem?.scrollIntoView({ behavior: "smooth" });
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                            View Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-7xl mx-auto p-6 space-y-6">
+                {/* Collapsible Attendance Details */}
+                <details className="bg-white rounded-lg shadow-sm" id="attendance-details">
+                    <summary className="px-6 py-4 cursor-pointer hover:bg-gray-50 rounded-lg font-medium text-gray-700 flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-blue-600" />
+                        Attendance Details
+                    </summary>
+                    <div className="px-6 pb-4 pt-2">
+                        <ClockInCard />
+                    </div>
+                </details>
+
+                {/* Main Orders Content */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <ShoppingCart className="h-7 w-7 text-blue-600" />
+                        <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
+                    </div>
+
+                    {/* Your existing orders functionality here */}
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {/* Sample Order Card */}
+                            <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h3 className="font-semibold text-lg">Order #1234</h3>
+                                        <p className="text-sm text-gray-500">Table 5</p>
+                                    </div>
+                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                                        Pending
+                                    </span>
+                                </div>
+                                <div className="space-y-1 text-sm text-gray-600 mb-3">
+                                    <p>• 2x Burger</p>
+                                    <p>• 1x Fries</p>
+                                    <p>• 2x Soda</p>
+                                </div>
+                                <button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-md font-medium transition-colors">
+                                    Mark as Served
+                                </button>
+                            </div>
+
+                            {/* Add more order cards or your actual order components */}
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-center min-h-[200px]">
+                                <div className="text-center text-gray-400">
+                                    <ShoppingCart className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">No more pending orders</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-4 mt-6 pt-6 border-t border-gray-200">
+                            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                                <ShoppingCart className="h-5 w-5" />
+                                New Order
+                            </button>
+                            <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+                                View All Orders
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Info Box */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                    <p className="font-medium mb-1">💡 Reminder</p>
+                    <p>
+                        Don't forget to clock out at the end of your shift!
+                        {attendance?.status === "pending" && " Your attendance is pending admin confirmation."}
                     </p>
                 </div>
-                {currentAttendance && getStatusBadge(currentAttendance.status)}
             </div>
-
-            {/* Location Status */}
-            <div className="mb-6 flex items-center gap-2 text-sm">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                {location ? (
-                    <span className="text-green-600">
-                        Location captured ✓
-                        <span className="ml-2 text-xs text-muted-foreground">
-                            ({location.coords.latitude.toFixed(6)}, {location.coords.longitude.toFixed(6)})
-                        </span>
-                    </span>
-                ) : locationError ? (
-                    <span className="text-destructive">{locationError}</span>
-                ) : (
-                    <span className="text-muted-foreground">
-                        Requesting location...
-                    </span>
-                )}
-            </div>
-
-            {/* Main Content Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-                    <TabsTrigger value="attendance" className="gap-2">
-                        <Clock className="h-4 w-4" />
-                        Attendance
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="orders"
-                        className="gap-2"
-                        disabled={currentAttendance?.status !== "CLOCKED_IN"}
-                    >
-                        <Coffee className="h-4 w-4" />
-                        Orders
-                    </TabsTrigger>
-                </TabsList>
-
-                {/* Attendance Tab */}
-                <TabsContent value="attendance" className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Today's Attendance</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {/* Clock In Button - Show if no attendance or rejected */}
-                            {(!currentAttendance || currentAttendance.status === "REJECTED" || currentAttendance.status === "CLOCKED_OUT") && (
-                                <Button
-                                    size="lg"
-                                    className="w-full"
-                                    onClick={handleClockIn}
-                                    disabled={isClockingIn || !location}
-                                >
-                                    {isClockingIn ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Requesting Clock-in...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Clock className="mr-2 h-4 w-4" />
-                                            Clock In
-                                        </>
-                                    )}
-                                </Button>
-                            )}
-
-                            {/* Active Session */}
-                            {currentAttendance?.status === "CLOCKED_IN" && (
-                                <div className="space-y-4">
-                                    <div className="rounded-lg bg-muted p-4 text-center">
-                                        <p className="text-sm text-muted-foreground">Time Elapsed</p>
-                                        <p className="font-mono text-4xl font-bold">{timeElapsed}</p>
-                                        <p className="mt-2 text-xs text-muted-foreground">
-                                            Clocked in at:{" "}
-                                            {new Date(currentAttendance.approvedCheckInAt!).toLocaleTimeString()}
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">
-                                            Work Summary <span className="text-destructive">*</span>
-                                        </label>
-                                        <Textarea
-                                            placeholder="Describe what you worked on today..."
-                                            value={workSummary}
-                                            onChange={(e) => setWorkSummary(e.target.value)}
-                                            rows={4}
-                                        />
-                                    </div>
-
-                                    <div className="flex gap-4">
-                                        <Button
-                                            size="lg"
-                                            variant="secondary"
-                                            className="flex-1"
-                                            onClick={() => setActiveTab("orders")}
-                                        >
-                                            <Coffee className="mr-2 h-4 w-4" />
-                                            Go to Orders
-                                        </Button>
-                                        <Button
-                                            size="lg"
-                                            variant="destructive"
-                                            className="flex-1"
-                                            onClick={handleClockOut}
-                                            disabled={isClockingOut || !location || !workSummary.trim()}
-                                        >
-                                            {isClockingOut ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Requesting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <LogOut className="mr-2 h-4 w-4" />
-                                                    Clock Out
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Pending States */}
-                            {currentAttendance?.status === "PENDING_CHECKIN" && (
-                                <div className="rounded-lg bg-yellow-50 p-6 text-center dark:bg-yellow-950/20">
-                                    <AlertCircle className="mx-auto mb-2 h-8 w-8 text-yellow-600" />
-                                    <h3 className="font-semibold">Clock-in Pending Approval</h3>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Your manager will review your clock-in request shortly.
-                                    </p>
-                                    <p className="mt-4 text-xs text-muted-foreground">
-                                        Requested at:{" "}
-                                        {new Date(currentAttendance.requestedCheckInAt!).toLocaleTimeString()}
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        className="mt-4"
-                                        onClick={() => {
-                                            toast.info("Checking for updates...");
-                                            checkTodayAttendance();
-                                        }}
-                                    >
-                                        <Clock className="mr-2 h-4 w-4" />
-                                        Check Status
-                                    </Button>
-                                </div>
-                            )}
-
-                            {currentAttendance?.status === "PENDING_CHECKOUT" && (
-                                <div className="rounded-lg bg-yellow-50 p-6 text-center dark:bg-yellow-950/20">
-                                    <AlertCircle className="mx-auto mb-2 h-8 w-8 text-yellow-600" />
-                                    <h3 className="font-semibold">Clock-out Pending Approval</h3>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Your manager will review your clock-out request shortly.
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        className="mt-4"
-                                        onClick={() => {
-                                            toast.info("Checking for updates...");
-                                            checkTodayAttendance();
-                                        }}
-                                    >
-                                        <Clock className="mr-2 h-4 w-4" />
-                                        Check Status
-                                    </Button>
-                                </div>
-                            )}
-
-                            {/* Completed */}
-                            {currentAttendance?.status === "CLOCKED_OUT" && (
-                                <div className="rounded-lg bg-green-50 p-6 text-center dark:bg-green-950/20">
-                                    <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green-600" />
-                                    <h3 className="font-semibold">Successfully Clocked Out</h3>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        Your attendance has been recorded.
-                                    </p>
-                                    <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-                                        <div>
-                                            <p className="text-muted-foreground">Total Hours</p>
-                                            <p className="font-medium">
-                                                {currentAttendance.totalHours?.toFixed(2)} hrs
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-muted-foreground">Status</p>
-                                            <p className="font-medium text-green-600">Completed</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Rejected */}
-                            {currentAttendance?.status === "REJECTED" && (
-                                <div className="rounded-lg bg-destructive/10 p-6 text-center">
-                                    <XCircle className="mx-auto mb-2 h-8 w-8 text-destructive" />
-                                    <h3 className="font-semibold text-destructive">
-                                        Request Rejected
-                                    </h3>
-                                    <p className="mt-2 text-sm text-muted-foreground">
-                                        {currentAttendance.rejectionReason ||
-                                            "Your attendance request was rejected."}
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        className="mt-4"
-                                        onClick={handleClockIn}
-                                        disabled={isClockingIn}
-                                    >
-                                        {isClockingIn ? (
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Clock className="mr-2 h-4 w-4" />
-                                        )}
-                                        Submit New Request
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Orders Tab */}
-                <TabsContent value="orders" className="space-y-6">
-                    {currentAttendance?.status === "CLOCKED_IN" ? (
-                        <>
-                            {/* Quick Stats */}
-                            <div className="grid gap-4 md:grid-cols-3">
-                                <Card>
-                                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                        <CardTitle className="text-sm font-medium">
-                                            Today's Orders
-                                        </CardTitle>
-                                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold">24</div>
-                                        <p className="text-xs text-muted-foreground">
-                                            +12% from yesterday
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                        <CardTitle className="text-sm font-medium">
-                                            Pending Orders
-                                        </CardTitle>
-                                        <Clock className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold">8</div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Requires attention
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                        <CardTitle className="text-sm font-medium">
-                                            Active Staff
-                                        </CardTitle>
-                                        <Users className="h-4 w-4 text-muted-foreground" />
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold">5</div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Currently clocked in
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            {/* Orders Grid */}
-                            <div className="grid gap-6 lg:grid-cols-2">
-                                {/* Active Orders */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center justify-between">
-                                            <span>Active Orders</span>
-                                            <Badge variant="secondary">8 pending</Badge>
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            {[1, 2, 3, 4, 5].map((i) => (
-                                                <div
-                                                    key={i}
-                                                    className="flex items-center justify-between rounded-lg border p-4"
-                                                >
-                                                    <div>
-                                                        <p className="font-medium">Table {i + 2}</p>
-                                                        <p className="text-sm text-muted-foreground">
-                                                            Order #{Math.floor(Math.random() * 1000)}
-                                                        </p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <Badge variant="outline">In Progress</Badge>
-                                                        <p className="mt-1 text-xs text-muted-foreground">
-                                                            5 min ago
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Menu Items */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Utensils className="h-5 w-5" />
-                                            Quick Menu
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <Button variant="outline" className="h-24 flex-col gap-2">
-                                                <Coffee className="h-6 w-6" />
-                                                <span>New Order</span>
-                                            </Button>
-                                            <Button variant="outline" className="h-24 flex-col gap-2">
-                                                <ShoppingCart className="h-6 w-6" />
-                                                <span>View Cart</span>
-                                            </Button>
-                                            <Button variant="outline" className="h-24 flex-col gap-2">
-                                                <Clock className="h-6 w-6" />
-                                                <span>Order History</span>
-                                            </Button>
-                                            <Button variant="outline" className="h-24 flex-col gap-2">
-                                                <Users className="h-6 w-6" />
-                                                <span>Staff</span>
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </>
-                    ) : (
-                        <Card>
-                            <CardContent className="flex flex-col items-center justify-center py-12">
-                                <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground" />
-                                <h3 className="mb-2 text-lg font-semibold">Access Restricted</h3>
-                                <p className="mb-6 text-center text-muted-foreground">
-                                    You need to be clocked in and approved to access orders.
-                                </p>
-                                <Button onClick={() => setActiveTab("attendance")}>
-                                    <Clock className="mr-2 h-4 w-4" />
-                                    Go to Attendance
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-            </Tabs>
         </div>
     );
 };
