@@ -36,7 +36,7 @@ export function LoginForm({
     try {
       await authClient.sendVerificationEmail({
         email: userEmail,
-        callbackURL: "/login?verified=true",
+        callbackURL: "/?verified=true",
       });
 
       toast.success("Verification email sent! Please check your inbox.");
@@ -64,7 +64,7 @@ export function LoginForm({
               setLoading(false);
               return;
             }
-            toast.success("Login successful! Setting up 2FA...");
+            toast.success("Login successful! Setting up 2FA");
             playSuccess();
             router.replace("/setup-2fa");
           },
@@ -373,18 +373,6 @@ export function LoginForm({
           </CardContent>
         </Card>
       )}
-
-      <p className="px-6 text-center text-sm text-muted-foreground">
-        By continuing, you agree to our{" "}
-        <a href="/terms" className="underline">
-          Terms
-        </a>{" "}
-        and{" "}
-        <a href="/privacy" className="underline">
-          Privacy Policy
-        </a>
-        .
-      </p>
     </div>
   );
 }

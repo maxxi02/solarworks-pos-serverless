@@ -14,13 +14,33 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { 
+  Unit,
+  UnitCategory,
+  getUnitCategory,
+  isValidUnit,
+  getCompatibleUnits, // ✅ Now this exists
+  getCompatibleUnitsForUnit,
+  formatQuantity,
+  normalizeToBaseUnit,
+  getBaseUnit,
+  areUnitsCompatible,
+  hasDensity,
+  ingredientDensities,
+  convertUnit
+} from '@/lib/unit-conversion';
 
 // Types
 export interface ProductIngredient {
-  inventoryItemId: string;
-  name: string;
-  quantity: number;
-  unit: string;
+  inventoryItemId: string;     // Link to inventory item
+  name: string;               // Ingredient name (from inventory)
+  quantity: number;           // Quantity in recipe unit
+  unit: Unit;                // Recipe unit (tsp, g, etc)
+  baseQuantity?: number;     // Normalized quantity in base unit (g, mL, pieces, cm)
+  baseUnit?: Unit;          // Base unit from inventory
+  displayQuantity?: number;  // Formatted quantity for display
+  displayUnit?: Unit;       // Display unit
+  conversionNote?: string;  // Human-readable conversion explanation
 }
 
 interface InventoryItem {
@@ -29,10 +49,15 @@ interface InventoryItem {
   category: string;
   currentStock: number;
   minStock: number;
-  unit: string;
+  maxStock: number;
+  unit: Unit;              // Base unit (g, mL, pieces, cm)
+  displayUnit: Unit;       // Display unit (kg, L, tsp, etc)
+  unitCategory: UnitCategory;
+  density?: number;
   pricePerUnit: number;
   supplier?: string;
   status: string;
+  currentStockDisplay?: string;
 }
 
 interface ProductIngredientsFormProps {
@@ -42,38 +67,20 @@ interface ProductIngredientsFormProps {
   loading?: boolean;
 }
 
-// Unit conversion mapping
-const UNIT_CONVERSION: Record<string, { baseUnit: string; multiplier: number }> = {
-  // Weight
-  'g': { baseUnit: 'g', multiplier: 1 },
-  'grams': { baseUnit: 'g', multiplier: 1 },
-  'kg': { baseUnit: 'g', multiplier: 1000 },
-  'kilograms': { baseUnit: 'g', multiplier: 1000 },
-  'oz': { baseUnit: 'g', multiplier: 28.35 },
-  'ounces': { baseUnit: 'g', multiplier: 28.35 },
-  
-  // Volume
-  'ml': { baseUnit: 'ml', multiplier: 1 },
-  'milliliters': { baseUnit: 'ml', multiplier: 1 },
-  'L': { baseUnit: 'ml', multiplier: 1000 },
-  'liters': { baseUnit: 'ml', multiplier: 1000 },
-  'cups': { baseUnit: 'ml', multiplier: 240 },
-  'tbsp': { baseUnit: 'ml', multiplier: 15 },
-  'tablespoons': { baseUnit: 'ml', multiplier: 15 },
-  'tsp': { baseUnit: 'ml', multiplier: 5 },
-  'teaspoons': { baseUnit: 'ml', multiplier: 5 },
-  
-  // Count
-  'pieces': { baseUnit: 'pieces', multiplier: 1 },
-  'pcs': { baseUnit: 'pieces', multiplier: 1 },
-  'boxes': { baseUnit: 'boxes', multiplier: 1 },
-  'bottles': { baseUnit: 'bottles', multiplier: 1 },
-  'bags': { baseUnit: 'bags', multiplier: 1 }
+// Common units for dropdown - organized by category
+const COMMON_UNITS: Record<UnitCategory, readonly Unit[]> = {
+  weight: ['g', 'kg', 'oz', 'lb'],
+  volume: ['mL', 'L', 'tsp', 'tbsp', 'cup', 'fl_oz'],
+  count: ['pieces', 'boxes', 'bottles', 'bags', 'packs'],
+  length: ['cm', 'm', 'inch']
 };
 
-// Common units for dropdown
-const COMMON_UNITS = [
-  'grams', 'kg', 'ml', 'L', 'pieces', 'cups', 'tbsp', 'tsp', 'oz', 'boxes', 'bottles', 'bags'
+// Flatten for dropdown
+const ALL_COMMON_UNITS: Unit[] = [
+  ...COMMON_UNITS.weight,
+  ...COMMON_UNITS.volume,
+  ...COMMON_UNITS.count,
+  ...COMMON_UNITS.length
 ];
 
 export function ProductIngredientsForm({
@@ -87,7 +94,7 @@ export function ProductIngredientsForm({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [quantity, setQuantity] = useState('');
-  const [unit, setUnit] = useState('');
+  const [unit, setUnit] = useState<Unit>('g');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   const [expandedIngredients, setExpandedIngredients] = useState<Record<string, boolean>>({});
@@ -105,34 +112,132 @@ export function ProductIngredientsForm({
 
   // Initialize with selected item
   useEffect(() => {
-    if (selectedItem && !unit) {
-      setUnit(selectedItem.unit || 'grams');
+    if (selectedItem) {
+      // Set default unit to the item's display unit
+      setUnit(selectedItem.displayUnit || selectedItem.unit);
     }
-  }, [selectedItem, unit]);
+  }, [selectedItem]);
 
   // Calculate total cost of ingredients
   const calculateTotalCost = useCallback(() => {
     return ingredients.reduce((total, ingredient) => {
       const inventoryItem = inventoryItems.find(item => item._id === ingredient.inventoryItemId);
       if (inventoryItem) {
-        const convertedQuantity = convertQuantity(ingredient.quantity, ingredient.unit, inventoryItem.unit);
-        return total + (convertedQuantity * inventoryItem.pricePerUnit);
+        // Use base quantity if available, otherwise convert
+        const baseQuantity = ingredient.baseQuantity || convertQuantity(
+          ingredient.quantity,
+          ingredient.unit,
+          inventoryItem.unit,
+          inventoryItem.name,
+          inventoryItem.density
+        );
+        return total + (baseQuantity * inventoryItem.pricePerUnit);
       }
       return total;
     }, 0);
   }, [ingredients, inventoryItems]);
 
-  // Convert quantity between units
-  const convertQuantity = (quantity: number, fromUnit: string, toUnit: string): number => {
-    const from = UNIT_CONVERSION[fromUnit.toLowerCase()] || { baseUnit: fromUnit, multiplier: 1 };
-    const to = UNIT_CONVERSION[toUnit.toLowerCase()] || { baseUnit: toUnit, multiplier: 1 };
-    
-    if (from.baseUnit === to.baseUnit) {
-      return (quantity * from.multiplier) / to.multiplier;
+  // Convert quantity between units with density support
+  const convertQuantity = (
+    quantity: number,
+    fromUnit: Unit,
+    toUnit: Unit,
+    ingredientName?: string,
+    density?: number
+  ): number => {
+    try {
+      // If units are the same, no conversion needed
+      if (fromUnit === toUnit) return quantity;
+      
+      // Check if units are compatible
+      if (!areUnitsCompatible(fromUnit, toUnit)) {
+        const fromCategory = getUnitCategory(fromUnit);
+        const toCategory = getUnitCategory(toUnit);
+        
+        // If converting between weight and volume, check for density
+        if ((fromCategory === 'weight' && toCategory === 'volume') ||
+            (fromCategory === 'volume' && toCategory === 'weight')) {
+          
+          // Use provided density or check global density lookup
+          const densityValue = density || (ingredientName ? hasDensity(ingredientName) ? 
+            ingredientDensities[ingredientName.toLowerCase()] : undefined : undefined);
+          
+          if (!densityValue) {
+            toast.error(`Cannot convert ${fromUnit} to ${toUnit}`, {
+              description: `No density data for ${ingredientName || 'this ingredient'}`
+            });
+            return quantity;
+          }
+          
+          // Weight to volume: g -> mL
+          if (fromCategory === 'weight' && toCategory === 'volume') {
+            const grams = convertQuantity(quantity, fromUnit, 'g');
+            const ml = grams / densityValue;
+            return convertQuantity(ml, 'mL', toUnit);
+          }
+          
+          // Volume to weight: mL -> g
+          if (fromCategory === 'volume' && toCategory === 'weight') {
+            const ml = convertQuantity(quantity, fromUnit, 'mL');
+            const grams = ml * densityValue;
+            return convertQuantity(grams, 'g', toUnit);
+          }
+        }
+        
+        // If we can't convert, return original quantity and warn
+        console.warn(`Cannot convert ${fromUnit} to ${toUnit}: different categories`);
+        return quantity;
+      }
+      
+      // Same category conversion
+      // Normalize to base unit first, then convert
+      const normalized = normalizeToBaseUnit(quantity, fromUnit);
+      const normalizedQuantity = normalized.quantity;
+      const baseUnit = normalized.unit as Unit;
+      
+      // Convert from base unit to target unit
+      return convertUnit(normalizedQuantity, baseUnit, toUnit);
+      
+    } catch (error) {
+      console.error('Conversion error:', error);
+      return quantity;
     }
-    
-    // If units are incompatible, return original quantity
-    return quantity;
+  };
+
+  // Normalize ingredient to base unit
+  const normalizeIngredient = (
+    ingredient: ProductIngredient,
+    inventoryItem: InventoryItem
+  ): ProductIngredient => {
+    try {
+      const baseQuantity = convertQuantity(
+        ingredient.quantity,
+        ingredient.unit,
+        inventoryItem.unit,
+        inventoryItem.name,
+        inventoryItem.density
+      );
+      
+      const formattedBaseQuantity = formatQuantity(baseQuantity, inventoryItem.unit);
+      
+      // Create conversion note
+      let conversionNote: string | undefined;
+      if (ingredient.unit !== inventoryItem.unit) {
+        conversionNote = `${ingredient.quantity} ${ingredient.unit} = ${formattedBaseQuantity} ${inventoryItem.unit}`;
+      }
+      
+      return {
+        ...ingredient,
+        baseQuantity: formattedBaseQuantity,
+        baseUnit: inventoryItem.unit,
+        displayQuantity: ingredient.quantity,
+        displayUnit: ingredient.unit,
+        conversionNote
+      };
+    } catch (error) {
+      console.error('Failed to normalize ingredient:', error);
+      return ingredient;
+    }
   };
 
   // Handle adding ingredient
@@ -144,6 +249,25 @@ export function ProductIngredientsForm({
 
     const quantityNum = Number(quantity);
     
+    // Validate unit
+    if (!isValidUnit(unit)) {
+      toast.error('Invalid unit', {
+        description: `"${unit}" is not a valid unit`
+      });
+      return;
+    }
+    
+    // Create new ingredient
+    const newIngredient: ProductIngredient = {
+      inventoryItemId: selectedItem._id,
+      name: selectedItem.name,
+      quantity: quantityNum,
+      unit: unit
+    };
+    
+    // Normalize to base unit
+    const normalizedIngredient = normalizeIngredient(newIngredient, selectedItem);
+    
     // Check if ingredient already exists
     const existingIndex = ingredients.findIndex(
       ing => ing.inventoryItemId === selectedItem._id
@@ -152,23 +276,29 @@ export function ProductIngredientsForm({
     let newIngredients: ProductIngredient[];
     
     if (existingIndex >= 0) {
-      // Update existing ingredient
-      newIngredients = [...ingredients];
-      newIngredients[existingIndex] = {
-        ...newIngredients[existingIndex],
-        quantity: newIngredients[existingIndex].quantity + quantityNum
+      // Update existing ingredient - add quantities
+      const existing = ingredients[existingIndex];
+      const updatedIngredient: ProductIngredient = {
+        ...existing,
+        quantity: existing.quantity + quantityNum,
+        unit: unit // Use new unit
       };
-      toast.info(`Updated quantity for ${selectedItem.name}`);
+      
+      // Re-normalize
+      const renormalized = normalizeIngredient(updatedIngredient, selectedItem);
+      
+      newIngredients = [...ingredients];
+      newIngredients[existingIndex] = renormalized;
+      
+      toast.info(`Updated quantity for ${selectedItem.name}`, {
+        description: renormalized.conversionNote
+      });
     } else {
       // Add new ingredient
-      const newIngredient: ProductIngredient = {
-        inventoryItemId: selectedItem._id,
-        name: selectedItem.name,
-        quantity: quantityNum,
-        unit: unit || selectedItem.unit
-      };
-      newIngredients = [...ingredients, newIngredient];
-      toast.success(`Added ${selectedItem.name} to recipe`);
+      newIngredients = [...ingredients, normalizedIngredient];
+      toast.success(`Added ${selectedItem.name} to recipe`, {
+        description: normalizedIngredient.conversionNote
+      });
     }
 
     setIngredients(newIngredients);
@@ -177,7 +307,7 @@ export function ProductIngredientsForm({
     // Reset form
     setSelectedItem(null);
     setQuantity('');
-    setUnit('');
+    setUnit('g');
     setSearchQuery('');
     setShowSearchResults(false);
   };
@@ -197,23 +327,46 @@ export function ProductIngredientsForm({
     if (isNaN(numQuantity) || numQuantity <= 0) return;
 
     const newIngredients = [...ingredients];
-    newIngredients[index] = {
-      ...newIngredients[index],
-      quantity: numQuantity
-    };
-    setIngredients(newIngredients);
-    onIngredientsChange(newIngredients);
+    const ingredient = newIngredients[index];
+    const inventoryItem = inventoryItems.find(item => item._id === ingredient.inventoryItemId);
+    
+    if (inventoryItem) {
+      ingredient.quantity = numQuantity;
+      const normalized = normalizeIngredient(ingredient, inventoryItem);
+      newIngredients[index] = normalized;
+      
+      setIngredients(newIngredients);
+      onIngredientsChange(newIngredients);
+      
+      toast.info(`Updated quantity for ${ingredient.name}`, {
+        description: normalized.conversionNote
+      });
+    }
   };
 
   // Handle unit change for existing ingredient
   const handleUnitChange = (index: number, newUnit: string) => {
+    if (!isValidUnit(newUnit)) {
+      toast.error(`Invalid unit: ${newUnit}`);
+      return;
+    }
+
     const newIngredients = [...ingredients];
-    newIngredients[index] = {
-      ...newIngredients[index],
-      unit: newUnit
-    };
-    setIngredients(newIngredients);
-    onIngredientsChange(newIngredients);
+    const ingredient = newIngredients[index];
+    const inventoryItem = inventoryItems.find(item => item._id === ingredient.inventoryItemId);
+    
+    if (inventoryItem) {
+      ingredient.unit = newUnit as Unit;
+      const normalized = normalizeIngredient(ingredient, inventoryItem);
+      newIngredients[index] = normalized;
+      
+      setIngredients(newIngredients);
+      onIngredientsChange(newIngredients);
+      
+      toast.info(`Updated unit for ${ingredient.name}`, {
+        description: normalized.conversionNote
+      });
+    }
   };
 
   // Toggle ingredient details
@@ -243,18 +396,34 @@ export function ProductIngredientsForm({
   // Calculate required stock vs available
   const calculateStockRequirement = (ingredient: ProductIngredient) => {
     const inventoryItem = getInventoryItem(ingredient.inventoryItemId);
-    if (!inventoryItem) return { sufficient: false, required: 0, available: 0 };
+    if (!inventoryItem) return { sufficient: false, required: 0, available: 0, unit: '' };
     
-    const required = convertQuantity(ingredient.quantity, ingredient.unit, inventoryItem.unit);
+    // Use base quantity if available
+    const required = ingredient.baseQuantity || convertQuantity(
+      ingredient.quantity,
+      ingredient.unit,
+      inventoryItem.unit,
+      inventoryItem.name,
+      inventoryItem.density
+    );
+    
     const sufficient = inventoryItem.currentStock >= required;
     
     return {
       sufficient,
-      required,
+      required: formatQuantity(required, inventoryItem.unit),
       available: inventoryItem.currentStock,
-      unit: inventoryItem.unit
+      unit: inventoryItem.unit,
+      displayRequired: ingredient.displayQuantity || ingredient.quantity,
+      displayUnit: ingredient.displayUnit || ingredient.unit
     };
   };
+
+  // Get compatible units for selected item
+  const getCompatibleUnitsForSelected = useCallback((): Unit[] => {
+    if (!selectedItem) return ALL_COMMON_UNITS;
+    return getCompatibleUnits(selectedItem.unitCategory);
+  }, [selectedItem]);
 
   // Total cost
   const totalCost = calculateTotalCost();
@@ -268,6 +437,9 @@ export function ProductIngredientsForm({
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           Add ingredients from inventory. When this product is sold, inventory will be automatically deducted.
+          <span className="block mt-1 text-xs text-blue-600 dark:text-blue-500">
+            Units will be automatically converted based on inventory settings.
+          </span>
         </p>
       </div>
 
@@ -329,7 +501,7 @@ export function ProductIngredientsForm({
                       }`}
                       onClick={() => {
                         setSelectedItem(item);
-                        setUnit(item.unit || 'grams');
+                        setUnit(item.displayUnit || item.unit);
                         setShowSearchResults(false);
                       }}
                     >
@@ -352,10 +524,10 @@ export function ProductIngredientsForm({
                         </div>
                         <div className="text-right">
                           <div className="font-medium text-gray-900 dark:text-white">
-                            {item.currentStock} {item.unit}
+                            {item.currentStockDisplay || `${item.currentStock} ${item.displayUnit || item.unit}`}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-500">
-                            ₱{item.pricePerUnit.toFixed(2)}/{item.unit}
+                            ₱{item.pricePerUnit.toFixed(2)}/{item.displayUnit || item.unit}
                           </div>
                         </div>
                       </div>
@@ -383,16 +555,21 @@ export function ProductIngredientsForm({
               <div>
                 <span className="text-gray-600 dark:text-gray-400">Available:</span>
                 <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                  {selectedItem.currentStock} {selectedItem.unit}
+                  {selectedItem.currentStockDisplay || `${selectedItem.currentStock} ${selectedItem.displayUnit || selectedItem.unit}`}
                 </span>
               </div>
               <div>
                 <span className="text-gray-600 dark:text-gray-400">Price:</span>
                 <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                  ₱{selectedItem.pricePerUnit.toFixed(2)}/{selectedItem.unit}
+                  ₱{selectedItem.pricePerUnit.toFixed(2)}/{selectedItem.displayUnit || selectedItem.unit}
                 </span>
               </div>
             </div>
+            {selectedItem.density && (
+              <div className="mt-1 text-xs text-blue-600 dark:text-blue-500">
+                Density: {selectedItem.density} g/mL (supports weight/volume conversion)
+              </div>
+            )}
           </div>
         )}
 
@@ -415,7 +592,7 @@ export function ProductIngredientsForm({
               />
               <div className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 min-w-[100px]">
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {unit || selectedItem?.unit || 'unit'}
+                  {unit || selectedItem?.displayUnit || selectedItem?.unit || 'unit'}
                 </span>
               </div>
             </div>
@@ -427,17 +604,22 @@ export function ProductIngredientsForm({
             </label>
             <select
               value={unit}
-              onChange={(e) => setUnit(e.target.value)}
+              onChange={(e) => setUnit(e.target.value as Unit)}
               className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500"
               disabled={!selectedItem}
             >
               <option value="">Select unit</option>
-              {COMMON_UNITS.map(unit => (
-                <option key={unit} value={unit}>
-                  {unit}
+              {getCompatibleUnitsForSelected().map((unitOption) => (
+                <option key={unitOption} value={unitOption}>
+                  {unitOption}
                 </option>
               ))}
             </select>
+            {selectedItem && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Compatible units: {getCompatibleUnits(selectedItem.unitCategory).join(', ')}
+              </p>
+            )}
           </div>
         </div>
 
@@ -504,9 +686,19 @@ export function ProductIngredientsForm({
                               Insufficient Stock
                             </span>
                           )}
+                          {ingredient.conversionNote && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
+                              Converted
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          {ingredient.quantity} {ingredient.unit} required per serving
+                          {ingredient.displayQuantity || ingredient.quantity} {ingredient.displayUnit || ingredient.unit} per serving
+                          {ingredient.conversionNote && (
+                            <span className="ml-2 text-xs text-blue-600 dark:text-blue-500">
+                              ({ingredient.conversionNote})
+                            </span>
+                          )}
                         </div>
                       </div>
                       
@@ -518,7 +710,7 @@ export function ProductIngredientsForm({
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                               : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
                           }`}>
-                            {stockReq.available.toFixed(2)}/{stockReq.required.toFixed(2)} {inventoryItem.unit}
+                            {stockReq.available.toFixed(2)}/{stockReq.required.toFixed(2)} {stockReq.unit}
                           </div>
                         )}
                         
@@ -564,11 +756,16 @@ export function ProductIngredientsForm({
                               onChange={(e) => handleUnitChange(index, e.target.value)}
                               className="border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm bg-white dark:bg-black"
                             >
-                              {COMMON_UNITS.map(unit => (
-                                <option key={unit} value={unit}>{unit}</option>
+                              {getCompatibleUnits(inventoryItem.unitCategory).map((unitOption) => (
+                                <option key={unitOption} value={unitOption}>{unitOption}</option>
                               ))}
                             </select>
                           </div>
+                          {ingredient.conversionNote && (
+                            <p className="mt-1 text-xs text-blue-600 dark:text-blue-500">
+                              {ingredient.conversionNote}
+                            </p>
+                          )}
                         </div>
                         
                         <div>
@@ -608,8 +805,14 @@ export function ProductIngredientsForm({
                           </div>
                           <div className="flex justify-between mt-1">
                             <span>Inventory Item Price:</span>
-                            <span>₱{inventoryItem.pricePerUnit.toFixed(2)}/{inventoryItem.unit}</span>
+                            <span>₱{inventoryItem.pricePerUnit.toFixed(2)}/{inventoryItem.displayUnit || inventoryItem.unit}</span>
                           </div>
+                          {inventoryItem.density && (
+                            <div className="flex justify-between mt-1 text-blue-600 dark:text-blue-500">
+                              <span>Density:</span>
+                              <span>{inventoryItem.density} g/mL</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

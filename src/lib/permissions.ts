@@ -16,6 +16,7 @@ export const statement = {
     "list", // ← add this!
     "ban", // optional, but useful for admin
     "unban",
+    "set-role"
     // "impersonate" if you want impersonation
   ],
 } as const;
@@ -29,7 +30,7 @@ export const staff = ac.newRole({
 });
 
 export const admin = ac.newRole({
-  user: ["create", "update", "delete", "read", "view", "list", "ban", "unban"],
+  user: ["create", "update", "delete", "read", "view", "list", "ban", "unban", "set-role"],
   ...adminAc.statements,
 });
 

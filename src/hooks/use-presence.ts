@@ -12,21 +12,20 @@ export function usePresence(): void {
   const { data: session } = authClient.useSession();
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const activityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialized = useRef(false);
 
   useEffect(() => {
-    if (!session?.user?.id || isInitialized.current) return;
+    const userId = session?.user?.id;
+    if (!userId) return;
 
-    isInitialized.current = true;
+    console.log("🔌 Initializing presence for user:", userId);
 
     // ─── Connect to Socket.IO ────────────────────────────────────
 
-    const socket = socketClient.connect(session.user.id);
+    const socket = socketClient.connect(userId);
 
     // ─── Emit Online Status ──────────────────────────────────────
 
     const handleConnect = (): void => {
-      // Only emit if socket is connected
       if (socketClient.isConnected()) {
         socketClient.emitOnline();
         console.log("📡 User status set to ONLINE");
@@ -71,7 +70,6 @@ export function usePresence(): void {
         console.log("👀 Tab hidden");
       } else {
         console.log("👀 Tab visible again");
-        // Check if connected before emitting
         if (socketClient.isConnected()) {
           socketClient.emitOnline();
         }
@@ -107,7 +105,6 @@ export function usePresence(): void {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       socketClient.disconnect();
-      isInitialized.current = false;
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id]); // Removed isInitialized
 }

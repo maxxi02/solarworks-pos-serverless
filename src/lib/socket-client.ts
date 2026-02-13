@@ -18,6 +18,28 @@ export interface UserActivityUpdate {
   lastSeen: Date;
 }
 
+export interface AttendanceApprovedData {
+  attendanceId: string;
+  userId: string;
+  status: string;
+  totalHours?: number;
+  approvedBy: string;
+}
+
+export interface AttendanceRejectedData {
+  attendanceId: string;
+  userId: string;
+  status: string;
+  rejectionReason: string;
+  rejectedBy: string;
+}
+
+export interface AttendanceStatusChangedData {
+  attendanceId: string;
+  userId: string;
+  status: string;
+}
+
 // ─── Socket Client Class ─────────────────────────────────────────
 
 class SocketClient {
@@ -90,6 +112,8 @@ class SocketClient {
     this.socket.emit("user:activity");
   }
 
+  // ─── User Status Listeners ───────────────────────────────────────
+
   /**
    * Listen for user status changes
    */
@@ -117,6 +141,52 @@ class SocketClient {
   offActivityUpdated(callback?: (data: UserActivityUpdate) => void): void {
     this.socket?.off("user:activity:updated", callback);
   }
+
+  // ─── Attendance Event Listeners ──────────────────────────────────
+
+  /**
+   * Listen for attendance approval notifications
+   */
+  onAttendanceApproved(callback: (data: AttendanceApprovedData) => void): void {
+    this.socket?.on("attendance:approved", callback);
+  }
+
+  /**
+   * Listen for attendance rejection notifications
+   */
+  onAttendanceRejected(callback: (data: AttendanceRejectedData) => void): void {
+    this.socket?.on("attendance:rejected", callback);
+  }
+
+  /**
+   * Listen for attendance status changes
+   */
+  onAttendanceStatusChanged(callback: (data: AttendanceStatusChangedData) => void): void {
+    this.socket?.on("attendance:status:changed", callback);
+  }
+
+  /**
+   * Remove attendance approved listener
+   */
+  offAttendanceApproved(callback?: (data: AttendanceApprovedData) => void): void {
+    this.socket?.off("attendance:approved", callback);
+  }
+
+  /**
+   * Remove attendance rejected listener
+   */
+  offAttendanceRejected(callback?: (data: AttendanceRejectedData) => void): void {
+    this.socket?.off("attendance:rejected", callback);
+  }
+
+  /**
+   * Remove attendance status changed listener
+   */
+  offAttendanceStatusChanged(callback?: (data: AttendanceStatusChangedData) => void): void {
+    this.socket?.off("attendance:status:changed", callback);
+  }
+
+  // ─── Utility Methods ─────────────────────────────────────────────
 
   /**
    * Get the current socket instance
