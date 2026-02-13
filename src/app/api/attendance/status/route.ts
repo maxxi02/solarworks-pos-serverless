@@ -1,12 +1,11 @@
-// app/api/attendance/clock-in/route.ts
+// app/api/attendance/status/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { AttendanceModel } from "@/models/attendance.model"; 
-import type { ClockInResponse } from "@/types/attendance"; 
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
@@ -20,26 +19,15 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id;
-    const attendance = await AttendanceModel.clockIn(userId);
+    const attendance = await AttendanceModel.getTodayAttendance(userId);
 
-    if (!attendance) {
-      const response: ClockInResponse = {
-        success: false,
-        message: "You have already clocked in today",
-        alreadyClockedIn: true,
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const response: ClockInResponse = {
+    return NextResponse.json({
       success: true,
       attendance,
-      message: "Successfully clocked in",
-    };
-
-    return NextResponse.json(response);
+      isClockedIn: !!attendance,
+    });
   } catch (error) {
-    console.error("Clock-in error:", error);
+    console.error("Get status error:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 },

@@ -1,425 +1,233 @@
+// StaffAttendancePage.tsx
+
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useSession } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import {
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  UserCheck,
-  MapPin,
-  UserX,
-  RefreshCw,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import type { AttendanceWithUser } from "@/types/attendance"; 
+import { CheckCircle, XCircle, Clock, Loader2, Calendar } from "lucide-react";
 
-type AttendanceStatus =
-  | "PENDING_CHECKIN"
-  | "PENDING_CHECKOUT"
-  | "CLOCKED_IN"
-  | "CLOCKED_OUT"
-  | "REJECTED"
-  | "CANCELLED";
-
-type PendingAttendance = {
-  id: string;
-  userId: string;
-  status: AttendanceStatus;
-  requestedCheckInAt?: string;
-  requestedCheckOutAt?: string;
-  checkInLocation?: { latitude: number; longitude: number };
-  checkOutLocation?: { latitude: number; longitude: number };
-  workSummary?: string;
-  user?: {
-    name?: string | null;
-    email: string;
-  };
-};
-
-const ManagerAttendancePage = () => {
-  const { data: session, isPending } = useSession();
-  const [pendingRequests, setPendingRequests] = useState<PendingAttendance[]>(
-    [],
-  );
+const StaffAttendancePage = () => {
+  const [pendingRecords, setPendingRecords] = useState<AttendanceWithUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch pending attendance requests
-  const fetchPendingRequests = async () => {
+  useEffect(() => {
+    fetchPendingAttendance();
+  }, []);
+
+  const fetchPendingAttendance = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/attendance/pending");
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      setError(null);
+
+      const response = await fetch("/api/attendance/admin/pending");
       const data = await response.json();
 
       if (data.success) {
-        const transformed = (data.attendances || []).map((att: any) => ({
-          id: att._id?.toString() || att.id,
-          userId: att.userId?.toString(),
-          status: att.status,
-          requestedCheckInAt: att.requestedCheckInAt,
-          requestedCheckOutAt: att.requestedCheckOutAt,
-          checkInLocation: att.checkInLocation,
-          checkOutLocation: att.checkOutLocation,
-          workSummary: att.workSummary,
-          user: att.user
-            ? {
-                name: att.user.name || null,
-                email: att.user.email || "unknown@example.com",
-              }
-            : { name: null, email: "unknown@example.com" },
-        }));
-
-        setPendingRequests(transformed);
+        setPendingRecords(data.records);
       } else {
-        toast.error("Failed to load requests", {
-          description: data.message || "Unknown error from server",
-        });
+        setError(data.message || "Failed to fetch attendance records");
       }
     } catch (err) {
-      console.error("Failed to fetch pending requests:", err);
-      toast.error("Connection error", {
-        description: "Could not load pending attendance requests.",
-      });
+      setError("Network error. Please try again.");
+      console.error("Fetch error:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRefresh = () => {
-    toast.info("Refreshing...", {
-      description: "Fetching latest requests...",
-    });
-    fetchPendingRequests();
-  };
-
-  // Poll every 10 seconds
-  useEffect(() => {
-    if (
-      session?.user?.id &&
-      ["manager", "admin"].includes(session.user.role || "")
-    ) {
-      fetchPendingRequests();
-      const interval = setInterval(fetchPendingRequests, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [session]);
-
-  // Approve handler
-  const handleApprove = async (
+  const handleUpdateStatus = async (
     attendanceId: string,
-    approveCheckIn: boolean,
-    approveCheckOut: boolean,
+    status: "confirmed" | "rejected",
+    adminNote?: string
   ) => {
-    if (!approveCheckIn && !approveCheckOut) return;
-
-    setProcessingId(attendanceId);
-
     try {
-      const response = await fetch("/api/attendance/approve", {
+      const response = await fetch("/api/attendance/admin/update-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          attendanceId,
-          approveCheckIn,
-          approveCheckOut,
-        }),
+        body: JSON.stringify({ attendanceId, status, adminNote }),
       });
 
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Approval failed");
+      if (data.success) {
+        // Remove from pending list
+        setPendingRecords((prev) =>
+          prev.filter((record) => record._id !== attendanceId)
+        );
+      } else {
+        alert(data.message || "Failed to update status");
       }
-
-      toast.success("Approved", {
-        description: `Status updated to ${data.status || "approved"}`,
-      });
-
-      // Only remove if success
-      setPendingRequests((prev) =>
-        prev.filter((req) => req.id !== attendanceId),
-      );
-
-      // Refresh list shortly after
-      setTimeout(fetchPendingRequests, 800);
-    } catch (err: any) {
-      toast.error("Approval failed", {
-        description: err.message || "Something went wrong.",
-      });
-      console.error("Approve error:", err);
-    } finally {
-      setProcessingId(null);
+    } catch (err) {
+      alert("Network error. Please try again.");
+      console.error("Update status error:", err);
     }
   };
 
-  // Reject handler
-  const handleReject = async (attendanceId: string) => {
-    const reason = window.prompt("Please enter reason for rejection:");
-    if (!reason?.trim()) {
-      toast.error("Rejection cancelled", {
-        description: "You must provide a reason.",
-      });
-      return;
-    }
-
-    setProcessingId(attendanceId);
-
-    try {
-      const response = await fetch("/api/attendance/reject", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          attendanceId,
-          reason: reason.trim(),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Rejection failed");
-      }
-
-      toast.error("Rejected", {
-        description: "Request has been rejected.",
-      });
-
-      setPendingRequests((prev) =>
-        prev.filter((req) => req.id !== attendanceId),
-      );
-      setTimeout(fetchPendingRequests, 800);
-    } catch (err: any) {
-      toast.error("Rejection failed", {
-        description: err.message || "Could not reject request.",
-      });
-    } finally {
-      setProcessingId(null);
-    }
+  const formatTime = (date: Date | string) => {
+    return new Date(date).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
-  const getUserDisplayName = (request: PendingAttendance) => {
-    if (!request.user) return "Unknown User";
-    return request.user.name || request.user.email || "Unknown User";
+  const formatDate = (date: Date | string) => {
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
-  // ────────────────────────────────────────────────
-  // Render
-  // ────────────────────────────────────────────────
-
-  if (isPending) {
+  if (isLoading) {
     return (
-      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (
-    !session?.user ||
-    !["manager", "admin"].includes(session.user.role || "")
-  ) {
-    return (
-      <div className="flex h-[calc(100vh-4rem)] items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Access Denied</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              You don't have permission to view this page.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-3 text-gray-600">Loading attendance records...</span>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto max-w-7xl p-6 pb-16">
-      {/* Header */}
-      <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Staff Attendance
-          </h1>
-          <p className="text-muted-foreground">
-            Review and approve pending clock-in / clock-out requests
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={isLoading}
-        >
-          <RefreshCw
-            className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-          />
-          Refresh
-        </Button>
-      </div>
-
-      {/* Main Content */}
-      <Card>
-        <CardHeader className="pb-3">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Clock className="h-5 w-5" />
-              Pending Requests
-            </CardTitle>
-            <Badge variant="secondary" className="text-sm">
-              {pendingRequests.length} pending
-            </Badge>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : pendingRequests.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <CheckCircle2 className="mb-4 h-12 w-12 text-green-500/80" />
-              <h3 className="text-lg font-semibold">All caught up!</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                No pending attendance requests at the moment.
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <Calendar className="h-6 w-6 text-blue-600" />
+                Staff Attendance Management
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Review and approve staff clock-in records
               </p>
-              <Button
-                variant="outline"
-                className="mt-6"
-                onClick={handleRefresh}
-              >
-                Check again
-              </Button>
+            </div>
+            <button
+              onClick={fetchPendingAttendance}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* Pending Records */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800">
+              Pending Approvals ({pendingRecords.length})
+            </h2>
+          </div>
+
+          {pendingRecords.length === 0 ? (
+            <div className="p-12 text-center">
+              <Clock className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No pending attendance records</p>
             </div>
           ) : (
-            <div className="space-y-5">
-              {pendingRequests.map((request) => (
-                <Card
-                  key={request.id}
-                  className="overflow-hidden border-l-4 border-l-yellow-400 dark:border-l-yellow-600"
-                >
-                  <CardContent className="p-6">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                      {/* Left - Info */}
-                      <div className="space-y-3 flex-1">
-                        <div className="flex items-center gap-3">
-                          {request.user ? (
-                            <UserCheck className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <UserX className="h-5 w-5 text-muted-foreground" />
-                          )}
-                          <span className="font-medium text-lg">
-                            {getUserDisplayName(request)}
-                          </span>
-                          <Badge variant="outline">
-                            {request.status === "PENDING_CHECKIN"
-                              ? "Clock-in"
-                              : "Clock-out"}
-                          </Badge>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Staff Member
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Clock In
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Clock Out
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Hours
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {pendingRecords.map((record) => (
+                    <tr key={record._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {record.user?.name || "Unknown"}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {record.user?.email}
+                          </div>
                         </div>
-
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>
-                            Requested:{" "}
-                            {new Date(
-                              request.requestedCheckInAt ||
-                                request.requestedCheckOutAt!,
-                            ).toLocaleString([], {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            })}
-                          </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {formatDate(record.date)}
                         </div>
-
-                        {request.checkInLocation && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            <span>
-                              Check-in:{" "}
-                              {request.checkInLocation.latitude.toFixed(5)},{" "}
-                              {request.checkInLocation.longitude.toFixed(5)}
-                            </span>
-                          </div>
-                        )}
-
-                        {request.checkOutLocation && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            <span>
-                              Check-out:{" "}
-                              {request.checkOutLocation.latitude.toFixed(5)},{" "}
-                              {request.checkOutLocation.longitude.toFixed(5)}
-                            </span>
-                          </div>
-                        )}
-
-                        {request.workSummary && (
-                          <div className="mt-3 rounded bg-muted/60 p-3 text-sm">
-                            <p className="font-medium mb-1">Work summary:</p>
-                            <p className="text-muted-foreground whitespace-pre-wrap">
-                              {request.workSummary}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right - Actions */}
-                      <div className="flex flex-row gap-3 lg:flex-col lg:gap-2">
-                        <Button
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 min-w-[110px]"
-                          onClick={() => {
-                            if (request.status === "PENDING_CHECKIN") {
-                              handleApprove(request.id, true, false);
-                            } else if (request.status === "PENDING_CHECKOUT") {
-                              handleApprove(request.id, false, true);
-                            }
-                          }}
-                          disabled={processingId === request.id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {formatTime(record.clockInTime)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {record.clockOutTime
+                            ? formatTime(record.clockOutTime)
+                            : "-"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {record.hoursWorked
+                            ? `${record.hoursWorked.toFixed(2)}h`
+                            : "-"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button
+                          onClick={() =>
+                            handleUpdateStatus(record._id, "confirmed")
+                          }
+                          className="inline-flex items-center px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-md transition-colors"
                         >
-                          {processingId === request.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                          )}
+                          <CheckCircle className="h-4 w-4 mr-1" />
                           Approve
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="min-w-[110px]"
-                          onClick={() => handleReject(request.id)}
-                          disabled={processingId === request.id}
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleUpdateStatus(record._id, "rejected")
+                          }
+                          className="inline-flex items-center px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-md transition-colors"
                         >
-                          {processingId === request.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <XCircle className="mr-2 h-4 w-4" />
-                          )}
+                          <XCircle className="h-4 w-4 mr-1" />
                           Reject
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default ManagerAttendancePage;
+export default StaffAttendancePage;
