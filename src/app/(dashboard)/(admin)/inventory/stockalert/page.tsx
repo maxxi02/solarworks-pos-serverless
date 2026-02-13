@@ -65,6 +65,14 @@ interface NewItemForm {
   density: string;
 }
 
+// API response type for adjustStock
+interface AdjustStockResponse {
+  newStock: number;
+  status: 'critical' | 'low' | 'warning' | 'ok';
+  adjustment: any;
+  conversionNote?: string;
+}
+
 function DeleteConfirmModal({
   isOpen,
   onClose,
@@ -311,6 +319,7 @@ export default function InventoryPage() {
         icon: 'package'
       };
 
+      // Use type assertion only at the API boundary
       const result = await createInventoryItem(inventoryItem as any);
       setInventory(prev => [...prev, result]);
       setShowAddModal(false);
@@ -389,14 +398,14 @@ export default function InventoryPage() {
           type: 'manual',
           id: `manual-${Date.now()}`
         }
-      });
+      }) as AdjustStockResponse;
 
       setInventory(prev => prev.map(item => {
         if (item._id?.toString() === showAdjustModal._id?.toString()) {
           return {
             ...item,
             currentStock: result.newStock,
-            status: result.status as any,
+            status: result.status,
             lastRestocked: adjustmentType === 'restock' ? new Date() : item.lastRestocked
           };
         }
@@ -512,8 +521,8 @@ export default function InventoryPage() {
   const totalValue = inventory.reduce((sum, item) => {
     try {
       if (!item.displayUnit || !item.unit) {
-      return sum + (item.currentStock * item.pricePerUnit);
-    }
+        return sum + (item.currentStock * item.pricePerUnit);
+      }
       const displayToBaseRatio = convertUnit(1, item.displayUnit, item.unit);
       const pricePerBaseUnit = item.pricePerUnit / displayToBaseRatio;
       return sum + (item.currentStock * pricePerBaseUnit);
@@ -533,7 +542,7 @@ export default function InventoryPage() {
             </p>
           </div>
           <div className="flex gap-2 mt-4 sm:mt-0">
-            <Link href="/inventory/audit">
+            <Link href="/inventory/stockalert/audit">
               <button className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900">
                 <History className="h-4 w-4" />
                 Audit Trail
@@ -683,8 +692,8 @@ export default function InventoryPage() {
                   {inventory.map((item) => {
                     const itemId = item._id?.toString() || '';
                     const basePrice = item.displayUnit && item.unit 
-                    ? (item.pricePerUnit / convertUnit(1, item.displayUnit, item.unit)).toFixed(2)
-                    : item.pricePerUnit.toFixed(2);
+                      ? (item.pricePerUnit / convertUnit(1, item.displayUnit, item.unit)).toFixed(2)
+                      : item.pricePerUnit.toFixed(2);
                     const stockPercentage = (item.currentStock / item.maxStock) * 100;
                     const needsRestock = item.currentStock <= item.reorderPoint;
                     const displayStock = `${item.currentStock} ${item.unit}`;
@@ -764,7 +773,7 @@ export default function InventoryPage() {
                             <span>₱{item.pricePerUnit.toFixed(2)}/{item.displayUnit}</span>
                           </div>
                           <div className="text-xs text-gray-400 dark:text-gray-500">
-                            Base: ₱{(item.pricePerUnit / convertUnit(1, item.displayUnit, item.unit)).toFixed(2)}/{item.unit}
+                            Base: ₱{basePrice}/{item.unit}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -787,7 +796,7 @@ export default function InventoryPage() {
                               Adjust
                             </button>
                             <button
-                              onClick={() => window.location.href = `/inventory/audit?id=${itemId}`}
+                              onClick={() => window.location.href = `/inventory/stockalert/audit?id=${itemId}`}
                               className="rounded-lg bg-purple-100 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-900/30 px-3 py-1.5 text-sm font-medium text-purple-700 dark:text-purple-500 hover:bg-purple-200 dark:hover:bg-purple-900/20"
                               title="View Audit Trail"
                             >
