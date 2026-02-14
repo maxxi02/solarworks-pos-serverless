@@ -12,10 +12,44 @@ import {
   DollarSign, Smartphone, Receipt,
   X, Loader2, Utensils, Coffee,
   ChevronLeft, ChevronRight, GripVertical,
-  Save, History,PackageX, RefreshCw, Bell
+  Save, History, PackageX, RefreshCw, Bell,
+  Printer, Download, CheckCircle, Percent,
+  User, Users, Menu, FileText, Search,
+  Filter, ArrowLeft, ArrowRight, Clock,
+  Calendar, MoreVertical, Edit, Copy,
+  AlertCircle, Check, Archive, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useInventoryOrder } from '@/hooks/useInventoryOrder';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
 // Types
 interface Product {
@@ -32,6 +66,8 @@ interface Product {
 interface CartItem extends Product {
   quantity: number;
   notes?: string;
+  hasDiscount?: boolean;
+  discountType?: 'senior' | 'pwd' | 'none';
 }
 
 interface CategoryData {
@@ -46,7 +82,7 @@ interface SavedOrder {
   customerName: string;
   items: CartItem[];
   subtotal: number;
-  tax: number;
+  discountTotal: number;
   total: number;
   paymentMethod: 'cash' | 'gcash' | 'split';
   splitPayment?: { cash: number; gcash: number };
@@ -54,6 +90,9 @@ interface SavedOrder {
   tableNumber?: string;
   timestamp: Date;
   status: 'pending' | 'completed' | 'cancelled';
+  seniorCount?: number;
+  pwdCount?: number;
+  orderNote?: string;
 }
 
 interface StockAlert {
@@ -67,6 +106,961 @@ interface StockAlert {
   location: string;
   outOfStock?: boolean;
 }
+
+// Enhanced Receipt Component with Print Options
+interface ReceiptData {
+  orderNumber: string;
+  customerName: string;
+  items: CartItem[];
+  subtotal: number;
+  discountTotal: number;
+  total: number;
+  paymentMethod: string;
+  splitPayment?: { cash: number; gcash: number };
+  orderType: string;
+  tableNumber?: string;
+  timestamp: Date;
+  cashier: string;
+  seniorIds?: string[];
+  pwdIds?: string[];
+  seniorCount?: number;
+  pwdCount?: number;
+  orderNote?: string;
+  isReprint?: boolean;
+}
+
+const ReceiptModal = ({ receipt, onClose, onPrint, onSavePDF }: { 
+  receipt: ReceiptData | null; 
+  onClose: () => void;
+  onPrint: () => void;
+  onSavePDF?: () => void;
+}) => {
+  if (!receipt) return null;
+
+  const itemsWithDiscount = receipt.items.filter(item => item.hasDiscount);
+  const itemsWithoutDiscount = receipt.items.filter(item => !item.hasDiscount);
+
+  // Print without saving to database (for menu printing)
+  const handlePrintOnly = () => {
+    const printContent = document.getElementById('receipt-content');
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Receipt #${receipt.orderNumber}</title>
+            <style>
+              body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 10px; }
+              .text-center { text-align: center; }
+              .border-bottom { border-bottom: 1px dashed #000; }
+              .flex { display: flex; }
+              .justify-between { justify-content: space-between; }
+              .font-bold { font-weight: bold; }
+              .mt-2 { margin-top: 8px; }
+              .mb-2 { margin-bottom: 8px; }
+              .pt-2 { padding-top: 8px; }
+              .pb-2 { padding-bottom: 8px; }
+              .text-xs { font-size: 10px; }
+              .text-green-600 { color: #059669; }
+              .line-through { text-decoration: line-through; }
+              @media print {
+                body { width: 100%; }
+                button { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent.outerHTML}
+            <div style="text-align: center; margin-top: 20px;">
+              <button onclick="window.print()" style="padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer; margin: 0 5px;">
+                Print Receipt
+              </button>
+              <button onclick="window.close()" style="padding: 10px 20px; background: #666; color: #fff; border: none; border-radius: 5px; cursor: pointer; margin: 0 5px;">
+                Close
+              </button>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-sm rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 shadow-xl">
+        {/* Receipt Header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Receipt className="w-4 h-4" />
+            {receipt.isReprint ? 'Reprint Receipt' : 'Receipt'} #{receipt.orderNumber}
+          </h3>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+            <X className="h-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Receipt Content - Printable Area */}
+        <div id="receipt-content" className="p-4 space-y-3 font-mono text-xs">
+          {/* Store Info */}
+          <div className="text-center border-b border-dashed border-gray-300 dark:border-gray-700 pb-2">
+            <h4 className="font-bold text-sm">YOUR STORE NAME</h4>
+            <p className="text-[10px]">123 Main Street, City</p>
+            <p className="text-[10px]">Tel: (123) 456-7890</p>
+            <p className="text-[10px]">VAT Reg TIN: 123-456-789-000</p>
+          </div>
+
+          {/* Receipt Details */}
+          <div className="border-b border-dashed border-gray-300 dark:border-gray-700 pb-2">
+            <div className="flex justify-between">
+              <span>Order #:</span>
+              <span className="font-medium">{receipt.orderNumber}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Date:</span>
+              <span>{new Date(receipt.timestamp).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Cashier:</span>
+              <span>{receipt.cashier}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Customer:</span>
+              <span>{receipt.customerName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Order Type:</span>
+              <span className="capitalize">{receipt.orderType}</span>
+            </div>
+            {receipt.tableNumber && (
+              <div className="flex justify-between">
+                <span>Table:</span>
+                <span>{receipt.tableNumber}</span>
+              </div>
+            )}
+            {receipt.orderNote && (
+              <div className="flex justify-between">
+                <span>Notes:</span>
+                <span className="italic">{receipt.orderNote}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Items without Discount */}
+          {itemsWithoutDiscount.length > 0 && (
+            <div className="border-b border-dashed border-gray-300 dark:border-gray-700 pb-2">
+              <div className="grid grid-cols-12 gap-1 font-bold mb-1">
+                <div className="col-span-6">Item</div>
+                <div className="col-span-2 text-right">Qty</div>
+                <div className="col-span-2 text-right">Price</div>
+                <div className="col-span-2 text-right">Total</div>
+              </div>
+              {itemsWithoutDiscount.map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-1 text-[10px]">
+                  <div className="col-span-6 truncate">{item.name}</div>
+                  <div className="col-span-2 text-right">{item.quantity}</div>
+                  <div className="col-span-2 text-right">₱{item.price.toFixed(2)}</div>
+                  <div className="col-span-2 text-right">₱{(item.price * item.quantity).toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Items with Discount */}
+          {itemsWithDiscount.length > 0 && (
+            <div className="border-b border-dashed border-gray-300 dark:border-gray-700 pb-2">
+              <div className="text-[10px] font-bold text-green-600 dark:text-green-500 mb-1">
+                *** WITH 20% DISCOUNT ***
+              </div>
+              <div className="grid grid-cols-12 gap-1 font-bold mb-1">
+                <div className="col-span-6">Item</div>
+                <div className="col-span-2 text-right">Qty</div>
+                <div className="col-span-2 text-right">Price</div>
+                <div className="col-span-2 text-right">Total</div>
+              </div>
+              {itemsWithDiscount.map((item, idx) => {
+                const discountedPrice = item.price * 0.8;
+                return (
+                  <div key={idx} className="grid grid-cols-12 gap-1 text-[10px]">
+                    <div className="col-span-6 truncate">{item.name}</div>
+                    <div className="col-span-2 text-right">{item.quantity}</div>
+                    <div className="col-span-2 text-right">
+                      <span className="line-through text-[8px]">₱{item.price.toFixed(2)}</span>
+                      <br />
+                      <span className="text-green-600">₱{discountedPrice.toFixed(2)}</span>
+                    </div>
+                    <div className="col-span-2 text-right">₱{(discountedPrice * item.quantity).toFixed(2)}</div>
+                  </div>
+                );
+              })}
+              
+              {/* Discount Summary */}
+              <div className="mt-2 text-[10px] text-green-600 dark:text-green-500">
+                <div className="flex justify-between">
+                  <span>Total Discount on SC/PWD Items:</span>
+                  <span>-₱{(receipt.subtotal - (receipt.total + receipt.discountTotal)).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Totals */}
+          <div className="border-b border-dashed border-gray-300 dark:border-gray-700 pb-2">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span>₱{receipt.subtotal.toFixed(2)}</span>
+            </div>
+            
+            {/* Discount Total */}
+            {receipt.discountTotal > 0 && (
+              <div className="flex justify-between text-green-600 dark:text-green-500">
+                <span>Total Discount:</span>
+                <span>-₱{receipt.discountTotal.toFixed(2)}</span>
+              </div>
+            )}
+            
+            <div className="flex justify-between font-bold text-sm mt-1">
+              <span>TOTAL:</span>
+              <span className="text-primary">₱{receipt.total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Beneficiaries Info */}
+          {(receipt.seniorCount || receipt.pwdCount) && (
+            <div className="border-b border-dashed border-gray-300 dark:border-gray-700 pb-2 text-[8px]">
+              {receipt.seniorCount ? (
+                <p>Senior Citizens: {receipt.seniorCount} {receipt.seniorIds?.length ? `(IDs: ${receipt.seniorIds.join(', ')})` : ''}</p>
+              ) : null}
+              {receipt.pwdCount ? (
+                <p>PWD: {receipt.pwdCount} {receipt.pwdIds?.length ? `(IDs: ${receipt.pwdIds.join(', ')})` : ''}</p>
+              ) : null}
+            </div>
+          )}
+
+          {/* Payment Details */}
+          <div className="border-b border-dashed border-gray-300 dark:border-gray-700 pb-2">
+            <div className="flex justify-between">
+              <span>Payment Method:</span>
+              <span className="capitalize">{receipt.paymentMethod}</span>
+            </div>
+            {receipt.paymentMethod === 'split' && receipt.splitPayment && (
+              <>
+                <div className="flex justify-between text-[10px] pl-2">
+                  <span>- Cash:</span>
+                  <span>₱{receipt.splitPayment.cash.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] pl-2">
+                  <span>- GCash:</span>
+                  <span>₱{receipt.splitPayment.gcash.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between">
+              <span>Amount Paid:</span>
+              <span>₱{receipt.total.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Change:</span>
+              <span>₱0.00</span>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="text-center text-[10px] space-y-1">
+            <p>Thank you for your patronage!</p>
+            <p>This serves as your official receipt</p>
+            {receipt.discountTotal > 0 && (
+              <p className="text-[9px] font-bold">*** With 20% Senior/PWD Discount on selected items ***</p>
+            )}
+            {receipt.isReprint && (
+              <p className="text-[9px] font-bold text-red-500">*** REPRINTED RECEIPT ***</p>
+            )}
+            <p className="text-[8px]">Generated by POS System v1.0</p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-800 flex gap-2">
+          <Button
+            onClick={onPrint}
+            className="flex-1 gap-2"
+            variant="default"
+          >
+            <Printer className="w-4 h-4" />
+            Print Receipt
+          </Button>
+          {onSavePDF && (
+            <Button
+              onClick={onSavePDF}
+              className="flex-1 gap-2"
+              variant="outline"
+            >
+              <Download className="w-4 h-4" />
+              Save PDF
+            </Button>
+          )}
+          <Button
+            onClick={onClose}
+            className="flex-1"
+            variant="outline"
+          >
+            Close
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Discount Modal Component
+interface DiscountModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onApply: (data: { type: 'senior' | 'pwd'; ids: string[]; itemIds: string[] }) => void;
+  cartItems: CartItem[];
+}
+
+const DiscountModal = ({ isOpen, onClose, onApply, cartItems }: DiscountModalProps) => {
+  const [discountType, setDiscountType] = useState<'senior' | 'pwd'>('senior');
+  const [ids, setIds] = useState<string[]>(['']);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+
+  const handleAddId = () => {
+    setIds([...ids, '']);
+  };
+
+  const handleRemoveId = (index: number) => {
+    const newIds = ids.filter((_, i) => i !== index);
+    setIds(newIds);
+  };
+
+  const handleIdChange = (index: number, value: string) => {
+    const newIds = [...ids];
+    newIds[index] = value;
+    setIds(newIds);
+  };
+
+  const handleToggleItem = (itemId: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  const handleApply = () => {
+    const validIds = ids.filter(id => id.trim() !== '');
+    
+    if (validIds.length === 0) {
+      toast.error('Please enter at least one ID');
+      return;
+    }
+
+    if (selectedItems.length === 0) {
+      toast.error('Please select at least one item');
+      return;
+    }
+
+    onApply({
+      type: discountType,
+      ids: validIds,
+      itemIds: selectedItems
+    });
+
+    setDiscountType('senior');
+    setIds(['']);
+    setSelectedItems([]);
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Apply Senior/PWD Discount</DialogTitle>
+          <DialogDescription>
+            Select which items are for Senior Citizen or PWD and enter their IDs.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Discount Type</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={discountType === 'senior' ? 'default' : 'outline'}
+                onClick={() => setDiscountType('senior')}
+                className="flex-1"
+                size="sm"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Senior Citizen
+              </Button>
+              <Button
+                type="button"
+                variant={discountType === 'pwd' ? 'default' : 'outline'}
+                onClick={() => setDiscountType('pwd')}
+                className="flex-1"
+                size="sm"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                PWD
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>{discountType === 'senior' ? 'Senior Citizen' : 'PWD'} ID Numbers</Label>
+            {ids.map((id, index) => (
+              <div key={index} className="flex gap-2">
+                <Input
+                  placeholder={`ID #${index + 1}`}
+                  value={id}
+                  onChange={(e) => handleIdChange(index, e.target.value)}
+                  className="flex-1"
+                />
+                {ids.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => handleRemoveId(index)}
+                    className="h-10 w-10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddId}
+              className="mt-2"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Another ID
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Select Items for Discount</Label>
+            <div className="max-h-60 overflow-y-auto border rounded-lg p-2 space-y-2">
+              {cartItems.map((item) => (
+                <div
+                  key={item._id}
+                  className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
+                    selectedItems.includes(item._id)
+                      ? 'bg-primary/10 border border-primary'
+                      : 'hover:bg-muted/50'
+                  }`}
+                  onClick={() => handleToggleItem(item._id)}
+                >
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Qty: {item.quantity} • ₱{item.price.toFixed(2)} each
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">₱{(item.price * item.quantity).toFixed(2)}</p>
+                    {selectedItems.includes(item._id) && (
+                      <Badge variant="default" className="text-[10px] mt-1">
+                        Selected
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Selected: {selectedItems.length} item(s)
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleApply}>
+            Apply Discount
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Menu Printing Component
+interface MenuPrintingModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  products: Product[];
+}
+
+const MenuPrintingModal = ({ isOpen, onClose, products }: MenuPrintingModalProps) => {
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedMenuType, setSelectedMenuType] = useState<'food' | 'drink' | 'all'>('all');
+  const [includePrices, setIncludePrices] = useState(true);
+  const [includeDescriptions, setIncludeDescriptions] = useState(true);
+  const [copies, setCopies] = useState(1);
+  const [paperSize, setPaperSize] = useState<'80mm' | 'A4'>('80mm');
+
+  const categories = ['All', ...Array.from(new Set(
+    products
+      .filter(p => p.available && (selectedMenuType === 'all' || p.menuType === selectedMenuType))
+      .map(p => p.category || 'Uncategorized')
+  ))];
+
+  const filteredProducts = products.filter(product => {
+    if (!product.available) return false;
+    if (selectedMenuType !== 'all' && product.menuType !== selectedMenuType) return false;
+    if (selectedCategory !== 'All' && product.category !== selectedCategory) return false;
+    return true;
+  });
+
+  const handlePrintMenu = () => {
+    const printContent = document.getElementById('menu-print-content');
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Menu - ${selectedCategory}</title>
+            <style>
+              body { 
+                font-family: 'Arial', sans-serif; 
+                ${paperSize === '80mm' ? 'width: 80mm; margin: 0 auto;' : 'max-width: 210mm; margin: 0 auto;'} 
+                padding: 10px; 
+              }
+              .header { text-align: center; margin-bottom: 20px; }
+              .header h1 { margin: 0; font-size: ${paperSize === '80mm' ? '14px' : '24px'}; }
+              .header p { margin: 5px 0; font-size: ${paperSize === '80mm' ? '10px' : '14px'}; }
+              .category { 
+                font-size: ${paperSize === '80mm' ? '12px' : '18px'}; 
+                font-weight: bold; 
+                border-bottom: 1px solid #000; 
+                margin-top: 15px; 
+                padding-bottom: 5px; 
+              }
+              .product { 
+                display: flex; 
+                justify-content: space-between; 
+                margin: 8px 0; 
+                font-size: ${paperSize === '80mm' ? '10px' : '14px'}; 
+              }
+              .product-info { flex: 1; }
+              .product-name { font-weight: bold; }
+              .product-description { 
+                font-size: ${paperSize === '80mm' ? '8px' : '12px'}; 
+                color: #666; 
+                margin-top: 2px; 
+              }
+              .product-price { font-weight: bold; white-space: nowrap; }
+              .footer { 
+                text-align: center; 
+                margin-top: 20px; 
+                font-size: ${paperSize === '80mm' ? '8px' : '12px'}; 
+                border-top: 1px dashed #000; 
+                padding-top: 10px; 
+              }
+              .grid-2 { 
+                display: grid; 
+                grid-template-columns: repeat(2, 1fr); 
+                gap: 10px; 
+              }
+              @media print {
+                body { width: 100%; }
+                button { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${Array(copies).fill(printContent.outerHTML).join('<div style="page-break-after: always;"></div>')}
+            <div style="text-align: center; margin-top: 20px;">
+              <button onclick="window.print()" style="padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer;">
+                Print Menu
+              </button>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  const groupByCategory = (products: Product[]) => {
+    const grouped: { [key: string]: Product[] } = {};
+    products.forEach(product => {
+      const category = product.category || 'Uncategorized';
+      if (!grouped[category]) grouped[category] = [];
+      grouped[category].push(product);
+    });
+    return grouped;
+  };
+
+  const groupedProducts = groupByCategory(filteredProducts);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Printer className="w-5 h-5" />
+            Print Menu
+          </DialogTitle>
+          <DialogDescription>
+            Configure and print your menu. This will not affect orders or inventory.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Print Settings */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Paper Size</Label>
+              <Select value={paperSize} onValueChange={(value: any) => setPaperSize(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="80mm">Thermal Paper (80mm)</SelectItem>
+                  <SelectItem value="A4">A4 Paper</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Number of Copies</Label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={copies}
+                onChange={(e) => setCopies(parseInt(e.target.value) || 1)}
+              />
+            </div>
+          </div>
+
+          {/* Menu Type Filter */}
+          <div className="space-y-2">
+            <Label>Menu Type</Label>
+            <div className="flex gap-2">
+              {(['all', 'food', 'drink'] as const).map((type) => (
+                <Button
+                  key={type}
+                  variant={selectedMenuType === type ? "default" : "outline"}
+                  onClick={() => {
+                    setSelectedMenuType(type);
+                    setSelectedCategory('All');
+                  }}
+                  className="flex-1"
+                >
+                  {type === 'food' && <Utensils className="w-4 h-4 mr-2" />}
+                  {type === 'drink' && <Coffee className="w-4 h-4 mr-2" />}
+                  {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category Filter */}
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Content Options */}
+          <div className="space-y-2">
+            <Label>Content Options</Label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includePrices}
+                  onChange={(e) => setIncludePrices(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm">Include Prices</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includeDescriptions}
+                  onChange={(e) => setIncludeDescriptions(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm">Include Descriptions</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Menu Preview */}
+          <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-900">
+            <div className="text-sm font-medium mb-2">Preview ({filteredProducts.length} items)</div>
+            <div id="menu-print-content" className="space-y-3">
+              <div className="header text-center">
+                <h1 className={`font-bold ${paperSize === '80mm' ? 'text-sm' : 'text-xl'}`}>
+                  OUR MENU
+                </h1>
+                <p className="text-xs text-gray-600">
+                  {selectedCategory === 'All' ? 'All Categories' : selectedCategory}
+                  {selectedMenuType !== 'all' && ` • ${selectedMenuType}`}
+                </p>
+                <p className="text-xs">Valid as of {new Date().toLocaleDateString()}</p>
+              </div>
+
+              {Object.entries(groupedProducts).map(([category, items]) => (
+                <div key={category} className="mb-4">
+                  <div className={`category ${paperSize === '80mm' ? 'text-sm' : 'text-lg'}`}>
+                    {category}
+                  </div>
+                  <div className={paperSize === '80mm' ? '' : 'grid grid-cols-2 gap-2'}>
+                    {items.map(product => (
+                      <div key={product._id} className="product">
+                        <div className="product-info">
+                          <span className="product-name text-sm">{product.name}</span>
+                          {includeDescriptions && product.description && (
+                            <div className="product-description text-xs text-gray-600">
+                              {product.description}
+                            </div>
+                          )}
+                          {!includeDescriptions && product.ingredients?.length > 0 && (
+                            <div className="product-description text-xs text-gray-600">
+                              {product.ingredients.map(i => i.name).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                        {includePrices && (
+                          <span className="product-price text-sm">
+                            ₱{product.price.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div className="footer text-xs text-gray-500">
+                <p>Thank you for dining with us!</p>
+                <p>Prices are subject to change without prior notice.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handlePrintMenu} className="gap-2">
+            <Printer className="w-4 h-4" />
+            Print Menu
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Order History Component
+interface OrderHistoryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  orders: SavedOrder[];
+  onReprint: (order: SavedOrder) => void;
+  onViewDetails: (order: SavedOrder) => void;
+}
+
+const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }: OrderHistoryModalProps) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('today');
+
+  const getDateFilter = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (dateRange) {
+      case 'today':
+        return today;
+      case 'week':
+        return new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      case 'month':
+        return new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      default:
+        return null;
+    }
+  };
+
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = 
+      order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
+    
+    const dateFilter = getDateFilter();
+    const matchesDate = !dateFilter || new Date(order.timestamp) >= dateFilter;
+    
+    return matchesSearch && matchesStatus && matchesDate;
+  });
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(date));
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="w-5 h-5" />
+            Order History
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Filters */}
+          <div className="flex gap-2 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <Input
+                placeholder="Search by order # or customer..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full"
+                icon={<Search className="w-4 h-4" />}
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px]">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={dateRange} onValueChange={(value: any) => setDateRange(value)}>
+              <SelectTrigger className="w-[140px]">
+                <Calendar className="w-4 h-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Orders List */}
+          <div className="border rounded-lg overflow-hidden">
+            <div className="max-h-[400px] overflow-y-auto">
+              {filteredOrders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <History className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>No orders found</p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredOrders.map((order) => (
+                    <div key={order.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-900">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-medium">{order.orderNumber}</span>
+                            <Badge variant={
+                              order.status === 'completed' ? 'default' :
+                              order.status === 'pending' ? 'secondary' : 'destructive'
+                            }>
+                              {order.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm">
+                            <span className="font-medium">{order.customerName}</span> • 
+                            <span className="text-muted-foreground ml-1">
+                              {order.items.length} items • ₱{order.total.toFixed(2)}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(order.timestamp)}
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onViewDetails(order)}
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onReprint(order)}
+                            title="Reprint Receipt"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="flex justify-between text-sm">
+            <span>Total Orders: {filteredOrders.length}</span>
+            <span>
+              Total Sales: ₱{filteredOrders
+                .filter(o => o.status === 'completed')
+                .reduce((sum, o) => sum + o.total, 0)
+                .toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const CashierPage = () => {
   // Data State
@@ -82,11 +1076,18 @@ const CashierPage = () => {
   const [orderType, setOrderType] = useState<'dine-in' | 'takeaway'>('takeaway');
   const [selectedTable, setSelectedTable] = useState<string>('');
   
+  // Discount State
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [seniorIds, setSeniorIds] = useState<string[]>([]);
+  const [pwdIds, setPwdIds] = useState<string[]>([]);
+  
   // UI State
   const [selectedMenuType, setSelectedMenuType] = useState<'food' | 'drink' | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [draggedItem, setDraggedItem] = useState<Product | null>(null);
   const [showSavedOrders, setShowSavedOrders] = useState(false);
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [showMenuPrinting, setShowMenuPrinting] = useState(false);
   const [orderNote, setOrderNote] = useState('');
   
   // Inventory State
@@ -95,6 +1096,11 @@ const CashierPage = () => {
   const [isCheckingStock, setIsCheckingStock] = useState(false);
   const [showInsufficientStockModal, setShowInsufficientStockModal] = useState(false);
   const [insufficientStockItems, setInsufficientStockItems] = useState<any[]>([]);
+  
+  // Receipt State
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [currentReceipt, setCurrentReceipt] = useState<ReceiptData | null>(null);
+  const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<SavedOrder | null>(null);
   
   // Categories scroll ref and touch state
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
@@ -119,7 +1125,7 @@ const CashierPage = () => {
   } = useInventoryOrder({
     onSuccess: (result) => {
       console.log('Inventory updated successfully:', result);
-      fetchStockAlerts(); // Refresh alerts after successful deduction
+      fetchStockAlerts();
     },
     onError: (error) => {
       console.error('Inventory update failed:', error);
@@ -136,10 +1142,19 @@ const CashierPage = () => {
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.10;
-  const total = subtotal + tax;
+  
+  const discountTotal = cart.reduce((sum, item) => {
+    if (item.hasDiscount) {
+      return sum + (item.price * item.quantity * 0.20);
+    }
+    return sum;
+  }, 0);
 
-  // Generate Order Number
+  const total = subtotal - discountTotal;
+
+  const seniorCount = cart.filter(item => item.hasDiscount && item.discountType === 'senior').length;
+  const pwdCount = cart.filter(item => item.hasDiscount && item.discountType === 'pwd').length;
+
   const generateOrderNumber = useCallback(() => {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
@@ -149,7 +1164,6 @@ const CashierPage = () => {
     return `ORD-${year}${month}${day}-${random}`;
   }, []);
 
-  // Fetch stock alerts
   const fetchStockAlerts = useCallback(async () => {
     try {
       const [criticalRes, lowStockRes] = await Promise.all([
@@ -167,7 +1181,6 @@ const CashierPage = () => {
     }
   }, []);
 
-  // Load saved orders from localStorage
   useEffect(() => {
     const loadSavedOrders = () => {
       try {
@@ -186,14 +1199,12 @@ const CashierPage = () => {
     };
 
     loadSavedOrders();
-    fetchStockAlerts(); // Initial fetch of stock alerts
+    fetchStockAlerts();
     
-    // Refresh alerts every 60 seconds
     const interval = setInterval(fetchStockAlerts, 60000);
     return () => clearInterval(interval);
   }, [fetchStockAlerts]);
 
-  // Save order to localStorage
   const saveOrderToLocal = useCallback((order: SavedOrder) => {
     try {
       const updatedOrders = [order, ...savedOrders].slice(0, 50);
@@ -205,7 +1216,6 @@ const CashierPage = () => {
     }
   }, [savedOrders]);
 
-  // Fetch products data
   const fetchProductsData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -236,19 +1246,16 @@ const CashierPage = () => {
     }
   }, []);
 
-  // Initial data fetch
   useEffect(() => {
     fetchProductsData();
   }, [fetchProductsData]);
 
-  // Update split payment when total changes
   useEffect(() => {
     if (paymentMethod === 'split' && total > 0) {
       setSplitPayment({ cash: total / 2, gcash: total / 2 });
     }
   }, [total, paymentMethod]);
 
-  // Filter products
   const filteredProducts = products.filter(product => {
     if (!product.available) return false;
     if (selectedMenuType !== 'all' && product.menuType !== selectedMenuType) return false;
@@ -256,14 +1263,12 @@ const CashierPage = () => {
     return true;
   });
 
-  // Get unique categories
   const categories = ['All', ...Array.from(new Set(
     products
       .filter(p => p.available && (selectedMenuType === 'all' || p.menuType === selectedMenuType))
       .map(p => p.category || 'Uncategorized')
   ))];
 
-  // Check scroll position for categories
   const checkScrollPosition = useCallback(() => {
     if (categoriesContainerRef.current) {
       const container = categoriesContainerRef.current;
@@ -296,7 +1301,6 @@ const CashierPage = () => {
     }
   }, []);
 
-  // Category swipe handlers
   const handleCategoryMouseDown = useCallback((e: React.MouseEvent) => {
     if (!categoriesContainerRef.current) return;
     setIsDragging(true);
@@ -328,7 +1332,6 @@ const CashierPage = () => {
   }, [isDragging, startX, scrollLeft]);
   const handleCategoryTouchEnd = useCallback(() => setIsDragging(false), []);
 
-  // Drag and Drop Handlers
   const handleDragStart = useCallback((e: React.DragEvent, product: Product) => {
     setDraggedItem(product);
     e.dataTransfer.setData('text/plain', product._id);
@@ -379,7 +1382,6 @@ const CashierPage = () => {
     }
   }, [draggedItem]);
 
-  // Touch drag and drop
   const handleTouchStart = useCallback((e: React.TouchEvent, product: Product) => {
     e.preventDefault();
     setDraggedItem(product);
@@ -443,13 +1445,12 @@ const CashierPage = () => {
     setDraggedItem(null);
   }, [touchPreview, draggedItem]);
 
-  // Cart functions
   const addToCart = useCallback((product: Product) => {
     setCart(prev => {
       const existing = prev.find(i => i._id === product._id);
       return existing 
         ? prev.map(i => i._id === product._id ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...prev, { ...product, quantity: 1 }];
+        : [...prev, { ...product, quantity: 1, hasDiscount: false, discountType: 'none' }];
     });
     
     toast.success(`${product.name} added to cart`, { duration: 1500 });
@@ -480,11 +1481,42 @@ const CashierPage = () => {
     setPaymentMethod('cash');
     setSelectedTable('');
     setOrderNote('');
+    setSeniorIds([]);
+    setPwdIds([]);
     clearStockCheck();
     toast.info('Cart cleared', { duration: 1500 });
   }, [clearStockCheck]);
 
-  // Save order
+  const handleApplyDiscount = useCallback((data: { type: 'senior' | 'pwd'; ids: string[]; itemIds: string[] }) => {
+    setCart(prev => prev.map(item => {
+      if (data.itemIds.includes(item._id)) {
+        return {
+          ...item,
+          hasDiscount: true,
+          discountType: data.type
+        };
+      }
+      return item;
+    }));
+
+    if (data.type === 'senior') {
+      setSeniorIds(prev => [...new Set([...prev, ...data.ids])]);
+    } else {
+      setPwdIds(prev => [...new Set([...prev, ...data.ids])]);
+    }
+
+    toast.success(`Discount applied to ${data.itemIds.length} item(s)`);
+  }, []);
+
+  const removeDiscount = useCallback((itemId: string) => {
+    setCart(prev => prev.map(item => 
+      item._id === itemId 
+        ? { ...item, hasDiscount: false, discountType: 'none' }
+        : item
+    ));
+    toast.info('Discount removed from item');
+  }, []);
+
   const saveOrder = useCallback(() => {
     if (cart.length === 0) {
       toast.error('Cannot save empty cart', { description: 'Add items to cart first' });
@@ -497,14 +1529,17 @@ const CashierPage = () => {
       customerName: customerName || 'Walk-in Customer',
       items: [...cart],
       subtotal,
-      tax,
+      discountTotal,
       total,
       paymentMethod,
       splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
       orderType,
       tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
       timestamp: new Date(),
-      status: 'pending'
+      status: 'pending',
+      seniorCount,
+      pwdCount,
+      orderNote: orderNote || undefined
     };
 
     saveOrderToLocal(newOrder);
@@ -514,9 +1549,8 @@ const CashierPage = () => {
       duration: 3000,
       icon: <Save className="h-4 w-4" />
     });
-  }, [cart, customerName, subtotal, tax, total, paymentMethod, splitPayment, orderType, selectedTable, generateOrderNumber, saveOrderToLocal]);
+  }, [cart, customerName, subtotal, discountTotal, total, paymentMethod, splitPayment, orderType, selectedTable, seniorCount, pwdCount, orderNote, generateOrderNumber, saveOrderToLocal]);
 
-  // Load saved order
   const loadSavedOrder = useCallback((order: SavedOrder) => {
     setCart(order.items);
     setCustomerName(order.customerName);
@@ -524,6 +1558,7 @@ const CashierPage = () => {
     if (order.splitPayment) setSplitPayment(order.splitPayment);
     setOrderType(order.orderType);
     setSelectedTable(order.tableNumber || '');
+    setOrderNote(order.orderNote || '');
     
     toast.success('Order Loaded', {
       description: `Order #${order.orderNumber} loaded to cart`,
@@ -533,184 +1568,288 @@ const CashierPage = () => {
     setShowSavedOrders(false);
   }, []);
 
-  // Process payment with sales analytics integration
-const processPayment = async () => {
-  if (cart.length === 0) {
-    toast.error('Cart is empty!');
-    return;
-  }
-  if (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total) {
-    toast.error('Split payment amounts must equal total!');
-    return;
-  }
-  
-  setIsCheckingStock(true);
-  
-  try {
-    const orderId = `order-${Date.now()}`;
-    const orderNumber = generateOrderNumber();
-    
-    // Prepare order items with ingredients for stock check
-    const orderItems = cart.map(item => ({
-      productId: item._id,
-      productName: item.name,
-      quantity: item.quantity,
-      ingredients: item.ingredients || []
-    }));
+  // New function to print menu without affecting orders
+  const handlePrintMenu = () => {
+    setShowMenuPrinting(true);
+  };
 
-    // Check stock availability first
-    const stockCheck = await checkOrderStock(orderItems);
+  // Function to reprint receipt from history
+  const handleReprintReceipt = (order: SavedOrder) => {
+    const receiptData: ReceiptData = {
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+      items: order.items,
+      subtotal: order.subtotal,
+      discountTotal: order.discountTotal,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+      splitPayment: order.splitPayment,
+      orderType: order.orderType,
+      tableNumber: order.tableNumber,
+      timestamp: order.timestamp,
+      cashier: 'Cashier #04',
+      seniorIds: order.seniorCount ? seniorIds : undefined,
+      pwdIds: order.pwdCount ? pwdIds : undefined,
+      seniorCount: order.seniorCount,
+      pwdCount: order.pwdCount,
+      orderNote: order.orderNote,
+      isReprint: true
+    };
+
+    setCurrentReceipt(receiptData);
+    setShowReceipt(true);
+  };
+
+  const handleViewOrderDetails = (order: SavedOrder) => {
+    setSelectedOrderForDetails(order);
+    // You can implement a details modal here
+    toast.info(`Viewing order ${order.orderNumber}`);
+  };
+
+  const handlePrintReceipt = useCallback(() => {
+    const printContent = document.getElementById('receipt-content');
+    if (!printContent) return;
+
+    const printWindow = window.open('', '_blank');
     
-    if (!stockCheck.allAvailable) {
-      setInsufficientStockItems(stockCheck.insufficientItems);
-      setShowInsufficientStockModal(true);
-      setIsCheckingStock(false);
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Receipt #${currentReceipt?.orderNumber}</title>
+            <style>
+              body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; margin: 0 auto; padding: 10px; }
+              .text-center { text-align: center; }
+              .border-bottom { border-bottom: 1px dashed #000; }
+              .flex { display: flex; }
+              .justify-between { justify-content: space-between; }
+              .font-bold { font-weight: bold; }
+              .mt-2 { margin-top: 8px; }
+              .mb-2 { margin-bottom: 8px; }
+              .pt-2 { padding-top: 8px; }
+              .pb-2 { padding-bottom: 8px; }
+              .text-xs { font-size: 10px; }
+              .text-green-600 { color: #059669; }
+              .line-through { text-decoration: line-through; }
+              @media print {
+                body { width: 100%; }
+                button { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent.outerHTML}
+            <div style="text-align: center; margin-top: 20px;">
+              <button onclick="window.print()" style="padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer;">
+                Print Receipt
+              </button>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  }, [currentReceipt]);
+
+  const handleSavePDF = useCallback(() => {
+    toast.info('PDF save feature coming soon');
+  }, []);
+
+  const processPayment = async () => {
+    if (cart.length === 0) {
+      toast.error('Cart is empty!');
       return;
     }
-
-    // Deduct ingredients from inventory
-    await processOrderDeductions(orderId, orderNumber, orderItems);
+    if (paymentMethod === 'split' && splitPayment.cash + splitPayment.gcash !== total) {
+      toast.error('Split payment amounts must equal total!');
+      return;
+    }
     
-    // === SAVE TO SALES ANALYTICS (MongoDB) ===
-    const paymentData = {
-      orderNumber,
-      customerName: customerName || 'Walk-in Customer',
-      items: cart.map(item => ({
-        productId: item._id,
-        name: item.name,
-        category: item.category || 'Uncategorized',
-        menuType: item.menuType || 'food',
-        price: item.price,
-        quantity: item.quantity,
-        revenue: item.price * item.quantity
-      })),
-      subtotal,
-      tax,
-      total,
-      paymentMethod,
-      splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
-      orderType,
-      tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : null,
-      orderNote: orderNote || null,
-      status: 'completed',
-      createdAt: new Date()
-    };
-
-    // Save to MongoDB payments collection
+    setIsCheckingStock(true);
+    
     try {
-      const paymentResponse = await fetch('/api/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(paymentData)
-      });
+      const orderId = `order-${Date.now()}`;
+      const orderNumber = generateOrderNumber();
+      
+      const orderItems = cart.map(item => ({
+        productId: item._id,
+        productName: item.name,
+        quantity: item.quantity,
+        ingredients: item.ingredients || []
+      }));
 
-      if (!paymentResponse.ok) {
-        console.error('Failed to save to payments API:', await paymentResponse.text());
-        // Continue with local save even if MongoDB fails
-        toast.warning('Payment saved locally only. Analytics may be delayed.', {
+      const stockCheck = await checkOrderStock(orderItems);
+      
+      if (!stockCheck.allAvailable) {
+        setInsufficientStockItems(stockCheck.insufficientItems);
+        setShowInsufficientStockModal(true);
+        setIsCheckingStock(false);
+        return;
+      }
+
+      await processOrderDeductions(orderId, orderNumber, orderItems);
+      
+      const paymentData = {
+        orderNumber,
+        customerName: customerName || 'Walk-in Customer',
+        items: cart.map(item => ({
+          productId: item._id,
+          name: item.name,
+          category: item.category || 'Uncategorized',
+          menuType: item.menuType || 'food',
+          price: item.price,
+          quantity: item.quantity,
+          revenue: item.hasDiscount ? item.price * 0.8 : item.price,
+          hasDiscount: item.hasDiscount,
+          discountType: item.discountType
+        })),
+        subtotal,
+        discountTotal,
+        total,
+        paymentMethod,
+        splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+        orderType,
+        tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : null,
+        orderNote: orderNote || null,
+        seniorIds: seniorIds.length > 0 ? seniorIds : null,
+        pwdIds: pwdIds.length > 0 ? pwdIds : null,
+        seniorCount,
+        pwdCount,
+        status: 'completed',
+        createdAt: new Date()
+      };
+
+      try {
+        const paymentResponse = await fetch('/api/payments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(paymentData)
+        });
+
+        if (!paymentResponse.ok) {
+          console.error('Failed to save to payments API:', await paymentResponse.text());
+          toast.warning('Payment saved locally only. Analytics may be delayed.', {
+            duration: 3000
+          });
+        } else {
+          const result = await paymentResponse.json();
+          console.log('Payment saved to MongoDB:', result);
+        }
+      } catch (apiError) {
+        console.error('Error calling payments API:', apiError);
+        toast.warning('Network error. Payment saved locally only.', {
           duration: 3000
         });
-      } else {
-        const result = await paymentResponse.json();
-        console.log('Payment saved to MongoDB:', result);
       }
-    } catch (apiError) {
-      console.error('Error calling payments API:', apiError);
-      toast.warning('Network error. Payment saved locally only.', {
+
+      toast.success('Payment Successful!', {
+        description: `Order Total: ₱${total.toFixed(2)}`,
+        duration: 4000
+      });
+      
+      const completedOrder: SavedOrder = {
+        id: orderId,
+        orderNumber,
+        customerName: customerName || 'Walk-in Customer',
+        items: cart,
+        subtotal,
+        discountTotal,
+        total,
+        paymentMethod,
+        splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+        orderType,
+        tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
+        timestamp: new Date(),
+        status: 'completed',
+        seniorCount,
+        pwdCount,
+        orderNote: orderNote || undefined
+      };
+      saveOrderToLocal(completedOrder);
+
+      const receiptData: ReceiptData = {
+        orderNumber,
+        customerName: customerName || 'Walk-in Customer',
+        items: [...cart],
+        subtotal,
+        discountTotal,
+        total,
+        paymentMethod,
+        splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+        orderType,
+        tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
+        timestamp: new Date(),
+        cashier: 'Cashier #04',
+        seniorIds: seniorIds.length > 0 ? seniorIds : undefined,
+        pwdIds: pwdIds.length > 0 ? pwdIds : undefined,
+        seniorCount,
+        pwdCount,
+        orderNote: orderNote || undefined
+      };
+
+      setCurrentReceipt(receiptData);
+      setShowReceipt(true);
+      
+      clearCart();
+      
+      toast.success('Order completed!', {
+        description: `Order #${orderNumber} has been saved`,
         duration: 3000
       });
-      // Continue with local save
-    }
-
-    toast.success('Payment Successful!', {
-      description: `Order Total: ₱${total.toFixed(2)}`,
-      duration: 4000
-    });
-    
-    // Save completed order to local storage (backup)
-    const completedOrder: SavedOrder = {
-      id: orderId,
-      orderNumber,
-      customerName: customerName || 'Walk-in Customer',
-      items: cart,
-      subtotal,
-      tax,
-      total,
-      paymentMethod,
-      splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
-      orderType,
-      tableNumber: orderType === 'dine-in' && selectedTable ? selectedTable : undefined,
-      timestamp: new Date(),
-      status: 'completed'
-    };
-    saveOrderToLocal(completedOrder);
-    
-    // Clear cart
-    clearCart();
-    
-    toast.success('Order completed!', {
-      description: `Order #${orderNumber} has been saved`,
-      duration: 3000
-    });
-    
-  } catch (error: any) {
-    console.error('Payment processing error:', error);
-    
-    // Check if it's an insufficient stock error
-    if (error.insufficientItems) {
-      setInsufficientStockItems(error.insufficientItems);
-      setShowInsufficientStockModal(true);
-    } else {
-      toast.error('Payment Failed', {
-        description: error.message || 'An error occurred during payment processing'
-      });
-    }
-  } finally {
-    setIsCheckingStock(false);
-  }
-};
-// Add to CashierPage component
-const syncOfflinePayments = async () => {
-  try {
-    // Get unsynced orders from localStorage
-    const saved = localStorage.getItem('pos_saved_orders');
-    if (!saved) return;
-    
-    const orders = JSON.parse(saved);
-    const unsynced = orders.filter((o: any) => !o.synced);
-    
-    for (const order of unsynced) {
-      try {
-        await fetch('/api/payments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...order,
-            createdAt: new Date(order.timestamp)
-          })
+      
+    } catch (error: any) {
+      console.error('Payment processing error:', error);
+      
+      if (error.insufficientItems) {
+        setInsufficientStockItems(error.insufficientItems);
+        setShowInsufficientStockModal(true);
+      } else {
+        toast.error('Payment Failed', {
+          description: error.message || 'An error occurred during payment processing'
         });
-        
-        // Mark as synced
-        order.synced = true;
-      } catch (e) {
-        console.error('Failed to sync order:', order.orderNumber);
       }
+    } finally {
+      setIsCheckingStock(false);
     }
-    
-    // Save updated sync status
-    localStorage.setItem('pos_saved_orders', JSON.stringify(orders));
-    
-  } catch (error) {
-    console.error('Sync failed:', error);
-  }
-};
+  };
 
-// Call this when component mounts
-useEffect(() => {
-  syncOfflinePayments();
-}, []);
+  const syncOfflinePayments = async () => {
+    try {
+      const saved = localStorage.getItem('pos_saved_orders');
+      if (!saved) return;
+      
+      const orders = JSON.parse(saved);
+      const unsynced = orders.filter((o: any) => !o.synced);
+      
+      for (const order of unsynced) {
+        try {
+          await fetch('/api/payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...order,
+              createdAt: new Date(order.timestamp)
+            })
+          });
+          
+          order.synced = true;
+        } catch (e) {
+          console.error('Failed to sync order:', order.orderNumber);
+        }
+      }
+      
+      localStorage.setItem('pos_saved_orders', JSON.stringify(orders));
+      
+    } catch (error) {
+      console.error('Sync failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    syncOfflinePayments();
+  }, []);
 
   const autoSplit = useCallback((type: 'half' | 'cash' | 'gcash') => {
     const splits = {
@@ -721,7 +1860,6 @@ useEffect(() => {
     setSplitPayment(splits[type]);
   }, [total]);
 
-  // Format date for display
   const formatOrderDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-PH', {
       month: 'short',
@@ -731,7 +1869,6 @@ useEffect(() => {
     }).format(date);
   };
 
-  // Insufficient Stock Modal Component
   const InsufficientStockModal = () => {
     if (!showInsufficientStockModal) return null;
     
@@ -792,7 +1929,6 @@ useEffect(() => {
             </button>
             <button
               onClick={() => {
-                // Remove items with insufficient stock from cart
                 const insufficientItemNames = new Set(
                   insufficientStockItems.map(item => item.name)
                 );
@@ -815,7 +1951,6 @@ useEffect(() => {
     );
   };
 
-  // Stock Alerts Badge Component
   const StockAlertsBadge = () => {
     const criticalCount = stockAlerts.filter(a => a.status === 'critical').length;
     const lowCount = stockAlerts.filter(a => a.status === 'low' || a.status === 'warning').length;
@@ -914,7 +2049,7 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-background p-4 relative">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header with Menu Options */}
         <header className="bg-card rounded-xl shadow-sm p-4 mb-4 border">
           <div className="flex justify-between items-center">
             <div>
@@ -922,22 +2057,66 @@ useEffect(() => {
               <p className="text-xs text-muted-foreground mt-1">Swipe categories - Drag items to cart</p>
             </div>
             <div className="flex items-center gap-3">
+              {/* New Menu Printing Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrintMenu}
+                className="h-8 text-xs gap-1"
+              >
+                <Menu className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Print Menu</span>
+              </Button>
+
               {/* Stock Alerts Badge */}
               <StockAlertsBadge />
               
+              {/* Order History Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowOrderHistory(true)}
+                className="h-8 text-xs gap-1"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">History</span>
+              </Button>
+              
+              {/* Saved Orders Button */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowSavedOrders(!showSavedOrders)}
                 className="h-8 text-xs gap-1"
               >
-                <History className="w-3.5 h-3.5" />
-                Saved Orders ({savedOrders.length})
+                <Save className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Saved ({savedOrders.length})</span>
               </Button>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-foreground">Cashier #04</p>
-                <p className="text-xs text-muted-foreground">Active</p>
-              </div>
+
+              {/* Quick Actions Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handlePrintMenu}>
+                    <Printer className="w-4 h-4 mr-2" />
+                    Print Menu
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowOrderHistory(true)}>
+                    <History className="w-4 h-4 mr-2" />
+                    View History
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={fetchStockAlerts}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh Stock
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -1107,15 +2286,27 @@ useEffect(() => {
                       <ShoppingCart className="w-4 h-4" />
                       Order ({cart.length})
                     </CardTitle>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={clearCart} 
-                      disabled={!cart.length || isInventoryProcessing || isCheckingStock}
-                      className="h-7 text-xs"
-                    >
-                      <Trash2 className="w-3 h-3 mr-1" /> Clear
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDiscountModal(true)}
+                        disabled={!cart.length || isInventoryProcessing || isCheckingStock}
+                        className="h-7 text-xs"
+                      >
+                        <Percent className="w-3 h-3 mr-1" />
+                        Discount
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={clearCart} 
+                        disabled={!cart.length || isInventoryProcessing || isCheckingStock}
+                        className="h-7 text-xs"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
                   
                   {/* Drop zone hint */}
@@ -1132,6 +2323,25 @@ useEffect(() => {
                   className="flex-1 overflow-y-auto space-y-3 p-3 pt-0"
                   style={{ WebkitOverflowScrolling: 'touch' }}
                 >
+                  {/* Discount Summary */}
+                  {(seniorCount > 0 || pwdCount > 0) && (
+                    <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-lg p-2">
+                      <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">
+                        Discount Beneficiaries:
+                      </p>
+                      {seniorCount > 0 && (
+                        <p className="text-[10px] text-green-600 dark:text-green-500">
+                          Senior Citizens: {seniorCount} item(s)
+                        </p>
+                      )}
+                      {pwdCount > 0 && (
+                        <p className="text-[10px] text-green-600 dark:text-green-500">
+                          PWD: {pwdCount} item(s)
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Order Type */}
                   <div>
                     <Label className="text-xs">Order Type</Label>
@@ -1166,46 +2376,85 @@ useEffect(() => {
                           <p className="text-xs">No items in cart</p>
                         </div>
                       ) : (
-                        cart.map(item => (
-                          <div key={item._id} className="flex justify-between items-center p-1.5 border rounded hover:bg-muted/30">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-xs truncate">{item.name}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                ₱{item.price.toFixed(2)} × {item.quantity}
-                              </p>
+                        cart.map(item => {
+                          const discountedPrice = item.price * 0.8;
+                          return (
+                            <div key={item._id} className="flex flex-col p-1.5 border rounded hover:bg-muted/30">
+                              <div className="flex justify-between items-center">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1">
+                                    <p className="font-medium text-xs truncate">{item.name}</p>
+                                    {item.hasDiscount && (
+                                      <Badge variant="default" className="text-[8px] h-4 px-1 bg-green-600">
+                                        20% OFF
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {item.hasDiscount ? (
+                                      <>
+                                        <p className="text-[10px] text-muted-foreground line-through">
+                                          ₱{item.price.toFixed(2)}
+                                        </p>
+                                        <p className="text-[10px] text-green-600 font-bold">
+                                          ₱{discountedPrice.toFixed(2)}
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <p className="text-[10px] text-muted-foreground">
+                                        ₱{item.price.toFixed(2)}
+                                      </p>
+                                    )}
+                                    <p className="text-[10px] text-muted-foreground">
+                                      × {item.quantity}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 ml-2">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => updateCartQuantity(item._id, -1)} 
+                                    className="h-6 w-6 p-0"
+                                    disabled={isInventoryProcessing || isCheckingStock}
+                                  >
+                                    <Minus className="w-2.5 h-2.5" />
+                                  </Button>
+                                  <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => updateCartQuantity(item._id, 1)} 
+                                    className="h-6 w-6 p-0"
+                                    disabled={isInventoryProcessing || isCheckingStock}
+                                  >
+                                    <Plus className="w-2.5 h-2.5" />
+                                  </Button>
+                                  {item.hasDiscount && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => removeDiscount(item._id)} 
+                                      className="h-6 w-6 p-0 text-yellow-600"
+                                      title="Remove discount"
+                                    >
+                                      <Percent className="w-2.5 h-2.5" />
+                                    </Button>
+                                  )}
+                                  <Button 
+                                    size="sm" 
+                                    variant="destructive" 
+                                    onClick={() => removeFromCart(item._id)} 
+                                    className="h-6 w-6 p-0"
+                                    disabled={isInventoryProcessing || isCheckingStock}
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1 ml-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => updateCartQuantity(item._id, -1)} 
-                                className="h-6 w-6 p-0"
-                                disabled={isInventoryProcessing || isCheckingStock}
-                              >
-                                <Minus className="w-2.5 h-2.5" />
-                              </Button>
-                              <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => updateCartQuantity(item._id, 1)} 
-                                className="h-6 w-6 p-0"
-                                disabled={isInventoryProcessing || isCheckingStock}
-                              >
-                                <Plus className="w-2.5 h-2.5" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="destructive" 
-                                onClick={() => removeFromCart(item._id)} 
-                                className="h-6 w-6 p-0"
-                                disabled={isInventoryProcessing || isCheckingStock}
-                              >
-                                <Trash2 className="w-2.5 h-2.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -1220,10 +2469,14 @@ useEffect(() => {
                         <span>Subtotal:</span>
                         <span>₱{subtotal.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span>Tax (10%):</span>
-                        <span>₱{tax.toFixed(2)}</span>
-                      </div>
+                      
+                      {discountTotal > 0 && (
+                        <div className="flex justify-between text-xs text-green-600 dark:text-green-500">
+                          <span>Total Discount:</span>
+                          <span>-₱{discountTotal.toFixed(2)}</span>
+                        </div>
+                      )}
+                      
                       <Separator />
                       <div className="flex justify-between font-bold text-sm">
                         <span>Total:</span>
@@ -1404,6 +2657,16 @@ useEffect(() => {
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                title="Print Menu"
+                onClick={handlePrintMenu}
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -1414,7 +2677,7 @@ useEffect(() => {
         <div className="fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl z-50 overflow-hidden flex flex-col">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-semibold flex items-center gap-2">
-              <History className="w-4 h-4" />
+              <Save className="w-4 h-4" />
               Saved Orders ({savedOrders.length})
             </h3>
             <Button
@@ -1430,7 +2693,7 @@ useEffect(() => {
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {savedOrders.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <History className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <Save className="h-12 w-12 mx-auto mb-3 opacity-20" />
                 <p className="text-sm">No saved orders</p>
               </div>
             ) : (
@@ -1449,6 +2712,13 @@ useEffect(() => {
                     
                     <div className="text-xs">
                       <p className="font-medium">{order.customerName}</p>
+                      {(order.seniorCount || order.pwdCount) && (
+                        <p className="text-green-600 dark:text-green-500 text-[10px]">
+                          {order.seniorCount ? `${order.seniorCount} Senior` : ''}
+                          {order.seniorCount && order.pwdCount ? ' • ' : ''}
+                          {order.pwdCount ? `${order.pwdCount} PWD` : ''}
+                        </p>
+                      )}
                       <p className="text-muted-foreground">{order.items.length} items • ₱{order.total.toFixed(2)}</p>
                     </div>
                     
@@ -1462,6 +2732,15 @@ useEffect(() => {
                       >
                         Load Order
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 w-7 p-0"
+                        onClick={() => handleReprintReceipt(order)}
+                        title="Reprint Receipt"
+                      >
+                        <Printer className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -1471,7 +2750,41 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Menu Printing Modal */}
+      <MenuPrintingModal
+        isOpen={showMenuPrinting}
+        onClose={() => setShowMenuPrinting(false)}
+        products={products}
+      />
+
+      {/* Order History Modal */}
+      <OrderHistoryModal
+        isOpen={showOrderHistory}
+        onClose={() => setShowOrderHistory(false)}
+        orders={savedOrders}
+        onReprint={handleReprintReceipt}
+        onViewDetails={handleViewOrderDetails}
+      />
+
+      {/* Discount Modal */}
+      <DiscountModal
+        isOpen={showDiscountModal}
+        onClose={() => setShowDiscountModal(false)}
+        onApply={handleApplyDiscount}
+        cartItems={cart}
+      />
+
+      {/* Receipt Modal */}
+      {showReceipt && (
+        <ReceiptModal
+          receipt={currentReceipt}
+          onClose={() => setShowReceipt(false)}
+          onPrint={handlePrintReceipt}
+          onSavePDF={handleSavePDF}
+        />
+      )}
+
+      {/* Insufficient Stock Modal */}
       <InsufficientStockModal />
     </div>
   );
