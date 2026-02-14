@@ -12,9 +12,7 @@ import {
   Download,
   RefreshCw,
   ArrowLeft,
-  ArrowRight,
   Save,
-  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Unit, isValidUnit } from '@/lib/unit-conversion';

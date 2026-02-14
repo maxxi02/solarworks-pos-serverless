@@ -1,5 +1,6 @@
+// config/db-Connect.ts
 import { Db } from "mongodb";
-import { MONGODB } from './db'; // Change to relative import, not @/config/db
+import { MONGODB } from './db'; // Import your existing MongoDB connection
 
 export const db = MONGODB;
 
@@ -8,15 +9,19 @@ let connectionPromise: Promise<Db> | null = null;
 
 export async function connectToDatabase(): Promise<Db> {
   if (isConnected && db) {
+    console.log('📦 Using existing database connection');
     return db;
   }
 
   if (connectionPromise) {
+    console.log('⏳ Waiting for existing connection promise...');
     return connectionPromise;
   }
 
+  console.log('📦 Connecting to database...');
   connectionPromise = (async () => {
     try {
+      // Test the connection with a ping
       await db.command({ ping: 1 });
       isConnected = true;
       console.log('✅ Database connected successfully');
