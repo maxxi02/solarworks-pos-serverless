@@ -1,12 +1,21 @@
-// lib/models/attendance.model.ts
+// lib/models/attendance.model.ts - UPDATED with 12-hour shifts
 
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
 import type { Attendance, AttendanceStatus } from "@/types/attendance";
 
 const COLLECTION_NAME = "attendance";
-const TEMP_COLLECTION_NAME = "attendance_temp"; // For unconfirmed records
-const REJECTED_COLLECTION_NAME = "attendance_rejected"; // For audit trail
+const TEMP_COLLECTION_NAME = "attendance_temp";
+const REJECTED_COLLECTION_NAME = "attendance_rejected";
+
+// Helper function to get current shift
+function getCurrentShift(): "morning" | "afternoon" {
+  const now = new Date();
+  const hours = now.getHours();
+  // Morning shift: 12:00 AM - 11:59 AM (0-11)
+  // Afternoon shift: 12:00 PM - 11:59 PM (12-23)
+  return hours < 12 ? "morning" : "afternoon";
+}
 
 export class AttendanceModel {
   private static getCollection() {
@@ -24,28 +33,32 @@ export class AttendanceModel {
   // Clock in a staff member (saves to temp collection)
   static async clockIn(userId: string): Promise<Attendance | null> {
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
 
-    // Check if already clocked in today (in temp or confirmed)
+    // Check if already clocked in for THIS SHIFT today
     const existingTemp = await tempCollection.findOne({
       userId,
       date: today,
+      shift: currentShift,
     });
 
     const collection = this.getCollection();
     const existingConfirmed = await collection.findOne({
       userId,
       date: today,
+      shift: currentShift,
     });
 
     if (existingTemp || existingConfirmed) {
-      return null; // Already clocked in
+      return null; // Already clocked in for this shift
     }
 
     const now = new Date();
-    const attendance: Omit<Attendance, "_id"> = {
+    const attendance: Omit<Attendance, "_id"> & { shift?: string } = {
       userId,
       date: today,
+      shift: currentShift, // Add shift field
       clockInTime: now,
       status: "pending",
       createdAt: now,
@@ -57,19 +70,21 @@ export class AttendanceModel {
     return {
       ...attendance,
       _id: result.insertedId.toString(),
-    };
+    } as Attendance;
   }
 
   // Clock out a staff member (updates record in either temp or confirmed collection)
   static async clockOut(userId: string): Promise<Attendance | null> {
     const today = new Date().toISOString().split("T")[0];
+    const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
     const collection = this.getCollection();
 
-    // First check temp collection
+    // First check temp collection for current shift
     let attendance = await tempCollection.findOne({
       userId,
       date: today,
+      shift: currentShift,
     });
 
     let isInTempCollection = true;
@@ -79,6 +94,7 @@ export class AttendanceModel {
       attendance = await collection.findOne({
         userId,
         date: today,
+        shift: currentShift,
       });
       isInTempCollection = false;
     }
@@ -125,15 +141,17 @@ export class AttendanceModel {
     }
   }
 
-  // Get today's attendance for a user (check both temp and confirmed)
+  // Get today's attendance for a user (check both temp and confirmed, current shift)
   static async getTodayAttendance(userId: string): Promise<Attendance | null> {
     const today = new Date().toISOString().split("T")[0];
+    const currentShift = getCurrentShift();
 
     // First check temp collection
     const tempCollection = this.getTempCollection();
     let attendance = await tempCollection.findOne({
       userId,
       date: today,
+      shift: currentShift,
     });
 
     // If not in temp, check confirmed collection
@@ -142,6 +160,7 @@ export class AttendanceModel {
       attendance = await collection.findOne({
         userId,
         date: today,
+        shift: currentShift,
       });
     }
 
@@ -151,6 +170,28 @@ export class AttendanceModel {
       ...attendance,
       _id: attendance._id.toString(),
     } as Attendance;
+  }
+
+  // Get all attendance records for today (both shifts)
+  static async getAllTodayAttendance(userId: string): Promise<Attendance[]> {
+    const today = new Date().toISOString().split("T")[0];
+    const tempCollection = this.getTempCollection();
+    const collection = this.getCollection();
+
+    const tempRecords = await tempCollection
+      .find({ userId, date: today })
+      .toArray();
+
+    const confirmedRecords = await collection
+      .find({ userId, date: today })
+      .toArray();
+
+    const allRecords = [...tempRecords, ...confirmedRecords];
+
+    return allRecords.map((record) => ({
+      ...record,
+      _id: record._id.toString(),
+    })) as Attendance[];
   }
 
   // Get all pending attendance records from temp collection (for admin)
@@ -172,7 +213,7 @@ export class AttendanceModel {
     const collection = this.getCollection();
     const records = await collection
       .find({ date })
-      .sort({ clockInTime: -1 })
+      .sort({ shift: 1, clockInTime: -1 }) // Sort by shift then time
       .toArray();
 
     return records.map((record) => ({
@@ -206,7 +247,7 @@ export class AttendanceModel {
       updatedAt: new Date(),
     };
 
-    delete (confirmedRecord as { _id?: ObjectId })._id; // Remove _id for insert
+    delete (confirmedRecord as { _id?: ObjectId })._id;
 
     // Insert into permanent collection
     const result = await collection.insertOne(confirmedRecord);
@@ -220,7 +261,7 @@ export class AttendanceModel {
     } as Attendance;
   }
 
-  // Reject attendance - saves to rejected collection for audit trail, then deletes from temp
+  // Reject attendance - saves to rejected collection for audit trail
   static async rejectAttendance(
     attendanceId: string,
     adminUserId: string,
@@ -245,12 +286,9 @@ export class AttendanceModel {
       updatedAt: new Date(),
     };
 
-    delete (rejectedRecord as { _id?: ObjectId })._id; // Remove _id for insert
+    delete (rejectedRecord as { _id?: ObjectId })._id;
 
-    // Insert into rejected collection (for audit)
     await rejectedCollection.insertOne(rejectedRecord);
-
-    // Delete from temp collection
     const result = await tempCollection.deleteOne({
       _id: new ObjectId(attendanceId),
     });
@@ -264,6 +302,7 @@ export class AttendanceModel {
     daysPresent: number;
     pendingApprovals: number;
     confirmedDays: number;
+    shiftsWorked: number;
   }> {
     const collection = this.getCollection();
     const tempCollection = this.getTempCollection();
@@ -296,18 +335,68 @@ export class AttendanceModel {
       (sum, r) => sum + (r.hoursWorked || 0),
       0,
     );
-    const daysPresent = confirmedRecords.length;
+
+    // Count unique dates for days present
+    const uniqueDates = new Set(confirmedRecords.map((r) => r.date));
+    const daysPresent = uniqueDates.size;
+
     const pendingApprovals = pendingRecords.length;
     const confirmedDays = confirmedRecords.filter(
       (r) => r.status === "confirmed",
     ).length;
+    const shiftsWorked = confirmedRecords.length; // Total number of shifts
 
     return {
       totalHours: Math.round(totalHours * 100) / 100,
       daysPresent,
       pendingApprovals,
       confirmedDays,
+      shiftsWorked,
     };
+  }
+
+  // Get user's attendance history (both confirmed and pending)
+  static async getUserAttendanceHistory(
+    userId: string,
+    startDate?: string,
+    endDate?: string,
+    limit: number = 30,
+  ): Promise<Attendance[]> {
+    const collection = this.getCollection();
+    const tempCollection = this.getTempCollection();
+
+    const query: Record<string, unknown> = { userId };
+
+    if (startDate && endDate) {
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+
+    // Get confirmed records
+    const confirmedRecords = await collection
+      .find(query)
+      .sort({ date: -1, shift: -1 })
+      .limit(limit)
+      .toArray();
+
+    // Get pending records
+    const pendingRecords = await tempCollection
+      .find(query)
+      .sort({ date: -1, shift: -1 })
+      .toArray();
+
+    // Combine and sort by date and shift
+    const allRecords = [...confirmedRecords, ...pendingRecords];
+    allRecords.sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      // If same date, afternoon shift comes before morning
+      return (b.shift || "").localeCompare(a.shift || "");
+    });
+
+    return allRecords.slice(0, limit).map((record) => ({
+      ...record,
+      _id: record._id.toString(),
+    })) as Attendance[];
   }
 
   // Get rejected attendance records (for admin audit trail)
@@ -334,46 +423,6 @@ export class AttendanceModel {
       .toArray();
 
     return records.map((record) => ({
-      ...record,
-      _id: record._id.toString(),
-    })) as Attendance[];
-  }
-
-  static async getUserAttendanceHistory(
-    userId: string,
-    startDate?: string,
-    endDate?: string,
-    limit: number = 30,
-  ): Promise<Attendance[]> {
-    const collection = this.getCollection();
-    const tempCollection = this.getTempCollection();
-
-    const query: Record<string, unknown> = { userId };
-
-    if (startDate && endDate) {
-      query.date = { $gte: startDate, $lte: endDate };
-    }
-
-    // Get confirmed records
-    const confirmedRecords = await collection
-      .find(query)
-      .sort({ date: -1 })
-      .limit(limit)
-      .toArray();
-
-    // Get pending records
-    const pendingRecords = await tempCollection
-      .find(query)
-      .sort({ date: -1 })
-      .toArray();
-
-    // Combine and sort by date
-    const allRecords = [...confirmedRecords, ...pendingRecords];
-    allRecords.sort((a, b) => {
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-
-    return allRecords.slice(0, limit).map((record) => ({
       ...record,
       _id: record._id.toString(),
     })) as Attendance[];

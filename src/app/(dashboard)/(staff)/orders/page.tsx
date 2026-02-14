@@ -1,71 +1,96 @@
-// OrdersPage.tsx
+// app/orders/page.tsx  (or wherever OrdersPage lives)
 
 "use client";
 
 import { useAttendance } from "@/hooks/useAttendance";
 import { ClockInCard } from "./_components/ClockInCard";
-import { AlertTriangle, ShoppingCart, CheckCircle2, Clock } from "lucide-react";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import {
+    AlertTriangle,
+    ShoppingCart,
+    Clock,
+    CheckCircle2,
+    ChevronRight,
+    Loader2,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
-const OrdersPage = () => {
-    const { isClockedIn, isLoading, attendance } = useAttendance();
+function OrdersPage() {
+    const { isClockedIn, isLoading, attendance, clockIn, clockOut } = useAttendance();
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gray-50 p-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="animate-pulse space-y-4">
-                        <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-                        <div className="h-64 bg-gray-200 rounded"></div>
+            <div className="min-h-screen bg-background">
+                <div className="container max-w-7xl mx-auto p-6">
+                    <div className="animate-pulse space-y-6">
+                        <div className="h-8 w-48 bg-muted rounded"></div>
+                        <div className="h-64 bg-muted rounded-xl"></div>
                     </div>
                 </div>
             </div>
         );
     }
 
-    // If not clocked in, show the clock-in requirement
+    // Not clocked in → full-screen prompt + clock-in button
     if (!isClockedIn) {
         return (
-            <div className="min-h-screen bg-gray-50 p-6">
-                <div className="max-w-2xl mx-auto mt-12">
-                    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-8 text-center mb-6 shadow-lg">
-                        <AlertTriangle className="h-20 w-20 text-yellow-600 mx-auto mb-4 animate-bounce" />
-                        <h2 className="text-3xl font-bold text-gray-800 mb-3">
-                            Clock In Required
-                        </h2>
-                        <p className="text-gray-600 text-lg mb-2">
-                            You must clock in before accessing the Orders page
+            <div className="min-h-screen bg-background flex items-center justify-center p-6">
+                <div className="max-w-lg w-full">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center shadow-sm">
+                        <AlertTriangle className="h-16 w-16 text-yellow-600 mx-auto mb-6" />
+                        <h2 className="text-2xl font-bold mb-3">Clock In Required</h2>
+                        <p className="text-muted-foreground mb-6">
+                            You need to start your shift before accessing orders and other features.
                         </p>
-                        <p className="text-sm text-gray-500">
-                            This ensures accurate time tracking for your shift
-                        </p>
+
+                        <Button
+                            onClick={clockIn}
+                            disabled={isLoading}
+                            size="lg"
+                            className="w-full sm:w-auto"
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                "Start Shift (Clock In)"
+                            )}
+                        </Button>
                     </div>
-                    <ClockInCard />
                 </div>
             </div>
         );
     }
 
-    // User is clocked in - show the full OrdersPage
+    // Clocked in → normal page with Sheet for attendance controls
     return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Top Status Bar - Compact */}
-            <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-                <div className="max-w-7xl mx-auto px-6 py-3">
+        <div className="min-h-screen bg-background">
+            {/* Top status bar */}
+            <div className="border-b bg-card sticky top-0 z-20 backdrop-blur-sm">
+                <div className="container max-w-7xl mx-auto px-6 py-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                                <span className="text-sm font-medium text-gray-700">
-                                    Clocked In
-                                </span>
+                                <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                                <span className="font-medium">On Shift</span>
                             </div>
 
                             {attendance && (
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
                                     <Clock className="h-4 w-4" />
                                     <span>
-                                        Since {new Date(attendance.clockInTime).toLocaleTimeString("en-US", {
-                                            hour: "2-digit",
+                                        Since {new Date(attendance.clockInTime).toLocaleTimeString([], {
+                                            hour: "numeric",
                                             minute: "2-digit",
                                         })}
                                     </span>
@@ -73,109 +98,136 @@ const OrdersPage = () => {
                             )}
 
                             {attendance?.status === "pending" && (
-                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
                                     Pending Approval
-                                </span>
+                                </Badge>
                             )}
 
                             {attendance?.status === "confirmed" && (
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                                    <CheckCircle2 className="h-3 w-3" />
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                                     Confirmed
-                                </span>
+                                </Badge>
                             )}
                         </div>
 
-                        <button
-                            onClick={() => {
-                                // You can add a modal or expand to show full attendance details
-                                const elem = document.getElementById("attendance-details");
-                                elem?.scrollIntoView({ behavior: "smooth" });
-                            }}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                            View Details
-                        </button>
+                        {/* Sheet trigger */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-1.5">
+                                    Attendance
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </SheetTrigger>
+
+                            <SheetContent side="right" className="w-full sm:w-[420px] sm:max-w-[420px]">
+                                <SheetHeader className="mb-6">
+                                    <SheetTitle className="flex items-center gap-2">
+                                        <Clock className="h-5 w-5 text-primary" />
+                                        Shift Controls
+                                    </SheetTitle>
+                                </SheetHeader>
+
+                                <div className="space-y-6">
+                                    <ClockInCard />
+
+                                    <Separator />
+
+                                    <div className="space-y-4">
+                                        {!attendance?.clockOutTime ? (
+                                            <Button
+                                                onClick={clockOut}
+                                                disabled={isLoading}
+                                                variant="destructive"
+                                                size="lg"
+                                                className="w-full"
+                                            >
+                                                {isLoading ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        Ending shift…
+                                                    </>
+                                                ) : (
+                                                    "Clock Out – End Shift"
+                                                )}
+                                            </Button>
+                                        ) : (
+                                            <div className="text-center text-muted-foreground py-4">
+                                                Shift completed
+                                            </div>
+                                        )}
+
+                                        <p className="text-xs text-center text-muted-foreground">
+                                            Remember to clock out at the end of your shift.
+                                            {attendance?.status === "pending" && (
+                                                <span className="block mt-1 text-yellow-700">
+                                                    Your current attendance is awaiting manager approval.
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                            </SheetContent>
+                        </Sheet>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto p-6 space-y-6">
-                {/* Collapsible Attendance Details */}
-                <details className="bg-white rounded-lg shadow-sm" id="attendance-details">
-                    <summary className="px-6 py-4 cursor-pointer hover:bg-gray-50 rounded-lg font-medium text-gray-700 flex items-center gap-2">
-                        <Clock className="h-5 w-5 text-blue-600" />
-                        Attendance Details
-                    </summary>
-                    <div className="px-6 pb-4 pt-2">
-                        <ClockInCard />
-                    </div>
-                </details>
+            {/* Main content */}
+            <div className="container max-w-7xl mx-auto p-6 space-y-8">
+                <div className="flex items-center gap-3">
+                    <ShoppingCart className="h-7 w-7 text-primary" />
+                    <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
+                </div>
 
-                {/* Main Orders Content */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <ShoppingCart className="h-7 w-7 text-blue-600" />
-                        <h1 className="text-3xl font-bold text-gray-800">Orders</h1>
-                    </div>
-
-                    {/* Your existing orders functionality here */}
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {/* Sample Order Card */}
-                            <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h3 className="font-semibold text-lg">Order #1234</h3>
-                                        <p className="text-sm text-gray-500">Table 5</p>
-                                    </div>
-                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                                        Pending
-                                    </span>
-                                </div>
-                                <div className="space-y-1 text-sm text-gray-600 mb-3">
-                                    <p>• 2x Burger</p>
-                                    <p>• 1x Fries</p>
-                                    <p>• 2x Soda</p>
-                                </div>
-                                <button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-md font-medium transition-colors">
-                                    Mark as Served
-                                </button>
+                {/* Your orders content here */}
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {/* Example order card */}
+                    <div className="border rounded-xl p-5 hover:shadow-sm transition-shadow">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 className="font-semibold">Order #1234</h3>
+                                <p className="text-sm text-muted-foreground">Table 5 • 12:45 PM</p>
                             </div>
-
-                            {/* Add more order cards or your actual order components */}
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-center min-h-[200px]">
-                                <div className="text-center text-gray-400">
-                                    <ShoppingCart className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                    <p className="text-sm">No more pending orders</p>
-                                </div>
-                            </div>
+                            <Badge variant="outline">Preparing</Badge>
                         </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-4 mt-6 pt-6 border-t border-gray-200">
-                            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2">
-                                <ShoppingCart className="h-5 w-5" />
-                                New Order
-                            </button>
-                            <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
-                                View All Orders
-                            </button>
+                        <div className="space-y-1.5 text-sm mb-5">
+                            <p>• 2× Cheeseburger</p>
+                            <p>• 1× Large Fries</p>
+                            <p>• 2× Cola</p>
                         </div>
+                        <Button className="w-full">Mark as Served</Button>
+                    </div>
+
+                    {/* Placeholder for empty state */}
+                    <div className="border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center text-muted-foreground min-h-[220px]">
+                        <ShoppingCart className="h-10 w-10 mb-3 opacity-40" />
+                        <p>No pending orders right now</p>
                     </div>
                 </div>
 
-                {/* Info Box */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-                    <p className="font-medium mb-1">💡 Reminder</p>
-                    <p>
-                        Don't forget to clock out at the end of your shift!
-                        {attendance?.status === "pending" && " Your attendance is pending admin confirmation."}
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-4 pt-6 border-t">
+                    <Button size="lg" className="gap-2">
+                        <ShoppingCart className="h-4 w-4" />
+                        New Order
+                    </Button>
+                    <Button variant="outline" size="lg">
+                        View All Orders
+                    </Button>
+                </div>
+
+                {/* Reminder */}
+                <div className="bg-muted/40 border rounded-lg p-5 text-sm">
+                    <p className="font-medium mb-1">Quick reminder</p>
+                    <p className="text-muted-foreground">
+                        Please clock out when your shift ends.{" "}
+                        {attendance?.status === "pending" && "Your current shift is still pending approval."}
                     </p>
                 </div>
             </div>
         </div>
     );
-};
+}
 
 export default OrdersPage;
