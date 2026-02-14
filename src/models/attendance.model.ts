@@ -338,4 +338,44 @@ export class AttendanceModel {
       _id: record._id.toString(),
     })) as Attendance[];
   }
+
+  static async getUserAttendanceHistory(
+    userId: string,
+    startDate?: string,
+    endDate?: string,
+    limit: number = 30,
+  ): Promise<Attendance[]> {
+    const collection = this.getCollection();
+    const tempCollection = this.getTempCollection();
+
+    const query: Record<string, unknown> = { userId };
+
+    if (startDate && endDate) {
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+
+    // Get confirmed records
+    const confirmedRecords = await collection
+      .find(query)
+      .sort({ date: -1 })
+      .limit(limit)
+      .toArray();
+
+    // Get pending records
+    const pendingRecords = await tempCollection
+      .find(query)
+      .sort({ date: -1 })
+      .toArray();
+
+    // Combine and sort by date
+    const allRecords = [...confirmedRecords, ...pendingRecords];
+    allRecords.sort((a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+    return allRecords.slice(0, limit).map((record) => ({
+      ...record,
+      _id: record._id.toString(),
+    })) as Attendance[];
+  }
 }
