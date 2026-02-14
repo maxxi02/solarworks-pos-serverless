@@ -21,7 +21,8 @@ import {
   Scale,
   Beaker,
   Ruler,
-  Box
+  Box,
+  FileSpreadsheet
 } from 'lucide-react';
 import {
   fetchInventory,
@@ -46,6 +47,7 @@ import {
 } from '@/lib/unit-conversion';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { SpreadsheetImport } from '@/app/(dashboard)/(admin)/inventory/stockalert/SpreadsheetImport';
 
 interface NewItemForm {
   name: string;
@@ -188,6 +190,7 @@ export default function InventoryPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState<Inventory | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [adjustmentType, setAdjustmentType] = useState<'restock' | 'usage' | 'waste' | 'correction' | 'deduction'>('restock');
   const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
   const [adjustmentUnit, setAdjustmentUnit] = useState<Unit>('g');
@@ -319,7 +322,6 @@ export default function InventoryPage() {
         icon: 'package'
       };
 
-      // Use type assertion only at the API boundary
       const result = await createInventoryItem(inventoryItem as any);
       setInventory(prev => [...prev, result]);
       setShowAddModal(false);
@@ -334,6 +336,42 @@ export default function InventoryPage() {
         description: error instanceof Error ? error.message : 'Unknown error occurred'
       });
     }
+  };
+
+  const handleBulkImport = async (items: any[]) => {
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: Array<{ item: string; error: string }> = [];
+
+    for (const item of items) {
+      try {
+        const result = await createInventoryItem(item as any);
+        if (result) {
+          successCount++;
+          setInventory(prev => [...prev, result]);
+        }
+      } catch (error: any) {
+        errorCount++;
+        errors.push({
+          item: item.name || 'Unknown',
+          error: error.message || 'Failed to import'
+        });
+        console.error('Failed to import item:', item.name, error);
+      }
+    }
+
+    if (errorCount > 0) {
+      toast.error(`Import completed with errors`, {
+        description: `${successCount} items added, ${errorCount} failed`
+      });
+      console.error('Import errors:', errors);
+    } else {
+      toast.success(`Import completed successfully`, {
+        description: `${successCount} items added to inventory`
+      });
+    }
+    
+    loadAlerts();
   };
 
   const handleStockAdjustment = async () => {
@@ -549,6 +587,13 @@ export default function InventoryPage() {
               </button>
             </Link>
             <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Import
+            </button>
+            <button
               onClick={loadInventory}
               className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
             >
@@ -560,7 +605,7 @@ export default function InventoryPage() {
               className="flex items-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
             >
               <Plus className="h-4 w-4" />
-              Add New Item
+              Add New
             </button>
           </div>
         </div>
@@ -827,13 +872,22 @@ export default function InventoryPage() {
                     ? 'Try a different search or clear filters' 
                     : 'Add your first inventory item'}
                 </p>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="mt-4 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
-                >
-                  <Plus className="mr-2 inline h-4 w-4" />
-                  Add New Item
-                </button>
+                <div className="flex justify-center gap-3 mt-4">
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                  >
+                    <Plus className="mr-2 inline h-4 w-4" />
+                    Add Manually
+                  </button>
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                  >
+                    <FileSpreadsheet className="mr-2 inline h-4 w-4" />
+                    Import from Spreadsheet
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1324,6 +1378,13 @@ export default function InventoryPage() {
         onClose={() => setDeleteModal({ isOpen: false, itemId: null, itemName: '' })}
         onConfirm={handleDeleteConfirm}
         itemName={deleteModal.itemName}
+      />
+
+      {/* Spreadsheet Import Modal */}
+      <SpreadsheetImport
+        onImport={handleBulkImport}
+        onClose={() => setShowImportModal(false)}
+        isOpen={showImportModal}
       />
     </div>
   );
