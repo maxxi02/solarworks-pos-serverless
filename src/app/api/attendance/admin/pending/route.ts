@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get pending attendance records
-    const attendanceCollection = MONGODB.collection("attendance");
+    const attendanceCollection = MONGODB.collection("attendance_temp");
     const records = await attendanceCollection
       .find({ status: "pending" })
       .sort({ clockInTime: -1 })

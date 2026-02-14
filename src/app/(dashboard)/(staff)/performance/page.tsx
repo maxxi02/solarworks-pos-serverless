@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "@/components/ui/calendar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Clock, 
-  CalendarDays, 
-  TrendingUp, 
+import {
+  Clock,
+  CalendarDays,
+  TrendingUp,
   AlertCircle,
   CheckCircle2,
   XCircle,
@@ -39,7 +39,7 @@ const MyPerformancePage = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch today's status
       const statusRes = await fetch("/api/attendance/status");
       const statusData = await statusRes.json();
@@ -71,9 +71,9 @@ const MyPerformancePage = () => {
           }),
           formattedClockOut: item.clockOutTime
             ? new Date(item.clockOutTime).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+              hour: "2-digit",
+              minute: "2-digit",
+            })
             : "Not clocked out",
         }));
         setAttendanceHistory(formatted);
