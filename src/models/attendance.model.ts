@@ -60,18 +60,32 @@ export class AttendanceModel {
     };
   }
 
-  // Clock out a staff member (updates temp record)
+  // Clock out a staff member (updates record in either temp or confirmed collection)
   static async clockOut(userId: string): Promise<Attendance | null> {
     const today = new Date().toISOString().split("T")[0];
     const tempCollection = this.getTempCollection();
+    const collection = this.getCollection();
 
-    const attendance = await tempCollection.findOne({
+    // First check temp collection
+    let attendance = await tempCollection.findOne({
       userId,
       date: today,
     });
 
+    let isInTempCollection = true;
+
+    // If not in temp, check confirmed collection
+    if (!attendance) {
+      attendance = await collection.findOne({
+        userId,
+        date: today,
+      });
+      isInTempCollection = false;
+    }
+
+    // Not found in either collection or already clocked out
     if (!attendance || attendance.clockOutTime) {
-      return null; // Not clocked in or already clocked out
+      return null;
     }
 
     const clockOutTime = new Date();
@@ -79,25 +93,36 @@ export class AttendanceModel {
       (clockOutTime.getTime() - new Date(attendance.clockInTime).getTime()) /
       (1000 * 60 * 60);
 
-    await tempCollection.updateOne(
-      { _id: attendance._id },
-      {
-        $set: {
-          clockOutTime,
-          hoursWorked: Math.round(hoursWorked * 100) / 100,
-          updatedAt: new Date(),
-        },
+    const updateData = {
+      $set: {
+        clockOutTime,
+        hoursWorked: Math.round(hoursWorked * 100) / 100,
+        updatedAt: new Date(),
       },
-    );
+    };
 
-    const updated = await tempCollection.findOne({ _id: attendance._id });
+    // Update in the appropriate collection
+    if (isInTempCollection) {
+      await tempCollection.updateOne({ _id: attendance._id }, updateData);
+      const updated = await tempCollection.findOne({ _id: attendance._id });
 
-    if (!updated) return null;
+      if (!updated) return null;
 
-    return {
-      ...updated,
-      _id: updated._id.toString(),
-    } as Attendance;
+      return {
+        ...updated,
+        _id: updated._id.toString(),
+      } as Attendance;
+    } else {
+      await collection.updateOne({ _id: attendance._id }, updateData);
+      const updated = await collection.findOne({ _id: attendance._id });
+
+      if (!updated) return null;
+
+      return {
+        ...updated,
+        _id: updated._id.toString(),
+      } as Attendance;
+    }
   }
 
   // Get today's attendance for a user (check both temp and confirmed)
