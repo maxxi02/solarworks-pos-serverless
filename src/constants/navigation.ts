@@ -37,6 +37,7 @@ export const PATHS = {
 
     STAFF: "/staff",
     STAFF_ACCESS_CONTROL: "/staff-management",
+    STAFF_ATTENDANCE: "/staff-attendance",
 
     REPORTS: "/reports",
     REPORTS_FINANCIAL: "/reports-and-analytics/financial-reports",
@@ -113,7 +114,10 @@ export const adminNavigation: NavItem[] = [
     title: "Staff Management",
     url: PATHS.ADMIN.STAFF,
     icon: UserCog,
-    items: [{ title: "Manage Staff", url: PATHS.ADMIN.STAFF_ACCESS_CONTROL }],
+    items: [
+      { title: "Manage Staff", url: PATHS.ADMIN.STAFF_ACCESS_CONTROL },
+      { title: "Staff Attendance", url: PATHS.ADMIN.STAFF_ATTENDANCE },
+    ],
   },
   {
     title: "Reports & Analytics",
