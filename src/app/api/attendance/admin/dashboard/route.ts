@@ -1,42 +1,49 @@
-// app/api/attendance/admin/dashboard/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
+import { ObjectId } from "mongodb";
+import type {
+  Attendance,
+  EnrichedAttendance,
+  UserBasicInfo,
+} from "@/types/attendance";
+
+interface DashboardStats {
+  totalRecords: number;
+  totalHours: number;
+  uniqueStaff: number;
+  averageHours: number;
+}
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await auth.api.getSession({ headers: await headers() });
 
     if (!session?.user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
-    // Check if user is admin or manager
-    const userRole = session.user.role;
-    if (userRole !== "admin" && userRole !== "manager") {
+    const { role } = session.user;
+    if (role !== "admin" && role !== "manager") {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Access denied. Admin or Manager role required.",
-        },
-        { status: 403 }
+        { success: false, message: "Access denied" },
+        { status: 403 },
       );
     }
 
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
-    const staffId = searchParams.get("staffId") || undefined;
+    const staffId = searchParams.get("staffId");
 
-    // Get attendance records based on filters
-    const query: Record<string, unknown> = {};
+    const query: {
+      userId?: string;
+      date?: { $gte: string; $lte: string };
+    } = {};
 
     if (staffId) {
       query.userId = staffId;
@@ -46,63 +53,83 @@ export async function GET(req: NextRequest) {
       query.date = { $gte: startDate, $lte: endDate };
     }
 
-    // Get confirmed attendance records
-    const collection = MONGODB.collection("attendance");
+    const collection = MONGODB.collection<Attendance>("attendance");
+
     const records = await collection
       .find(query)
       .sort({ date: -1, clockInTime: -1 })
       .toArray();
 
-    // Get user details for all records
-    const usersCollection = MONGODB.collection("user");
-    const userIds = [...new Set(records.map((r) => r.userId))];
+    // ── Prepare user lookup ─────────────────────────────────────────────
+    const userIds = [...new Set(records.map((r) => String(r.userId)))].filter(
+      Boolean,
+    );
 
-    // 🔥 FIX: Better Auth stores user ID in _id field (as string)
-    // So we need to query by _id, not id
+    const userObjectIds = userIds
+      .map((id) => {
+        try {
+          return new ObjectId(id);
+        } catch {
+          console.warn(`Invalid userId in dashboard: ${id}`);
+          return null;
+        }
+      })
+      .filter((id): id is ObjectId => id !== null);
+
+    console.log("[dashboard] Looking up users for IDs:", userIds);
+
+    const usersCollection = MONGODB.collection("user");
+
     const users = await usersCollection
-      .find({ _id: { $in: userIds } })
+      .find({ _id: { $in: userObjectIds } })
       .toArray();
 
-    // 🔥 FIX: Map users by _id (converted to string)
-    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+    console.log("[dashboard] Found users:", users.length);
 
-    const recordsWithUsers = records.map((record) => {
-      const user = userMap.get(record.userId);
-      return {
-        ...record,
-        _id: record._id.toString(),
-        user: user
-          ? {
-              id: user._id.toString(),
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              salaryPerHour: user.salaryPerHour,
-            }
-          : undefined,
-      };
-    });
+    const userMap = new Map<string, UserBasicInfo>(
+      users.map((user) => [
+        user._id.toString(),
+        {
+          id: user._id.toString(),
+          name: (user.name as string) || "Unnamed User",
+          email: (user.email as string) || "—",
+          role: (user.role as string) || "—",
+        } satisfies UserBasicInfo,
+      ]),
+    );
 
-    // Calculate overall statistics
-    const totalHours = records.reduce((sum, r) => sum + (r.hoursWorked || 0), 0);
-    const uniqueStaff = new Set(records.map((r) => r.userId)).size;
+    const enrichedRecords: EnrichedAttendance[] = records.map((record) => ({
+      ...record,
+      _id: String(record._id),
+      userId: String(record.userId),
+      user: userMap.get(String(record.userId)),
+    }));
+
+    // Calculate stats
+    const totalHours = records.reduce(
+      (sum, r) => sum + (r.hoursWorked ?? 0),
+      0,
+    );
+    const uniqueStaff = new Set(records.map((r) => String(r.userId))).size;
     const averageHours = records.length > 0 ? totalHours / records.length : 0;
+
+    const stats: DashboardStats = {
+      totalRecords: records.length,
+      totalHours: Math.round(totalHours * 100) / 100,
+      uniqueStaff,
+      averageHours: Math.round(averageHours * 100) / 100,
+    };
 
     return NextResponse.json({
       success: true,
-      records: recordsWithUsers,
-      stats: {
-        totalRecords: records.length,
-        totalHours: Math.round(totalHours * 100) / 100,
-        uniqueStaff,
-        averageHours: Math.round(averageHours * 100) / 100,
-      },
+      records: enrichedRecords,
+      stats,
     });
   } catch (error) {
-    console.error("Get admin dashboard error:", error);
+    console.error("[dashboard] Error:", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error", error: String(error) },
-      { status: 500 }
+      { success: false, message: "Internal server error" },
+      { status: 500 },
     );
   }
 }

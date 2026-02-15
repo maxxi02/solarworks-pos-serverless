@@ -1,15 +1,13 @@
-// app/api/attendance/admin/pending/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
+import { ObjectId } from "mongodb";
+import { AttendanceRecord, EnrichedAttendance, UserBasicInfo } from "@/types/attendance";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await auth.api.getSession({ headers: await headers() });
 
     if (!session?.user) {
       return NextResponse.json(
@@ -18,59 +16,73 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Check if user is admin or manager
-    const userRole = session.user.role;
-    if (userRole !== "admin" && userRole !== "manager") {
+    const { role } = session.user;
+    if (role !== "admin" && role !== "manager") {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Access denied. Admin or Manager role required.",
-        },
+        { success: false, message: "Access denied" },
         { status: 403 },
       );
     }
 
-    // Get pending attendance records
-    const attendanceCollection = MONGODB.collection("attendance_temp");
-    const records = await attendanceCollection
-      .find({ status: "pending" })
+    const tempCollection =
+      MONGODB.collection<AttendanceRecord>("attendance_temp");
+
+    const records = await tempCollection
+      .find({})
       .sort({ clockInTime: -1 })
       .toArray();
 
-    // Fetch user details for each attendance record
-    const usersCollection = MONGODB.collection("user");
-    const userIds = [...new Set(records.map((r) => r.userId))];
+    // ── Prepare user lookup ─────────────────────────────────────────────
+    const userIds = [...new Set(records.map((r) => String(r.userId)))].filter(
+      Boolean,
+    );
 
-    // 🔥 FIX: Query by _id field
+    const userObjectIds = userIds
+      .map((id) => {
+        try {
+          return new ObjectId(id);
+        } catch {
+          console.warn(`Invalid userId in pending: ${id}`);
+          return null;
+        }
+      })
+      .filter((id): id is ObjectId => id !== null);
+
+    console.log("[pending] Looking up users for IDs:", userIds);
+
+    const usersCollection = MONGODB.collection("user");
+
     const users = await usersCollection
-      .find({ _id: { $in: userIds } })
+      .find({ _id: { $in: userObjectIds } })
       .toArray();
 
-    // 🔥 FIX: Map by _id as string
-    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+    console.log("[pending] Found users:", users.length);
 
-    const recordsWithUsers = records.map((record) => {
-      const user = userMap.get(record.userId);
-      return {
-        ...record,
-        _id: record._id.toString(),
-        user: user
-          ? {
-              id: user._id.toString(),
-              name: user.name,
-              email: user.email,
-              role: user.role,
-            }
-          : undefined,
-      };
-    });
+    const userMap = new Map<string, UserBasicInfo>(
+      users.map((user) => [
+        user._id.toString(),
+        {
+          id: user._id.toString(),
+          name: (user.name as string) || "Unnamed User",
+          email: (user.email as string) || "—",
+          role: (user.role as string) || "—",
+        } satisfies UserBasicInfo,
+      ]),
+    );
+
+    const enrichedRecords: EnrichedAttendance[] = records.map((record) => ({
+      ...record,
+      _id: String(record._id),
+      userId: String(record.userId),
+      user: userMap.get(String(record.userId)),
+    }));
 
     return NextResponse.json({
       success: true,
-      records: recordsWithUsers,
+      records: enrichedRecords,
     });
   } catch (error) {
-    console.error("Get pending attendance error:", error);
+    console.error("[pending] Error:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 },
