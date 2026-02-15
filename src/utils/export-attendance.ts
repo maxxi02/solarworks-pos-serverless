@@ -5,48 +5,47 @@ import type { AttendanceWithUser } from "@/types/attendance";
 /**
  * Export attendance data to CSV format
  */
-export const exportToCSV = (
-  records: AttendanceWithUser[],
-  filename: string = "attendance-report",
-) => {
-  // CSV Headers
-  const headers = [
-    "Staff Name",
-    "Email",
-    "Role",
-    "Date",
-    "Clock In",
-    "Clock Out",
-    "Hours Worked",
-    "Status",
-    "Admin Note",
-  ];
+export function exportToCSV(
+  data: AttendanceWithUser[] | string[][], 
+  filename: string
+): void {
+  let csvContent: string;
 
-  // Convert records to CSV rows
-  const rows = records.map((record) => [
-    record.user?.name || "Unknown",
-    record.user?.email || "",
-    record.user?.role || "",
-    record.date,
-    new Date(record.clockInTime).toLocaleString(),
-    record.clockOutTime
-      ? new Date(record.clockOutTime).toLocaleString()
-      : "Not clocked out",
-    record.hoursWorked?.toFixed(2) || "0",
-    record.status,
-    record.adminNote || "",
-  ]);
+  if (Array.isArray(data[0]) && typeof data[0][0] === 'string') {
+    // Handle string[][] format
+    csvContent = (data as string[][])
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+  } else {
+    // Handle AttendanceWithUser[] format (existing logic)
+    const records = data as AttendanceWithUser[];
+    const headers = ["Staff Name", "Email", "Date", "Clock In", "Clock Out", "Hours Worked", "Status"];
+    const rows = records.map(r => [
+      r.user?.name || "Unknown",
+      r.user?.email || "",
+      new Date(r.date).toLocaleDateString(),
+      new Date(r.clockInTime).toLocaleTimeString(),
+      r.clockOutTime ? new Date(r.clockOutTime).toLocaleTimeString() : "Not clocked out",
+      r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
+      r.status
+    ]);
+    
+    csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+  }
 
-  // Combine headers and rows
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-  ].join("\n");
-
-  // Create and download file
-  downloadFile(csvContent, `${filename}.csv`, "text/csv");
-};
-
+  // Download logic
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 /**
  * Export attendance data to Excel format (using CSV with .xlsx extension)
  * For true Excel format, you'd need a library like xlsx or exceljs

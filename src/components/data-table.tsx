@@ -60,9 +60,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// Drag Handle Component
+// ── Drag Handle ──────────────────────────────────────────────────────────────
 interface DragHandleProps {
-  id: string;
+  id: UniqueIdentifier;
 }
 
 function DragHandle({ id }: DragHandleProps) {
@@ -80,7 +80,7 @@ function DragHandle({ id }: DragHandleProps) {
   );
 }
 
-// Draggable Row Component
+// ── Draggable Row ────────────────────────────────────────────────────────────
 interface DraggableRowProps<TData> {
   row: Row<TData>;
 }
@@ -110,27 +110,33 @@ function DraggableRow<TData>({ row }: DraggableRowProps<TData>) {
   );
 }
 
-// Main DataTable Props
-export interface DataTableProps<TData, TValue> {
+// ── Main Props ───────────────────────────────────────────────────────────────
+export interface DataTableProps<TData, TValue = unknown> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
 
-  // Optional features
+  /** Enable row drag & drop reordering */
   enableDragAndDrop?: boolean;
+
+  /** Enable checkbox row selection */
   enableRowSelection?: boolean;
+
+  /** Show pagination controls */
   enablePagination?: boolean;
+
+  /** Allow column sorting */
   enableSorting?: boolean;
 
-  // Loading state
+  // Loading & Empty states
   loading?: boolean;
   loadingMessage?: string;
-
-  // Empty state
   emptyMessage?: string;
 
-  // Pagination
+  // Pagination (client or server-side)
   manualPagination?: boolean;
-  pageCount?: number;
+  pageCount?: number;           // required when manualPagination = true
+  totalCount?: number;          // total rows count (for display)
+  pagination?: PaginationState; // controlled pagination state (for manualPagination)
   onPaginationChange?: OnChangeFn<PaginationState>;
 
   // Selection
@@ -141,34 +147,29 @@ export interface DataTableProps<TData, TValue> {
   sorting?: SortingState;
   onSortingChange?: OnChangeFn<SortingState>;
 
-  // Filtering
+  // Column filters
   columnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: OnChangeFn<ColumnFiltersState>;
 
-  // Visibility
+  // Column visibility
   columnVisibility?: VisibilityState;
   onColumnVisibilityChange?: OnChangeFn<VisibilityState>;
 
-  // Drag and drop
-  onDragEnd?: (data: TData[]) => void;
+  // Drag & drop callback (called with new order)
+  onDragEnd?: (reorderedData: TData[]) => void;
 
-  // Get row ID
-  getRowId?: (row: TData) => string;
+  // Required when rows don't have `id` property or you want custom ID
+  getRowId?: (originalRow: TData, index: number, parent?: Row<TData>) => string;
 
-  // Pagination options
+  // Pagination settings
   pageSizeOptions?: number[];
   initialPageSize?: number;
 
-  // Total count for server-side pagination
-  totalCount?: number;
-
-  // Custom footer
-  renderFooter?: (
-    table: ReturnType<typeof useReactTable<TData>>,
-  ) => React.ReactNode;
+  // Optional custom footer
+  renderFooter?: (table: ReturnType<typeof useReactTable<TData>>) => React.ReactNode;
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData, TValue = unknown>({
   columns,
   data,
   enableDragAndDrop = false,
@@ -180,6 +181,8 @@ export function DataTable<TData, TValue>({
   emptyMessage = "No results.",
   manualPagination = false,
   pageCount,
+  totalCount,
+  pagination: controlledPagination,
   onPaginationChange,
   rowSelection: controlledRowSelection,
   onRowSelectionChange,
@@ -193,15 +196,12 @@ export function DataTable<TData, TValue>({
   getRowId,
   pageSizeOptions = [10, 15, 25, 50],
   initialPageSize = 15,
-  totalCount,
   renderFooter,
 }: DataTableProps<TData, TValue>) {
-  // Internal state (used when not controlled)
+  // ── Internal state (fallback when not controlled) ─────────────────────────
   const [internalRowSelection, setInternalRowSelection] =
     React.useState<RowSelectionState>({});
-  const [internalSorting, setInternalSorting] = React.useState<SortingState>(
-    [],
-  );
+  const [internalSorting, setInternalSorting] = React.useState<SortingState>([]);
   const [internalColumnFilters, setInternalColumnFilters] =
     React.useState<ColumnFiltersState>([]);
   const [internalColumnVisibility, setInternalColumnVisibility] =
@@ -212,26 +212,26 @@ export function DataTable<TData, TValue>({
       pageSize: initialPageSize,
     });
 
-  // Use controlled or internal state
+  // ── Resolve controlled vs internal state ──────────────────────────────────
   const rowSelection = controlledRowSelection ?? internalRowSelection;
   const sorting = controlledSorting ?? internalSorting;
   const columnFilters = controlledColumnFilters ?? internalColumnFilters;
-  const columnVisibility =
-    controlledColumnVisibility ?? internalColumnVisibility;
-  const pagination = manualPagination
-    ? controlledRowSelection
-      ? { pageIndex: 0, pageSize: initialPageSize }
-      : internalPagination
+  const columnVisibility = controlledColumnVisibility ?? internalColumnVisibility;
+  const effectivePagination = manualPagination
+    ? (controlledPagination ?? internalPagination)
     : internalPagination;
+  const setPagination = manualPagination
+    ? onPaginationChange
+    : setInternalPagination;
 
-  // Sensors for drag and drop
+  // ── Sensors for drag and drop ─────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
     useSensor(TouchSensor),
     useSensor(KeyboardSensor),
   );
 
-  // Create table instance
+  // ── Table instance ────────────────────────────────────────────────────────
   const table = useReactTable({
     data,
     columns,
@@ -240,7 +240,7 @@ export function DataTable<TData, TValue>({
       columnVisibility,
       rowSelection,
       columnFilters,
-      pagination,
+      pagination: effectivePagination,
     },
     pageCount: manualPagination ? pageCount : undefined,
     manualPagination,
@@ -250,49 +250,53 @@ export function DataTable<TData, TValue>({
     onRowSelectionChange: onRowSelectionChange ?? setInternalRowSelection,
     onSortingChange: onSortingChange ?? setInternalSorting,
     onColumnFiltersChange: onColumnFiltersChange ?? setInternalColumnFilters,
-    onColumnVisibilityChange:
-      onColumnVisibilityChange ?? setInternalColumnVisibility,
-    onPaginationChange: onPaginationChange ?? setInternalPagination,
+    onColumnVisibilityChange: onColumnVisibilityChange ?? setInternalColumnVisibility,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // Handle drag end
+  // ── Drag & drop logic ─────────────────────────────────────────────────────
   const handleDragEnd = React.useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-      if (over && active.id !== over.id) {
-        const oldIndex = data.findIndex((item) => {
-          const id = getRowId ? getRowId(item) : (item as any).id;
-          return id === active.id;
-        });
-        const newIndex = data.findIndex((item) => {
-          const id = getRowId ? getRowId(item) : (item as any).id;
-          return id === over.id;
-        });
+      if (!over || active.id === over.id) return;
 
-        const newData = arrayMove(data, oldIndex, newIndex);
-        onDragEnd?.(newData);
-      }
+      const activeId = String(active.id);
+      const overId = String(over.id);
+
+      const oldIndex = data.findIndex((row, index) => {
+        const rowId = getRowId ? getRowId(row, index) : String(index);
+        return rowId === activeId;
+      });
+
+      const newIndex = data.findIndex((row, index) => {
+        const rowId = getRowId ? getRowId(row, index) : String(index);
+        return rowId === overId;
+      });
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newData = arrayMove(data, oldIndex, newIndex);
+      onDragEnd?.(newData);
     },
     [data, getRowId, onDragEnd],
   );
 
-  // Get data IDs for drag and drop
-  const dataIds = React.useMemo<UniqueIdentifier[]>(() => {
-    return data.map((item) => {
-      const id = getRowId ? getRowId(item) : (item as any).id;
-      return id;
+  // ── Row IDs for DND (strings to match TanStack) ───────────────────────────
+  const rowIds = React.useMemo(() => {
+    return data.map((row, index) => {
+      return getRowId ? getRowId(row, index) : String(index);
     });
   }, [data, getRowId]);
 
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
-  const totalDisplayCount = totalCount ?? data.length;
+  const displayedTotal = totalCount ?? data.length;
 
   return (
     <div className="space-y-4">
-      {/* Table */}
+      {/* Table wrapper */}
       <div className="rounded-lg border overflow-hidden">
         <DndContext
           sensors={sensors}
@@ -305,16 +309,10 @@ export function DataTable<TData, TValue>({
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      style={{ width: header.getSize() }}
-                    >
+                    <TableHead key={header.id} style={{ width: header.getSize() }}>
                       {header.isPlaceholder
                         ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
+                        : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   ))}
                 </TableRow>
@@ -324,19 +322,13 @@ export function DataTable<TData, TValue>({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-32 text-center"
-                  >
+                  <TableCell colSpan={columns.length} className="h-32 text-center">
                     {loadingMessage}
                   </TableCell>
                 </TableRow>
               ) : table.getRowModel().rows?.length ? (
                 enableDragAndDrop ? (
-                  <SortableContext
-                    items={dataIds}
-                    strategy={verticalListSortingStrategy}
-                  >
+                  <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
                     {table.getRowModel().rows.map((row) => (
                       <DraggableRow key={row.id} row={row} />
                     ))}
@@ -350,10 +342,7 @@ export function DataTable<TData, TValue>({
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -361,10 +350,7 @@ export function DataTable<TData, TValue>({
                 )
               ) : (
                 <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-32 text-center"
-                  >
+                  <TableCell colSpan={columns.length} className="h-32 text-center">
                     {emptyMessage}
                   </TableCell>
                 </TableRow>
@@ -374,25 +360,22 @@ export function DataTable<TData, TValue>({
         </DndContext>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination & info */}
       {enablePagination && (
-        <div className="flex items-center justify-between px-2">
+        <div className="flex items-center justify-between px-2 flex-wrap gap-4">
           <div className="text-sm text-muted-foreground hidden md:block">
             {enableRowSelection && selectedCount > 0 && (
               <>
-                {selectedCount} of {table.getFilteredRowModel().rows.length}{" "}
-                selected •{" "}
+                {selectedCount} of {table.getFilteredRowModel().rows.length} selected •{" "}
               </>
             )}
-            Total: {totalDisplayCount}
+            Total: {displayedTotal}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center md:justify-end w-full md:w-auto">
             <Select
-              value={`${pagination.pageSize}`}
-              onValueChange={(value) => {
-                table.setPageSize(Number(value));
-              }}
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => table.setPageSize(Number(value))}
             >
               <SelectTrigger className="w-20 h-8">
                 <SelectValue />
@@ -427,8 +410,7 @@ export function DataTable<TData, TValue>({
               </Button>
 
               <span className="text-sm font-medium mx-2">
-                Page {table.getState().pagination.pageIndex + 1} of{" "}
-                {table.getPageCount()}
+                Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
               </span>
 
               <Button
@@ -454,11 +436,9 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      {/* Custom Footer */}
       {renderFooter?.(table)}
     </div>
   );
 }
 
-// Export the DragHandle for use in column definitions
 export { DragHandle };

@@ -1,3 +1,5 @@
+// app/api/attendance/admin/dashboard/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -6,32 +8,17 @@ import { ObjectId } from "mongodb";
 import type {
   Attendance,
   EnrichedAttendance,
-  UserBasicInfo,
+  DashboardStats,
 } from "@/types/attendance";
-
-interface DashboardStats {
-  totalRecords: number;
-  totalHours: number;
-  uniqueStaff: number;
-  averageHours: number;
-}
+import { calculateDailyEarnings } from "@/models/attendance.model";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
-
-    if (!session?.user) {
+    if (!session?.user || !["admin", "manager"].includes(session.user.role)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 },
-      );
-    }
-
-    const { role } = session.user;
-    if (role !== "admin" && role !== "manager") {
-      return NextResponse.json(
-        { success: false, message: "Access denied" },
-        { status: 403 },
       );
     }
 
@@ -40,84 +27,94 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get("endDate");
     const staffId = searchParams.get("staffId");
 
-    const query: {
-      userId?: string;
-      date?: { $gte: string; $lte: string };
-    } = {};
+    const query: Record<string, unknown> = { status: "confirmed" }; // only confirmed → pay
 
-    if (staffId) {
-      query.userId = staffId;
-    }
+    if (staffId) query.userId = new ObjectId(staffId);
+    if (startDate && endDate) query.date = { $gte: startDate, $lte: endDate };
 
-    if (startDate && endDate) {
-      query.date = { $gte: startDate, $lte: endDate };
-    }
-
-    const collection = MONGODB.collection<Attendance>("attendance");
-
-    const records = await collection
+    const attendanceColl = MONGODB.collection<Attendance>("attendance");
+    const records = await attendanceColl
       .find(query)
       .sort({ date: -1, clockInTime: -1 })
       .toArray();
 
-    // ── Prepare user lookup ─────────────────────────────────────────────
-    const userIds = [...new Set(records.map((r) => String(r.userId)))].filter(
-      Boolean,
-    );
-
-    const userObjectIds = userIds
-      .map((id) => {
-        try {
-          return new ObjectId(id);
-        } catch {
-          console.warn(`Invalid userId in dashboard: ${id}`);
-          return null;
-        }
-      })
-      .filter((id): id is ObjectId => id !== null);
-
-    console.log("[dashboard] Looking up users for IDs:", userIds);
-
-    const usersCollection = MONGODB.collection("user");
-
-    const users = await usersCollection
-      .find({ _id: { $in: userObjectIds } })
+    // Fetch users with salaryPerHour
+    const userIds = [...new Set(records.map((r) => r.userId.toString()))];
+    const usersColl = MONGODB.collection("user");
+    const users = await usersColl
+      .find(
+        { _id: { $in: userIds.map((id) => new ObjectId(id)) } },
+        { projection: { name: 1, email: 1, role: 1, salaryPerHour: 1 } },
+      )
       .toArray();
 
-    console.log("[dashboard] Found users:", users.length);
-
-    const userMap = new Map<string, UserBasicInfo>(
-      users.map((user) => [
-        user._id.toString(),
+    const userMap = new Map(
+      users.map((u) => [
+        u._id.toString(),
         {
-          id: user._id.toString(),
-          name: (user.name as string) || "Unnamed User",
-          email: (user.email as string) || "—",
-          role: (user.role as string) || "—",
-        } satisfies UserBasicInfo,
+          id: u._id.toString(),
+          name: u.name || "Unnamed",
+          email: u.email || "—",
+          role: u.role || "—",
+          salaryPerHour: u.salaryPerHour ?? 56.25,
+        },
       ]),
     );
 
-    const enrichedRecords: EnrichedAttendance[] = records.map((record) => ({
-      ...record,
-      _id: String(record._id),
-      userId: String(record.userId),
-      user: userMap.get(String(record.userId)),
-    }));
+    const enrichedRecords: EnrichedAttendance[] = [];
+    let totalEarnings = 0;
+    let regularEarnings = 0;
+    let overtimeEarnings = 0;
 
-    // Calculate stats
+    for (const r of records) {
+      const user = userMap.get(r.userId.toString());
+      if (!user) continue;
+
+      const earnings = calculateDailyEarnings(r, user.salaryPerHour);
+
+      const enriched: EnrichedAttendance = {
+        ...r,
+        _id: r._id.toString(),
+        userId: r.userId.toString(),
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          salaryPerHour: user.salaryPerHour,
+        },
+        dailyEarnings: earnings.total,
+        regularEarnings: earnings.regular,
+        overtimeEarnings: earnings.overtime,
+        overtimeHours: earnings.otHours,
+      };
+
+      enrichedRecords.push(enriched);
+
+      totalEarnings += earnings.total;
+      regularEarnings += earnings.regular;
+      overtimeEarnings += earnings.overtime;
+    }
+
     const totalHours = records.reduce(
       (sum, r) => sum + (r.hoursWorked ?? 0),
       0,
     );
-    const uniqueStaff = new Set(records.map((r) => String(r.userId))).size;
-    const averageHours = records.length > 0 ? totalHours / records.length : 0;
+    const uniqueStaff = userMap.size;
 
     const stats: DashboardStats = {
       totalRecords: records.length,
       totalHours: Math.round(totalHours * 100) / 100,
       uniqueStaff,
-      averageHours: Math.round(averageHours * 100) / 100,
+      averageHours: records.length
+        ? Math.round((totalHours / records.length) * 100) / 100
+        : 0,
+      totalEarnings: Math.round(totalEarnings * 100) / 100,
+      regularEarnings: Math.round(regularEarnings * 100) / 100,
+      overtimeEarnings: Math.round(overtimeEarnings * 100) / 100,
+      averageDailyEarnings: records.length
+        ? Math.round((totalEarnings / records.length) * 100) / 100
+        : 0,
     };
 
     return NextResponse.json({
@@ -125,10 +122,10 @@ export async function GET(req: NextRequest) {
       records: enrichedRecords,
       stats,
     });
-  } catch (error) {
-    console.error("[dashboard] Error:", error);
+  } catch (err) {
+    console.error("[admin dashboard]", err);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, message: "Server error" },
       { status: 500 },
     );
   }

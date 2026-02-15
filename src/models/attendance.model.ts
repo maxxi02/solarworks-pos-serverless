@@ -428,3 +428,35 @@ export class AttendanceModel {
     })) as Attendance[];
   }
 }
+
+export function calculateDailyEarnings(
+  record: Attendance,
+  hourlyRate: number = 56.25,
+): {
+  total: number;
+  regular: number;
+  overtime: number;
+  otHours: number;
+} {
+  if (record.status !== "confirmed") {
+    return { total: 0, regular: 0, overtime: 0, otHours: 0 };
+  }
+
+  const hours = record.hoursWorked ?? 0;
+  if (hours <= 0) {
+    return { total: 0, regular: 0, overtime: 0, otHours: 0 };
+  }
+
+  const regularHours = Math.min(8, hours);
+  const otHours = Math.max(0, hours - 8);
+
+  const regular = regularHours * hourlyRate;
+  const overtime = otHours * hourlyRate * 1.25;
+
+  return {
+    total: Math.round((regular + overtime) * 100) / 100,
+    regular: Math.round(regular * 100) / 100,
+    overtime: Math.round(overtime * 100) / 100,
+    otHours,
+  };
+}

@@ -29,6 +29,18 @@ export interface Attendance {
   updatedAt: string | Date;
 }
 
+export interface StaffEarnings {
+  staffId: string;
+  name: string;
+  email: string;
+  totalEarnings: number;
+  regularEarnings: number;
+  overtimeEarnings: number;
+  totalHours: number;
+  daysPresent: number;
+  recordCount: number;
+}
+
 /**
  * Attendance record enriched with basic user information
  * (most commonly used shape in admin UI and staff views)
@@ -80,6 +92,11 @@ export interface AttendanceStats {
   averageHoursPerShift?: number;
   totalShiftsPossible?: number; // optional – e.g. days in period
   rejectionCount?: number; // optional – track rejections
+  // ── Payroll stats (added) ────────────────────────
+  totalEarnings: number;
+  regularEarnings: number;
+  overtimeEarnings: number;
+  averageDailyEarnings: number;
 }
 
 /**
@@ -107,6 +124,11 @@ export interface DashboardStats {
     name: string;
     hours: number;
   };
+  // ── Payroll stats (added) ────────────────────────
+  totalEarnings: number;
+  regularEarnings: number;
+  overtimeEarnings: number;
+  averageDailyEarnings: number;
 }
 
 /**
@@ -153,11 +175,17 @@ export interface UserBasicInfo {
   name: string;
   email: string;
   role?: string;
+  salaryPerHour?: number; // ← added here too
 }
 
 export interface EnrichedAttendance extends Attendance {
   _id: string;
   user?: UserBasicInfo;
+  // ── Payroll fields (added) ───────────────────────
+  dailyEarnings?: number;       // total for this record
+  regularEarnings?: number;
+  overtimeEarnings?: number;
+  overtimeHours?: number;
 }
 
 export type AttendanceRecord = Attendance;

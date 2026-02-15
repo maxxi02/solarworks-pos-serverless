@@ -46,13 +46,7 @@ export function getColumns({ onRefresh }: GetColumnsProps): ColumnDef<TableUser>
                 />
             ),
         },
-        {
-            id: "payRange",
-            header: "Pay Range",
-            cell: ({ row }) => (
-                <span className="text-muted-foreground">{row.original.payRange}</span>
-            ),
-        },
+        // ── Pay Range column removed ───────────────────────────────────────
         {
             id: "status",
             header: "Account",
