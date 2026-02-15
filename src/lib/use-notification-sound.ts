@@ -1,9 +1,32 @@
 // lib/use-notification-sound.ts
-import { useCallback } from "react";
+import { useCallback, useRef, useEffect } from "react";
 
 type NotificationType = "success" | "error" | "order";
 
+const audioCache: Record<string, HTMLAudioElement> = {};
+
 export function useNotificationSound() {
+  const hasUserInteracted = useRef(false);
+
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      hasUserInteracted.current = true;
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('touchstart', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
+
   const play = useCallback((type: NotificationType) => {
     let fileName: string;
 
@@ -21,15 +44,20 @@ export function useNotificationSound() {
         return;
     }
 
-    // Create fresh Audio instance each time → avoids overlap/locking issues
-    const audio = new Audio(`/audio/${fileName}`);
+    if (!audioCache[fileName]) {
+      audioCache[fileName] = new Audio(`/audio/${fileName}`);
+      audioCache[fileName].volume = 0.45;
+    }
 
-    // Optional: lower volume for notifications (0–1)
-    audio.volume = 0.45;
+    const audio = audioCache[fileName];
+    audio.currentTime = 0;
 
     audio.play().catch((err) => {
-      console.warn("Audio play failed:", err);
-      // Most common reasons: autoplay policy or user hasn't interacted yet
+      if (!hasUserInteracted.current) {
+        console.log("Waiting for user interaction to play audio");
+      } else {
+        console.warn("Audio play failed:", err);
+      }
     });
   }, []);
 
@@ -38,4 +66,13 @@ export function useNotificationSound() {
     playError: () => play("error"),
     playOrder: () => play("order"),
   };
+}
+
+export function preloadNotificationSounds() {
+  const sounds = ["success-notification.mp3", "error-notification.mp3", "order-notification.mp3"];
+  sounds.forEach(fileName => {
+    const audio = new Audio(`/audio/${fileName}`);
+    audio.load();
+    audioCache[fileName] = audio;
+  });
 }

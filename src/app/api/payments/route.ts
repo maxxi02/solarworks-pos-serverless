@@ -1,26 +1,39 @@
-// app/api/payments/route.ts
 import { NextResponse } from 'next/server';
 import MONGODB from '@/config/db';
-import { ObjectId } from 'mongodb';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    const paymentData = {
-      ...body,
-      _id: new ObjectId(),
-      createdAt: new Date()
-    };
+    // Validate required fields
+    if (!body.orderNumber || !body.total || !body.paymentMethod) {
+      return NextResponse.json({
+        success: false,
+        error: 'Missing required fields'
+      }, { status: 400 });
+    }
     
-    const result = await MONGODB.collection('payments').insertOne(paymentData);
+    const collection = MONGODB.collection('payments');
+    
+    // Insert the payment record
+    const result = await collection.insertOne({
+      ...body,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    console.log('Payment saved with ID:', result.insertedId);
     
     return NextResponse.json({
       success: true,
-      data: paymentData
+      data: {
+        _id: result.insertedId,
+        ...body
+      }
     });
     
   } catch (error) {
+    console.error('Payment save error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to save payment'
@@ -31,29 +44,36 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50;
-    const skip = searchParams.get('skip') ? parseInt(searchParams.get('skip')!) : 0;
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = parseInt(searchParams.get('page') || '1');
+    const skip = (page - 1) * limit;
     
-    const payments = await MONGODB.collection('payments')
-      .find({})
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .toArray();
+    const collection = MONGODB.collection('payments');
     
-    const total = await MONGODB.collection('payments').countDocuments();
+    const [payments, total] = await Promise.all([
+      collection.find({})
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      collection.countDocuments()
+    ]);
     
     return NextResponse.json({
       success: true,
-      data: payments,
-      pagination: {
-        total,
-        limit,
-        skip
+      data: {
+        payments,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit)
+        }
       }
     });
     
   } catch (error) {
+    console.error('Payment fetch error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch payments'

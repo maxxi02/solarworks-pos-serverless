@@ -1,4 +1,3 @@
-// app/api/payments/summary/route.ts
 import { NextResponse } from 'next/server';
 import MONGODB from '@/config/db';
 
@@ -25,21 +24,34 @@ export async function GET(request: Request) {
         startDate = new Date(now.setFullYear(now.getFullYear() - 1));
         break;
       case 'all':
-        startDate = new Date(0);
+        startDate = new Date(0); // 1970-01-01
         break;
+      default:
+        startDate = new Date(now.setDate(now.getDate() - 7));
     }
     
-    const collection = MONGODB.collection('payments');
-    const matchStage = { $match: { createdAt: { $gte: startDate } } };
+    console.log(`Fetching payments from ${startDate} to ${new Date()}`);
     
-    // RUN ALL QUERIES IN PARALLEL - isang bagsakan!
+    const collection = MONGODB.collection('payments');
+    
+    // FIX: Use $match with proper date comparison
+    const matchStage = { 
+      $match: { 
+        createdAt: { $gte: startDate } 
+      } 
+    };
+    
+    // Log para debugging
+    const count = await collection.countDocuments({ createdAt: { $gte: startDate } });
+    console.log(`Found ${count} payments in date range`);
+    
+    // RUN ALL QUERIES IN PARALLEL
     const [
       summaryResult,
       dailyResult,
       productsResult,
       methodsResult,
-      recentResult,
-      totalCount
+      recentResult
     ] = await Promise.all([
       
       // 1. Overall summary
@@ -61,7 +73,12 @@ export async function GET(request: Request) {
         {
           $group: {
             _id: {
-              date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }
+              date: { 
+                $dateToString: { 
+                  format: '%Y-%m-%d', 
+                  date: '$createdAt' 
+                } 
+              }
             },
             revenue: { $sum: '$total' },
             transactions: { $sum: 1 }
@@ -73,8 +90,7 @@ export async function GET(request: Request) {
             _id: 0,
             date: '$_id.date',
             revenue: 1,
-            transactions: 1,
-            avgOrder: { $round: [{ $divide: ['$revenue', '$transactions'] }, 2] }
+            transactions: 1
           }
         }
       ]).toArray(),
@@ -101,12 +117,12 @@ export async function GET(request: Request) {
             name: '$_id.name',
             category: '$_id.category',
             quantity: 1,
-            revenue: 1
+            revenue: { $round: ['$revenue', 2] }
           }
         }
       ]).toArray(),
       
-      // 4. Payment methods breakdown
+      // 4. Payment methods breakdown - FIXED: Keep _id field
       collection.aggregate([
         matchStage,
         {
@@ -118,31 +134,31 @@ export async function GET(request: Request) {
         },
         {
           $project: {
-            method: '$_id',
-            total: 1,
-            count: 1,
-            _id: 0
+            _id: 1,  // Keep _id para magamit sa frontend
+            total: { $round: ['$total', 2] },
+            count: 1
           }
         }
       ]).toArray(),
       
       // 5. Recent transactions
-      collection.find(matchStage.$match)
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .project({
-          orderNumber: 1,
-          customerName: 1,
-          total: 1,
-          paymentMethod: 1,
-          orderType: 1,
-          createdAt: 1,
-          items: { $size: '$items' }
-        })
-        .toArray(),
-      
-      // 6. Total count for this period
-      collection.countDocuments(matchStage.$match)
+      collection.aggregate([
+        matchStage,
+        { $sort: { createdAt: -1 } },
+        { $limit: 10 },
+        {
+          $project: {
+            _id: 1,
+            orderNumber: 1,
+            customerName: 1,
+            total: 1,
+            paymentMethod: 1,
+            orderType: 1,
+            createdAt: 1,
+            itemsCount: { $size: '$items' }
+          }
+        }
+      ]).toArray()
     ]);
     
     // Format the response
@@ -151,6 +167,8 @@ export async function GET(request: Request) {
       totalTransactions: 0,
       avgOrderValue: 0
     };
+    
+    console.log('Payment methods data:', methodsResult); // Debug log
     
     return NextResponse.json({
       success: true,
@@ -161,15 +179,18 @@ export async function GET(request: Request) {
           to: new Date()
         },
         summary: {
-          ...summary,
           totalRevenue: Math.round(summary.totalRevenue * 100) / 100,
+          totalTransactions: summary.totalTransactions,
           avgOrderValue: Math.round(summary.avgOrderValue * 100) / 100
         },
-        daily: dailyResult,
+        daily: dailyResult.map(d => ({
+          ...d,
+          revenue: Math.round(d.revenue * 100) / 100
+        })),
         topProducts: productsResult,
-        paymentMethods: methodsResult,
+        paymentMethods: methodsResult, // Now has _id field
         recentTransactions: recentResult,
-        transactionsCount: totalCount
+        totalCount: summary.totalTransactions
       }
     });
     
@@ -177,7 +198,8 @@ export async function GET(request: Request) {
     console.error('Summary API error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to generate summary'
+      error: 'Failed to generate summary',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
