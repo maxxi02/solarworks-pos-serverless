@@ -1,60 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { Printer, Mail, Upload, Save, Trash2, Eye, X, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Printer, Mail, Upload, Save, Trash2, Eye, X, Settings, Bluetooth, Wifi, Utensils } from 'lucide-react';
 import { toast } from 'sonner';
+import { useReceiptSettings, DEFAULT_SETTINGS } from '@/hooks/useReceiptSettings';
 
 export default function ReceiptSettings() {
-  // State for receipt settings
-  const [settings, setSettings] = useState({
-    businessName: 'Rendezvous Cafe',
-    locationAddress: 'Rendezvous Café, Talisay - Tanauan Road, Natatas, Tanauan City, Batangas, Philippines',
-    phoneNumber: '+63639660049893',
-    taxPin: '123-456-789-000',
-    
-    // Display options
-    showLogo: true,
-    showTaxPIN: true,
-    showSKU: false,
-    showReferenceNumber: true,
-    showBusinessHours: true,
-    
-    // Email settings
-    emailReceipt: true,
-    printReceipt: true,
-    
-    // Receipt width
-    receiptWidth: '80mm',
-    
-    // Header/Footer settings (for each section)
-    sections: {
-      locationAddress: { header: true, footer: false, disabled: false },
-      storeName: { header: true, footer: false, disabled: false },
-      transactionType: { header: true, footer: false, disabled: false },
-      phoneNumber: { header: false, footer: false, disabled: false },
-      message: { header: false, footer: true, disabled: false },
-      payLaterDueDate: { header: false, footer: false, disabled: true },
-      orderType: { header: false, footer: false, disabled: true },
-      disclaimer: { header: false, footer: false, disabled: true },
-      barcode: { header: true, footer: false, disabled: false },
-      orderNote: { header: false, footer: true, disabled: false },
-      customerInfo: { header: false, footer: true, disabled: false },
-    },
-    
-    // Messages
-    receiptMessage: 'Thank You for visiting Rendezvous Cafe!',
-    disclaimer: 'Prices include 12% VAT. No refunds or exchanges on food items.',
-    
-    // Business hours
-    businessHours: 'Monday - Sunday: 7:00 AM - 10:00 PM',
-    
-    // Logo
-    logo: null as File | null,
-    logoPreview: '',
-  });
-
-  // Preview mode state
+  const { settings: savedSettings, isLoading, saveSettings, updateSetting, updateNestedSetting, updateSectionPosition, testPrint } = useReceiptSettings();
+  
+  // Local state for form
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'sections' | 'printers'>('general');
+
+  // Load saved settings when available
+  useEffect(() => {
+    if (savedSettings) {
+      setSettings(savedSettings);
+    }
+  }, [savedSettings]);
 
   // Handle input changes
   const handleInputChange = (field: string, value: any) => {
@@ -94,15 +58,13 @@ export default function ReceiptSettings() {
       reader.onloadend = () => {
         setSettings(prev => ({
           ...prev,
-          logo: file,
+          logo: reader.result as string,
           logoPreview: reader.result as string
         }));
       };
       reader.readAsDataURL(file);
       
-      toast.success('Logo uploaded', {
-        description: 'Logo has been uploaded successfully'
-      });
+      toast.success('Logo uploaded');
     }
   };
 
@@ -117,58 +79,33 @@ export default function ReceiptSettings() {
   };
 
   // Save settings
-  const handleSave = () => {
-    // Here you would typically save to your backend
-    toast.success('Settings saved', {
-      description: 'Receipt settings have been updated'
-    });
+  const handleSave = async () => {
+    const success = await saveSettings(settings);
+    if (success) {
+      toast.success('Settings saved successfully');
+    }
   };
 
   // Reset settings
   const handleReset = () => {
     if (confirm('Are you sure you want to reset all settings to default?')) {
-      setSettings({
-        businessName: 'Rendezvous Cafe',
-        locationAddress: 'Rendezvous Café, Talisay - Tanauan Road, Natatas, Tanauan City, Batangas, Philippines',
-        phoneNumber: '+63639660049893',
-        taxPin: '123-456-789-000',
-        showLogo: true,
-        showTaxPIN: true,
-        showSKU: false,
-        showReferenceNumber: true,
-        showBusinessHours: true,
-        emailReceipt: true,
-        printReceipt: true,
-        receiptWidth: '80mm',
-        sections: {
-          
-          locationAddress: { header: true, footer: false, disabled: false },
-          storeName: { header: true, footer: false, disabled: false },
-          transactionType: { header: true, footer: false, disabled: false },
-          phoneNumber: { header: false, footer: false, disabled: false },
-          message: { header: false, footer: true, disabled: false },
-          payLaterDueDate: { header: false, footer: false, disabled: true },
-          orderType: { header: false, footer: false, disabled: true },
-          disclaimer: { header: false, footer: false, disabled: true },
-          barcode: { header: true, footer: false, disabled: false },
-          orderNote: { header: false, footer: true, disabled: false },
-          customerInfo: { header: false, footer: true, disabled: false },
-        },
-        receiptMessage: 'Thank You for visiting Rendezvous Cafe!',
-        disclaimer: 'Prices include 12% VAT. No refunds or exchanges on food items.',
-        businessHours: 'Monday - Sunday: 7:00 AM - 10:00 PM',
-        logo: null,
-        logoPreview: '',
-      });
+      setSettings(DEFAULT_SETTINGS);
       toast.info('Settings reset to default');
     }
   };
 
+  // Test printer connection
+  const handleTestPrinter = async (type: 'customer' | 'kitchen') => {
+    await testPrint(type);
+  };
+
   // Receipt Preview Component
   const ReceiptPreview = () => {
+    const is58mm = settings.receiptWidth === '58mm';
+    
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 dark:bg-black/90">
-        <div className="w-full max-w-md rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-4">
+        <div className={`w-full ${is58mm ? 'max-w-[220px]' : 'max-w-md'} rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-4`}>
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Receipt Preview</h3>
             <button
@@ -180,152 +117,179 @@ export default function ReceiptSettings() {
           </div>
           
           {/* Receipt Preview Content */}
-          <div className="font-mono text-xs bg-white dark:bg-black p-4 border border-dashed border-gray-300 dark:border-gray-700">
+          <div className={`font-mono ${is58mm ? 'text-[10px]' : 'text-xs'} bg-white dark:bg-black p-4 border border-dashed border-gray-300 dark:border-gray-700`}>
             {/* Logo */}
             {settings.showLogo && settings.logoPreview && (
               <div className="mb-2 flex justify-center">
-                <img src={settings.logoPreview} alt="Logo" className="h-16 object-contain" />
+                <img src={settings.logoPreview} alt="Logo" className="h-12 object-contain" />
               </div>
             )}
             
             {/* Store Name */}
-            {settings.sections.storeName.header && (
+            {settings.sections.storeName?.header && !settings.sections.storeName?.disabled && (
               <div className="text-center font-bold mb-1">{settings.businessName}</div>
             )}
             
             {/* Location Address */}
-            {settings.sections.locationAddress.header && (
-              <div className="text-center mb-1">{settings.locationAddress}</div>
+            {settings.sections.locationAddress?.header && !settings.sections.locationAddress?.disabled && (
+              <div className="text-center mb-1 text-[10px]">{settings.locationAddress}</div>
             )}
             
             {/* Phone Number */}
-            {settings.sections.phoneNumber.header && !settings.sections.phoneNumber.disabled && (
-              <div className="text-center mb-1">{settings.phoneNumber}</div>
+            {settings.sections.phoneNumber?.header && !settings.sections.phoneNumber?.disabled && (
+              <div className="text-center mb-1 text-[10px]">{settings.phoneNumber}</div>
             )}
             
             {/* Separator */}
-            <div className="text-center mb-1">--------------------------------</div>
+            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
             {/* Order Details */}
-            <div className="mb-1">
+            <div className="mb-1 text-[10px]">
+              <div>Order #: PREVIEW-001</div>
               <div>Date: {new Date().toLocaleDateString()}, {new Date().toLocaleTimeString()}</div>
-              <div>Order Type: DINE_IN</div>
-              <div>Transaction #: {settings.showReferenceNumber ? '1637000006' : ''}</div>
-              <div>Cashier: [Owner]</div>
+              <div>Cashier: Test Cashier</div>
+              <div>Customer: Test Customer</div>
+              {settings.sections.transactionType?.header && !settings.sections.transactionType?.disabled && (
+                <div>Type: DINE-IN</div>
+              )}
+              {settings.sections.orderType?.header && !settings.sections.orderType?.disabled && (
+                <div>Table: 5</div>
+              )}
             </div>
             
-            <div className="text-center mb-1">--------------------------------</div>
+            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
             {/* Customer Info */}
-            {settings.sections.customerInfo.footer && !settings.sections.customerInfo.disabled && (
-              <div className="mb-1">
-                <div>Customer: Valor customer</div>
-                <div>Phone: </div>
-                <div>Rewarded Points: </div>
-                <div>Total Points: </div>
+            {settings.sections.customerInfo?.footer && !settings.sections.customerInfo?.disabled && (
+              <div className="mb-1 text-[10px]">
+                <div>Senior/PWD IDs: ID-12345, ID-67890</div>
               </div>
             )}
             
             {/* Items */}
-            <div className="mb-1">
-              <div>Item(s)</div>
-              <div>1. Mocha latte - 5x @178.57 P892.85</div>
+            <div className="mb-1 text-[10px]">
+              <div className="flex justify-between font-bold mb-1">
+                <span>Item</span>
+                <span>Qty Amount</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Mocha latte</span>
+                <span>2  P357.14</span>
+              </div>
+              <div className="flex justify-between text-green-600">
+                <span>  (20% Senior/PWD)</span>
+                <span>-P71.43</span>
+              </div>
+              {settings.showSKU && (
+                <div className="text-[8px] text-gray-500">SKU: PROD-001</div>
+              )}
             </div>
             
-            <div className="text-center mb-1">--------------------------------</div>
+            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
             {/* Totals */}
-            <div className="mb-1">
+            <div className="mb-1 text-[10px]">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
-                <span>P892.85</span>
+                <span>P428.57</span>
               </div>
-              <div className="flex justify-between">
-                <span>Tax:</span>
-                <span>P107.15</span>
+              <div className="flex justify-between text-green-600">
+                <span>Discount:</span>
+                <span>-P71.43</span>
               </div>
               {settings.showTaxPIN && (
-                <div className="flex justify-between text-xs">
-                  <span>VAT 12% (Included):</span>
-                  <span>P107.15</span>
+                <div className="flex justify-between">
+                  <span>VAT (12%):</span>
+                  <span>P42.86</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span>Discount:</span>
-                <span>P307.15</span>
-              </div>
               <div className="flex justify-between font-bold mt-1">
                 <span>TOTAL:</span>
-                <span>P692.85</span>
+                <span>P357.14</span>
               </div>
             </div>
             
-            <div className="text-center mb-1">--------------------------------</div>
+            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
             {/* Payment */}
-            <div className="mb-1">
+            <div className="mb-1 text-[10px]">
+              <div className="flex justify-between">
+                <span>Payment:</span>
+                <span>CASH</span>
+              </div>
               <div className="flex justify-between">
                 <span>Cash Received:</span>
-                <span>P700.00</span>
+                <span>P400.00</span>
               </div>
               <div className="flex justify-between">
                 <span>Change:</span>
-                <span>P7.15</span>
+                <span>P42.86</span>
               </div>
             </div>
             
             {/* Barcode */}
-            {settings.sections.barcode.header && !settings.sections.barcode.disabled && (
-              <div className="mt-2 text-center">
-                <div>[BARCODE: 1637000006]</div>
+            {settings.sections.barcode?.header && !settings.sections.barcode?.disabled && (
+              <div className="mt-2 text-center text-[8px]">
+                <div>[BARCODE: PREVIEW-001]</div>
               </div>
             )}
             
             {/* Business Hours */}
             {settings.showBusinessHours && (
-              <div className="mt-2 text-center text-xs">
+              <div className="mt-2 text-center text-[8px]">
                 <div>{settings.businessHours}</div>
               </div>
             )}
             
             {/* Tax PIN */}
             {settings.showTaxPIN && (
-              <div className="mt-1 text-center text-xs">
+              <div className="mt-1 text-center text-[8px]">
                 <div>Tax PIN: {settings.taxPin}</div>
               </div>
             )}
             
             {/* Receipt Message */}
-            {settings.sections.message.footer && !settings.sections.message.disabled && (
-              <div className="mt-2 text-center">
+            {settings.sections.message?.footer && !settings.sections.message?.disabled && (
+              <div className="mt-2 text-center text-[8px]">
                 <div>{settings.receiptMessage}</div>
               </div>
             )}
             
             {/* Disclaimer */}
-            {!settings.sections.disclaimer.disabled && (
-              <div className="mt-1 text-center text-xs">
+            {!settings.sections.disclaimer?.disabled && (
+              <div className="mt-1 text-center text-[8px]">
                 <div>{settings.disclaimer}</div>
               </div>
             )}
           </div>
           
           <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            Receipt Width: {settings.receiptWidth} ({(settings.receiptWidth === '80mm' ? '3.14 inches' : '2.36 inches')})
+            Receipt Width: {settings.receiptWidth}
           </div>
           
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex justify-end gap-2">
             <button
               onClick={() => setShowPreview(false)}
               className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
             >
-              Close Preview
+              Close
             </button>
           </div>
         </div>
       </div>
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-6">
@@ -336,7 +300,7 @@ export default function ReceiptSettings() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Receipt Settings</h1>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
-                Customize your receipt layout and information for Rendezvous Cafe
+                Customize your receipt layout and printer settings
               </p>
             </div>
             <div className="flex gap-2 mt-4 sm:mt-0">
@@ -356,284 +320,566 @@ export default function ReceiptSettings() {
               </button>
             </div>
           </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2 mt-6 border-b border-gray-200 dark:border-gray-800">
+            <button
+              onClick={() => setActiveTab('general')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'general'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-500'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              General Settings
+            </button>
+            <button
+              onClick={() => setActiveTab('sections')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'sections'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-500'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Section Positioning
+            </button>
+            <button
+              onClick={() => setActiveTab('printers')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'printers'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-500'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Printer Settings
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Business Information */}
+          {/* Left Column - Settings Forms */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Business Information Card */}
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Information</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Business Name
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.businessName}
-                    onChange={(e) => handleInputChange('businessName', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                  />
+            {/* General Settings Tab */}
+            {activeTab === 'general' && (
+              <>
+                {/* Business Information Card */}
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Information</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Business Name
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.businessName}
+                        onChange={(e) => handleInputChange('businessName', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Location Address
+                      </label>
+                      <textarea
+                        value={settings.locationAddress}
+                        onChange={(e) => handleInputChange('locationAddress', e.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.phoneNumber}
+                        onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Tax PIN
+                      </label>
+                      <input
+                        type="text"
+                        value={settings.taxPin}
+                        onChange={(e) => handleInputChange('taxPin', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Location Address
-                  </label>
-                  <textarea
-                    value={settings.locationAddress}
-                    onChange={(e) => handleInputChange('locationAddress', e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                  />
+
+                {/* Display Settings Card */}
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Display Settings</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="showLogo"
+                          checked={settings.showLogo}
+                          onChange={(e) => handleInputChange('showLogo', e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="showLogo" className="text-sm text-gray-700 dark:text-gray-300">
+                          Show Logo
+                        </label>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="showTaxPIN"
+                          checked={settings.showTaxPIN}
+                          onChange={(e) => handleInputChange('showTaxPIN', e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="showTaxPIN" className="text-sm text-gray-700 dark:text-gray-300">
+                          Show Tax PIN
+                        </label>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="showSKU"
+                          checked={settings.showSKU}
+                          onChange={(e) => handleInputChange('showSKU', e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="showSKU" className="text-sm text-gray-700 dark:text-gray-300">
+                          Show SKU
+                        </label>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="showReferenceNumber"
+                          checked={settings.showReferenceNumber}
+                          onChange={(e) => handleInputChange('showReferenceNumber', e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="showReferenceNumber" className="text-sm text-gray-700 dark:text-gray-300">
+                          Show Reference Number
+                        </label>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="showBusinessHours"
+                          checked={settings.showBusinessHours}
+                          onChange={(e) => handleInputChange('showBusinessHours', e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="showBusinessHours" className="text-sm text-gray-700 dark:text-gray-300">
+                          Show Business Hours
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Business Hours
+                      </label>
+                      <textarea
+                        value={settings.businessHours}
+                        onChange={(e) => handleInputChange('businessHours', e.target.value)}
+                        rows={4}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                        placeholder="Monday - Sunday: 7:00 AM - 10:00 PM"
+                      />
+                    </div>
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.phoneNumber}
-                    onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                  />
+
+                {/* Logo Upload Card */}
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Logo Settings</h3>
+                  
+                  <div className="space-y-4">
+                    {settings.logoPreview ? (
+                      <div className="flex flex-col items-center">
+                        <div className="mb-4">
+                          <img src={settings.logoPreview} alt="Logo preview" className="h-32 object-contain" />
+                        </div>
+                        <button
+                          onClick={handleRemoveLogo}
+                          className="flex items-center gap-2 rounded-lg bg-red-600 dark:bg-red-700 px-4 py-2 text-white hover:bg-red-700 dark:hover:bg-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Remove Logo
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center">
+                        <Upload className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+                        <p className="text-gray-600 dark:text-gray-400 mb-2">Upload your cafe logo</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">Recommended: PNG, 300x100px, max 2MB</p>
+                        <input
+                          type="file"
+                          id="logoUpload"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="logoUpload"
+                          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600 cursor-pointer"
+                        >
+                          <Upload className="h-4 w-4" />
+                          Upload Logo
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Receipt Messages Card */}
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Messages</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Receipt Message (Footer)
+                      </label>
+                      <textarea
+                        value={settings.receiptMessage}
+                        onChange={(e) => handleInputChange('receiptMessage', e.target.value)}
+                        rows={2}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                        placeholder="Thank You for visiting!"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Disclaimer
+                      </label>
+                      <textarea
+                        value={settings.disclaimer}
+                        onChange={(e) => handleInputChange('disclaimer', e.target.value)}
+                        rows={3}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                        placeholder="Add any disclaimer text here..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Sections Tab */}
+            {activeTab === 'sections' && (
+              <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Section Positioning</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Choose where each section appears on the receipt (Header, Footer, or Disabled)
+                </p>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Tax PIN
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.taxPin}
-                    onChange={(e) => handleInputChange('taxPin', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                  />
+                <div className="space-y-6">
+                  {Object.entries(settings.sections).map(([key, value]) => {
+                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    return (
+                      <div key={key} className="space-y-2 pb-4 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {label}
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleSectionToggle(key, 'header')}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                              value.header
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            }`}
+                          >
+                            Header
+                          </button>
+                          <button
+                            onClick={() => handleSectionToggle(key, 'footer')}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                              value.footer
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            }`}
+                          >
+                            Footer
+                          </button>
+                          <button
+                            onClick={() => handleSectionToggle(key, 'disabled')}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                              value.disabled
+                                ? 'border-gray-500 bg-gray-100 text-gray-700 dark:border-gray-500 dark:bg-gray-900/10 dark:text-gray-500'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            }`}
+                          >
+                            Disabled
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Display Settings Card */}
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Display Settings</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left side - Checkboxes */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="showLogo"
-                      checked={settings.showLogo}
-                      onChange={(e) => handleInputChange('showLogo', e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="showLogo" className="text-sm text-gray-700 dark:text-gray-300">
-                      Show Logo
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="showTaxPIN"
-                      checked={settings.showTaxPIN}
-                      onChange={(e) => handleInputChange('showTaxPIN', e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="showTaxPIN" className="text-sm text-gray-700 dark:text-gray-300">
-                      Show Tax PIN
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="showSKU"
-                      checked={settings.showSKU}
-                      onChange={(e) => handleInputChange('showSKU', e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="showSKU" className="text-sm text-gray-700 dark:text-gray-300">
-                      Show SKU
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="showReferenceNumber"
-                      checked={settings.showReferenceNumber}
-                      onChange={(e) => handleInputChange('showReferenceNumber', e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="showReferenceNumber" className="text-sm text-gray-700 dark:text-gray-300">
-                      Show Reference Number
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="showBusinessHours"
-                      checked={settings.showBusinessHours}
-                      onChange={(e) => handleInputChange('showBusinessHours', e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="showBusinessHours" className="text-sm text-gray-700 dark:text-gray-300">
-                      Show Business Hours
-                    </label>
-                  </div>
-                </div>
-                
-                {/* Right side - Business Hours */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business Hours
-                  </label>
-                  <textarea
-                    value={settings.businessHours}
-                    onChange={(e) => handleInputChange('businessHours', e.target.value)}
-                    rows={4}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                    placeholder="Monday - Sunday: 7:00 AM - 10:00 PM"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Logo Upload Card */}
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Logo Settings</h3>
-              
-              <div className="space-y-4">
-                {settings.logoPreview ? (
-                  <div className="flex flex-col items-center">
-                    <div className="mb-4">
-                      <img src={settings.logoPreview} alt="Logo preview" className="h-32 object-contain" />
+            {/* Printers Tab */}
+            {activeTab === 'printers' && (
+              <>
+                {/* Customer Printer Settings */}
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Printer className="h-5 w-5 text-blue-600" />
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Customer Printer</h3>
                     </div>
                     <button
-                      onClick={handleRemoveLogo}
-                      className="flex items-center gap-2 rounded-lg bg-red-600 dark:bg-red-700 px-4 py-2 text-white hover:bg-red-700 dark:hover:bg-red-600"
+                      onClick={() => handleTestPrinter('customer')}
+                      className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
                     >
-                      <Trash2 className="h-4 w-4" />
-                      Remove Logo
+                      <Wifi className="h-3 w-3" />
+                      Test Connection
                     </button>
                   </div>
-                ) : (
-                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center">
-                    <Upload className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-600 dark:text-gray-400 mb-2">Upload your cafe logo</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">Recommended: PNG, 300x100px, max 2MB</p>
-                    <input
-                      type="file"
-                      id="logoUpload"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                    />
-                    <label
-                      htmlFor="logoUpload"
-                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600 cursor-pointer"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload Logo
-                    </label>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Receipt Messages Card */}
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Messages</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Receipt Message (Footer)
-                  </label>
-                  <textarea
-                    value={settings.receiptMessage}
-                    onChange={(e) => handleInputChange('receiptMessage', e.target.value)}
-                    rows={2}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                    placeholder="Thank You for visiting!"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Disclaimer
-                  </label>
-                  <textarea
-                    value={settings.disclaimer}
-                    onChange={(e) => handleInputChange('disclaimer', e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                    placeholder="Add any disclaimer text here..."
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column - Layout and Actions */}
-          <div className="space-y-6">
-            {/* Section Positioning Card */}
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Section Positioning</h3>
-              
-              <div className="space-y-4">
-                {Object.entries(settings.sections).map(([key, value]) => {
-                  const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                  return (
-                    <div key={key} className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {label}
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Connection Type
                       </label>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleSectionToggle(key, 'header')}
-                          className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
-                            value.header
+                          onClick={() => updateNestedSetting('customerPrinter', 'connectionType', 'usb')}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                            settings.customerPrinter?.connectionType === 'usb'
                               ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
                               : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                           }`}
                         >
-                          Header
+                          USB
                         </button>
                         <button
-                          onClick={() => handleSectionToggle(key, 'footer')}
-                          className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
-                            value.footer
+                          onClick={() => updateNestedSetting('customerPrinter', 'connectionType', 'bluetooth')}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                            settings.customerPrinter?.connectionType === 'bluetooth'
                               ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
                               : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                           }`}
                         >
-                          Footer
-                        </button>
-                        <button
-                          onClick={() => handleSectionToggle(key, 'disabled')}
-                          className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium ${
-                            value.disabled
-                              ? 'border-gray-500 bg-gray-100 text-gray-700 dark:border-gray-500 dark:bg-gray-900/10 dark:text-gray-500'
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
-                          }`}
-                        >
-                          Disabled
+                          Bluetooth
                         </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Paper Width
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => updateNestedSetting('customerPrinter', 'paperWidth', '80mm')}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                            settings.customerPrinter?.paperWidth === '80mm'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                          }`}
+                        >
+                          80mm
+                        </button>
+                        <button
+                          onClick={() => updateNestedSetting('customerPrinter', 'paperWidth', '58mm')}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                            settings.customerPrinter?.paperWidth === '58mm'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                          }`}
+                        >
+                          58mm
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
+                {/* Kitchen Printer Settings */}
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Utensils className="h-5 w-5 text-orange-600" />
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Kitchen Printer</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={settings.kitchenPrinter?.enabled}
+                          onChange={(e) => updateNestedSetting('kitchenPrinter', 'enabled', e.target.checked)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>Enabled</span>
+                      </label>
+                      <button
+                        onClick={() => handleTestPrinter('kitchen')}
+                        className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+                      >
+                        <Bluetooth className="h-3 w-3" />
+                        Test Connection
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {settings.kitchenPrinter?.enabled && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Connection Type
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => updateNestedSetting('kitchenPrinter', 'connectionType', 'bluetooth')}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                              settings.kitchenPrinter?.connectionType === 'bluetooth'
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            }`}
+                          >
+                            Bluetooth
+                          </button>
+                          <button
+                            onClick={() => updateNestedSetting('kitchenPrinter', 'connectionType', 'usb')}
+                            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                              settings.kitchenPrinter?.connectionType === 'usb'
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            }`}
+                          >
+                            USB
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Printer Name
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.kitchenPrinter?.printerName || ''}
+                          onChange={(e) => updateNestedSetting('kitchenPrinter', 'printerName', e.target.value)}
+                          placeholder="XP-58 Kitchen"
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Paper Width
+                          </label>
+                          <select
+                            value={settings.kitchenPrinter?.paperWidth || '58mm'}
+                            onChange={(e) => {
+                              const value = e.target.value as '58mm' | '80mm';
+                              updateNestedSetting('kitchenPrinter', 'paperWidth', value);
+                            }}
+                            className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="58mm">58mm</option>
+                            <option value="80mm">80mm</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Copies
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="5"
+                            value={settings.kitchenPrinter?.copies || 1}
+                            onChange={(e) => updateNestedSetting('kitchenPrinter', 'copies', parseInt(e.target.value))}
+                            className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="printOrderNumber"
+                            checked={settings.kitchenPrinter?.printOrderNumber}
+                            onChange={(e) => updateNestedSetting('kitchenPrinter', 'printOrderNumber', e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <label htmlFor="printOrderNumber" className="text-sm text-gray-700 dark:text-gray-300">
+                            Print Order Number
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="printTableNumber"
+                            checked={settings.kitchenPrinter?.printTableNumber}
+                            onChange={(e) => updateNestedSetting('kitchenPrinter', 'printTableNumber', e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <label htmlFor="printTableNumber" className="text-sm text-gray-700 dark:text-gray-300">
+                            Print Table Number
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="printSpecialInstructions"
+                            checked={settings.kitchenPrinter?.printSpecialInstructions}
+                            onChange={(e) => updateNestedSetting('kitchenPrinter', 'printSpecialInstructions', e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <label htmlFor="printSpecialInstructions" className="text-sm text-gray-700 dark:text-gray-300">
+                            Print Special Instructions
+                          </label>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="separateByCategory"
+                            checked={settings.kitchenPrinter?.separateByCategory}
+                            onChange={(e) => updateNestedSetting('kitchenPrinter', 'separateByCategory', e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <label htmlFor="separateByCategory" className="text-sm text-gray-700 dark:text-gray-300">
+                            Separate Items by Category
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Right Column - Actions */}
+          <div className="space-y-6">
             {/* Receipt Output Card */}
             <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Output</h3>
@@ -679,7 +925,7 @@ export default function ReceiptSettings() {
                         : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                     }`}
                   >
-                    80mm (3.14")
+                    80mm
                   </button>
                   <button
                     onClick={() => handleInputChange('receiptWidth', '58mm')}
@@ -689,7 +935,7 @@ export default function ReceiptSettings() {
                         : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                     }`}
                   >
-                    58mm (2.28")
+                    58mm
                   </button>
                 </div>
               </div>
@@ -700,13 +946,6 @@ export default function ReceiptSettings() {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions</h3>
               
               <div className="space-y-3">
-                <button
-                  onClick={handleSave}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-3 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
-                >
-                  <Save className="h-4 w-4" />
-                  Save Settings
-                </button>
                 
                 <button
                   onClick={handleReset}
@@ -727,7 +966,7 @@ export default function ReceiptSettings() {
               
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-800">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Changes will affect all receipts printed or emailed from your POS system.
+                  Changes will affect all receipts printed from your POS system.
                 </p>
               </div>
             </div>
