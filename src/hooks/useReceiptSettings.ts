@@ -34,12 +34,10 @@ export const DEFAULT_SETTINGS: ReceiptSettings = {
   businessHours: 'Monday - Sunday: 7:00 AM - 10:00 PM',
   logo: null,
   logoPreview: '',
-  // Customer printer defaults
   customerPrinter: {
     connectionType: 'usb',
     paperWidth: '58mm'
   },
-  // Kitchen printer defaults
   kitchenPrinter: {
     enabled: true,
     printerName: 'XP-58 Kitchen',
@@ -59,77 +57,47 @@ export function useReceiptSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load settings from API
   const loadSettings = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('📡 Loading receipt settings from API...');
       const response = await fetch('/api/settings/receipt');
       
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Settings loaded from API:', data);
-        
-        // Merge with defaults to ensure all fields exist
         setSettings({
           ...DEFAULT_SETTINGS,
           ...data.settings,
-          customerPrinter: {
-            ...DEFAULT_SETTINGS.customerPrinter,
-            ...data.settings?.customerPrinter
-          },
-          kitchenPrinter: {
-            ...DEFAULT_SETTINGS.kitchenPrinter,
-            ...data.settings?.kitchenPrinter
-          }
+          customerPrinter: { ...DEFAULT_SETTINGS.customerPrinter, ...data.settings?.customerPrinter },
+          kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...data.settings?.kitchenPrinter }
         });
-        
-        // Backup to localStorage
         localStorage.setItem('receipt_settings', JSON.stringify(data.settings));
       } else {
-        console.warn('⚠️ API returned error, falling back to localStorage');
-        // Fallback to localStorage
         const saved = localStorage.getItem('receipt_settings');
         if (saved) {
           const parsed = JSON.parse(saved);
           setSettings({
             ...DEFAULT_SETTINGS,
             ...parsed,
-            customerPrinter: {
-              ...DEFAULT_SETTINGS.customerPrinter,
-              ...parsed?.customerPrinter
-            },
-            kitchenPrinter: {
-              ...DEFAULT_SETTINGS.kitchenPrinter,
-              ...parsed?.kitchenPrinter
-            }
+            customerPrinter: { ...DEFAULT_SETTINGS.customerPrinter, ...parsed?.customerPrinter },
+            kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...parsed?.kitchenPrinter }
           });
           toast.info('Using locally saved settings');
         } else {
           setSettings(DEFAULT_SETTINGS);
         }
       }
-    } catch (error) {
-      console.error('❌ Failed to load receipt settings:', error);
+    } catch {
       setError('Failed to load settings from server');
-      
-      // Fallback to localStorage
       const saved = localStorage.getItem('receipt_settings');
       if (saved) {
         const parsed = JSON.parse(saved);
         setSettings({
           ...DEFAULT_SETTINGS,
           ...parsed,
-          customerPrinter: {
-            ...DEFAULT_SETTINGS.customerPrinter,
-            ...parsed?.customerPrinter
-          },
-          kitchenPrinter: {
-            ...DEFAULT_SETTINGS.kitchenPrinter,
-            ...parsed?.kitchenPrinter
-          }
+          customerPrinter: { ...DEFAULT_SETTINGS.customerPrinter, ...parsed?.customerPrinter },
+          kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...parsed?.kitchenPrinter }
         });
         toast.info('Using locally saved settings (offline mode)');
       } else {
@@ -140,55 +108,41 @@ export function useReceiptSettings() {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
-  // Save settings to API
   const saveSettings = async (newSettings: ReceiptSettings): Promise<boolean> => {
     try {
       setIsSaving(true);
       setError(null);
       
-      console.log('📡 Saving settings to API...');
       const response = await fetch('/api/settings/receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings)
       });
 
-      // Get response text first for debugging
       const responseText = await response.text();
-      console.log('📥 API Response:', response.status, responseText);
-
       let data;
       try {
         data = JSON.parse(responseText);
-      } catch (e) {
-        console.error('❌ Failed to parse response as JSON:', responseText);
+      } catch {
         throw new Error('Invalid response from server');
       }
 
       if (response.ok) {
         setSettings(data.settings);
-        
-        // Backup to localStorage
         localStorage.setItem('receipt_settings', JSON.stringify(data.settings));
-        
         toast.success('Settings saved successfully');
         return true;
       } else {
         throw new Error(data.error || 'Failed to save');
       }
     } catch (error) {
-      console.error('❌ Failed to save receipt settings:', error);
       setError(error instanceof Error ? error.message : 'Failed to save settings to server');
-      
-      // Fallback to localStorage
       localStorage.setItem('receipt_settings', JSON.stringify(newSettings));
       setSettings(newSettings);
-      
       toast.warning('Settings saved locally (offline mode)');
       return false;
     } finally {
@@ -196,7 +150,6 @@ export function useReceiptSettings() {
     }
   };
 
-  // Update single setting
   const updateSetting = <K extends keyof ReceiptSettings>(
     key: K,
     value: ReceiptSettings[K]
@@ -204,7 +157,38 @@ export function useReceiptSettings() {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  // Update nested setting
+  // FIXED: This function now properly handles nested object updates with type safety
+  const updateNestedSetting = <
+    S extends keyof ReceiptSettings,
+    F extends keyof ReceiptSettings[S]
+  >(
+    section: S,
+    field: F,
+    value: ReceiptSettings[S][F]
+  ) => {
+    setSettings(prev => {
+      const sectionData = prev[section];
+      
+      // Check if sectionData exists and is an object (not null, not array)
+      if (sectionData && typeof sectionData === 'object' && !Array.isArray(sectionData)) {
+        return {
+          ...prev,
+          [section]: {
+            ...sectionData,
+            [field]: value
+          }
+        };
+      }
+      
+      // If sectionData is not an object, log warning and return previous state
+      console.warn(`Cannot update nested setting: ${String(section)} is not an object`);
+      return prev;
+    });
+  };
+
+  // Alternative FIX if you're sure all sections being passed are objects:
+  // You can use this version if you want to assert that sectionData is always an object
+  /*
   const updateNestedSetting = <
     S extends keyof ReceiptSettings,
     F extends keyof ReceiptSettings[S]
@@ -216,13 +200,13 @@ export function useReceiptSettings() {
     setSettings(prev => ({
       ...prev,
       [section]: {
-        ...(prev[section] as any),
+        ...(prev[section] as object),
         [field]: value
       }
     }));
   };
+  */
 
-  // Update section positioning
   const updateSectionPosition = (
     sectionKey: string,
     position: 'header' | 'footer' | 'disabled'
@@ -240,18 +224,13 @@ export function useReceiptSettings() {
     }));
   };
 
-  // Reset to defaults
   const resetToDefaults = async (): Promise<boolean> => {
-    const confirmed = window.confirm('Are you sure you want to reset all settings to default?');
-    if (!confirmed) return false;
-    
+    if (!window.confirm('Reset all settings to default?')) return false;
     return await saveSettings(DEFAULT_SETTINGS);
   };
 
-  // Test print (for debugging)
   const testPrint = async (type: 'customer' | 'kitchen') => {
     toast.info(`Testing ${type} printer connection...`);
-    // This will be implemented by the printer system
   };
 
   return {
