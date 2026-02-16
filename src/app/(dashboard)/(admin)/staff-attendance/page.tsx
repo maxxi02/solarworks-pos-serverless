@@ -34,9 +34,6 @@ import {
   Calendar as CalendarIcon,
   AlertCircle,
   RefreshCw,
-  DollarSign,
-  BarChart3,
-  PieChart,
 } from "lucide-react";
 import {
   Line,
@@ -48,17 +45,12 @@ import {
   ResponsiveContainer,
   Bar,
   BarChart,
-  Pie,
-  PieChart as RePieChart,
-  Cell,
 } from "recharts";
 import {
   exportToCSV,
   generateFilename,
 } from "@/utils/export-attendance";
-import {
-  DataTable,
-} from "@/components/data-table"; // Adjust path as needed
+import { DataTable } from "@/components/data-table";
 import { ColumnDef } from "@tanstack/react-table";
 
 interface StaffMember {
@@ -75,30 +67,6 @@ interface DashboardStats {
   averageHours: number;
 }
 
-interface StaffEarnings {
-  staffId: string;
-  name: string;
-  email: string;
-  totalEarnings: number;
-  regularEarnings: number;
-  overtimeEarnings: number;
-  totalHours: number;
-  regularHours: number;
-  overtimeHours: number;
-  daysPresent: number;
-  recordCount: number;
-}
-
-interface EarningsSummary {
-  totalPayroll: number;
-  totalRegularPay: number;
-  totalOvertimePay: number;
-  averageEarningsPerStaff: number;
-  staffCount: number;
-}
-
-const COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
-
 const AdminAttendancePage = () => {
   // ── Pending tab ────────────────────────────────────────────────────────────
   const [pendingRecords, setPendingRecords] = useState<AttendanceWithUser[]>([]);
@@ -114,13 +82,6 @@ const AdminAttendancePage = () => {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [dashboardLastRefresh, setDashboardLastRefresh] = useState(new Date());
-
-  // ── Earnings tab ───────────────────────────────────────────────────────────
-  const [earningsData, setEarningsData] = useState<StaffEarnings[]>([]);
-  const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
-  const [earningsLoading, setEarningsLoading] = useState(true);
-  const [earningsError, setEarningsError] = useState<string | null>(null);
-  const [earningsLastRefresh, setEarningsLastRefresh] = useState(new Date());
 
   // ── Shared filters ─────────────────────────────────────────────────────────
   const [selectedStaff, setSelectedStaff] = useState<string>("all");
@@ -142,21 +103,16 @@ const AdminAttendancePage = () => {
   useEffect(() => {
     if (activeTab === "dashboard") {
       fetchDashboardData();
-      const interval = setInterval(() => fetchDashboardData(true), 25000);
-      return () => clearInterval(interval);
-    }
-
-    if (activeTab === "earnings") {
-      fetchEarningsData();
-      const interval = setInterval(() => fetchEarningsData(true), 30000);
+      const interval = setInterval(() => fetchDashboardData(true), 30000);
       return () => clearInterval(interval);
     }
   }, [activeTab, selectedStaff, startDate, endDate]);
 
   useEffect(() => {
-    if (activeTab !== "pending") return;
-    const interval = setInterval(() => fetchPendingAttendance(true), 15000);
-    return () => clearInterval(interval);
+    if (activeTab === "pending") {
+      const interval = setInterval(() => fetchPendingAttendance(true), 15000);
+      return () => clearInterval(interval);
+    }
   }, [activeTab]);
 
   const fetchPendingAttendance = async (silent = false) => {
@@ -166,15 +122,18 @@ const AdminAttendancePage = () => {
 
     try {
       const res = await fetch("/api/attendance/admin/pending");
+      if (!res.ok) throw new Error("Failed to fetch pending records");
+
       const data = await res.json();
       if (data.success) {
-        setPendingRecords(data.records);
+        setPendingRecords(data.records || []);
         setPendingLastRefresh(new Date());
       } else {
         setPendingError(data.message || "Failed to load pending records");
       }
-    } catch {
-      setPendingError("Network error");
+    } catch (err) {
+      setPendingError("Network error – please try again");
+      console.error(err);
     } finally {
       setPendingLoading(false);
       setPendingRefreshing(false);
@@ -184,10 +143,14 @@ const AdminAttendancePage = () => {
   const fetchStaffList = async () => {
     try {
       const res = await fetch("/api/attendance/admin/staff-list");
+      if (!res.ok) return;
+
       const data = await res.json();
-      if (data.success) setStaff(data.staff);
+      if (data.success) {
+        setStaff(data.staff || []);
+      }
     } catch (err) {
-      console.error("Staff list fetch failed", err);
+      console.error("Failed to load staff list", err);
     }
   };
 
@@ -202,61 +165,22 @@ const AdminAttendancePage = () => {
       if (endDate) params.set("endDate", endDate.toISOString().split("T")[0]);
 
       const res = await fetch(`/api/attendance/admin/dashboard?${params}`);
+      if (!res.ok) throw new Error("Dashboard fetch failed");
+
       const data = await res.json();
 
       if (data.success) {
-        setRecords(data.records);
-        setStats(data.stats);
+        setRecords(data.records || []);
+        setStats(data.stats || null);
         setDashboardLastRefresh(new Date());
       } else {
-        setDashboardError(data.message || "Failed to load dashboard");
+        setDashboardError(data.message || "Failed to load dashboard data");
       }
-    } catch {
-      setDashboardError("Network error");
+    } catch (err) {
+      setDashboardError("Network error – please try again");
+      console.error(err);
     } finally {
       setDashboardLoading(false);
-    }
-  };
-
-  const fetchEarningsData = async (silent = false) => {
-    if (!silent) setEarningsLoading(true);
-    setEarningsError(null);
-
-    try {
-      const params = new URLSearchParams();
-      if (selectedStaff !== "all") params.set("staffId", selectedStaff);
-      if (startDate) params.set("startDate", startDate.toISOString().split("T")[0]);
-      if (endDate) params.set("endDate", endDate.toISOString().split("T")[0]);
-
-      const res = await fetch(`/api/attendance/admin/earnings?${params}`);
-      const data = await res.json();
-
-      if (data.success) {
-        setEarningsData(data.staffEarnings || []);
-
-        // Calculate summary statistics
-        if (data.staffEarnings?.length > 0) {
-          const summary: EarningsSummary = {
-            totalPayroll: data.staffEarnings.reduce((sum: number, e: StaffEarnings) => sum + e.totalEarnings, 0),
-            totalRegularPay: data.staffEarnings.reduce((sum: number, e: StaffEarnings) => sum + e.regularEarnings, 0),
-            totalOvertimePay: data.staffEarnings.reduce((sum: number, e: StaffEarnings) => sum + e.overtimeEarnings, 0),
-            averageEarningsPerStaff: 0,
-            staffCount: data.staffEarnings.length,
-          };
-          summary.averageEarningsPerStaff = summary.totalPayroll / summary.staffCount;
-          setEarningsSummary(summary);
-        } else {
-          setEarningsSummary(null);
-        }
-
-        setEarningsLastRefresh(new Date());
-      } else {
-        setEarningsError(data.message || "Failed to load earnings data");
-      }
-    } catch {
-      setEarningsError("Network error");
-    } finally {
-      setEarningsLoading(false);
     }
   };
 
@@ -268,136 +192,85 @@ const AdminAttendancePage = () => {
         body: JSON.stringify({ attendanceId, status }),
       });
 
+      if (!res.ok) throw new Error("Update failed");
+
       const data = await res.json();
       if (!data.success) {
-        toast.error(data.message || "Failed to update");
+        toast.error(data.message || "Failed to update attendance status");
         return;
       }
 
-      setPendingRecords(prev => prev.filter(r => r._id !== attendanceId));
+      setPendingRecords((prev) => prev.filter((r) => r._id !== attendanceId));
       toast.success(status === "confirmed" ? "Attendance confirmed" : "Attendance rejected");
 
-      if (activeTab === "dashboard") fetchDashboardData(true);
-      if (activeTab === "earnings") fetchEarningsData(true);
-    } catch {
-      toast.error("Network error");
+      // Refresh dashboard if we're currently viewing it
+      if (activeTab === "dashboard") {
+        fetchDashboardData(true);
+      }
+    } catch (err) {
+      toast.error("Failed to update – network error");
+      console.error(err);
     }
   };
 
-  const handleExportEarnings = () => {
-    if (earningsData.length === 0) {
-      toast.warning("No earnings data to export");
-      return;
-    }
+  // ── Formatters ─────────────────────────────────────────────────────────────
+  const formatTime = (date: Date | string | undefined) =>
+    date ? new Date(date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—";
 
-    const filename = generateFilename(
-      startDate?.toISOString().split("T")[0],
-      endDate?.toISOString().split("T")[0],
-      "earnings-summary"
-    );
-
-    const headers = [
-      "Staff Name",
-      "Email",
-      "Total Earnings (₱)",
-      "Regular Earnings (₱)",
-      "Overtime Earnings (₱)",
-      "Total Hours",
-      "Regular Hours",
-      "Overtime Hours",
-      "Days Present",
-      "Record Count"
-    ];
-
-    const rows = earningsData.map(e => [
-      e.name,
-      e.email,
-      e.totalEarnings.toFixed(2),
-      e.regularEarnings.toFixed(2),
-      e.overtimeEarnings.toFixed(2),
-      e.totalHours.toFixed(2),
-      e.regularHours.toFixed(2),
-      e.overtimeHours.toFixed(2),
-      e.daysPresent.toString(),
-      e.recordCount.toString()
-    ]);
-
-    exportToCSV([headers, ...rows], filename);
-    toast.success("Earnings exported as CSV");
-  };
-
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const formatTime = (date: Date | string) =>
-    new Date(date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-
-  const formatDate = (date: Date | string) =>
-    new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-  const formatCurrency = (value?: number) => value ? `₱${value.toFixed(2)}` : "₱0.00";
-
-  const formatCompactCurrency = (value: number) => {
-    if (value >= 1000000) return `₱${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `₱${(value / 1000).toFixed(1)}K`;
-    return `₱${value.toFixed(0)}`;
-  };
+  const formatDate = (date: Date | string | undefined) =>
+    date ? new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "confirmed": return <Badge className="bg-green-600">Confirmed</Badge>;
-      case "pending": return <Badge className="bg-yellow-500">Pending</Badge>;
-      case "rejected": return <Badge variant="destructive">Rejected</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
+      case "confirmed":
+        return <Badge className="bg-green-600 hover:bg-green-600">Confirmed</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-500 hover:bg-yellow-500">Pending</Badge>;
+      case "rejected":
+        return <Badge variant="destructive">Rejected</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  const getChartData = () => {
+  // ── Chart Data Preparers ───────────────────────────────────────────────────
+  const getDailyHoursTrend = () => {
     const map = new Map<string, number>();
     records.forEach((r) => {
+      if (!r.date || !r.hoursWorked) return;
       const key = new Date(r.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      map.set(key, (map.get(key) || 0) + (r.hoursWorked || 0));
+      map.set(key, (map.get(key) || 0) + r.hoursWorked);
     });
-    return Array.from(map, ([date, hours]) => ({ date, hours: Math.round(hours * 100) / 100 }))
+
+    return Array.from(map, ([date, hours]) => ({
+      date,
+      hours: Math.round(hours * 100) / 100,
+    }))
       .slice(-14)
       .reverse();
   };
 
-  const getStaffHoursData = () => {
+  const getTopStaffByHours = () => {
     const map = new Map<string, { name: string; hours: number }>();
+
     records.forEach((r) => {
+      if (!r.hoursWorked) return;
       const name = r.user?.name || "Unknown";
       const entry = map.get(r.userId) || { name, hours: 0 };
-      entry.hours += r.hoursWorked || 0;
+      entry.hours += r.hoursWorked;
       map.set(r.userId, entry);
     });
+
     return Array.from(map.values())
       .map((v) => ({
-        name: v.name.length > 15 ? v.name.slice(0, 12) + "…" : v.name,
-        hours: Math.round(v.hours * 100) / 100
+        name: v.name.length > 18 ? v.name.slice(0, 15) + "…" : v.name,
+        hours: Math.round(v.hours * 100) / 100,
       }))
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 10);
   };
 
-  const getEarningsPieData = () => {
-    if (!earningsSummary) return [];
-    return [
-      { name: "Regular Pay", value: earningsSummary.totalRegularPay },
-      { name: "Overtime Pay", value: earningsSummary.totalOvertimePay },
-    ];
-  };
-
-  const getTopEarnersData = () => {
-    return earningsData
-      .sort((a, b) => b.totalEarnings - a.totalEarnings)
-      .slice(0, 5)
-      .map(e => ({
-        name: e.name.length > 12 ? e.name.slice(0, 10) + "…" : e.name,
-        earnings: e.totalEarnings,
-      }));
-  };
-
-  // ── Pending Columns ────────────────────────────────────────────────────────
+  // ── Columns ────────────────────────────────────────────────────────────────
   const pendingColumns: ColumnDef<AttendanceWithUser>[] = [
     {
       accessorKey: "user.name",
@@ -405,7 +278,9 @@ const AdminAttendancePage = () => {
       cell: ({ row }) => (
         <div className="font-medium">
           {row.original.user?.name ?? "Unknown"}
-          <div className="text-sm text-muted-foreground">{row.original.user?.email}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {row.original.user?.email ?? "—"}
+          </div>
         </div>
       ),
     },
@@ -427,26 +302,25 @@ const AdminAttendancePage = () => {
     {
       accessorKey: "clockOutTime",
       header: "Clock Out",
-      cell: ({ getValue }) => ( // Fix: Remove unused 'row' parameter
+      cell: ({ getValue }) =>
         getValue() ? (
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-rose-500" />
             {formatTime(getValue() as string)}
           </div>
         ) : (
-          <span className="italic text-muted-foreground">Not clocked out</span>
-        )
-      ),
+          <span className="italic text-muted-foreground text-sm">Not clocked out</span>
+        ),
     },
     {
       accessorKey: "hoursWorked",
       header: "Hours",
-      cell: ({ getValue }) => (
-        getValue() ? `${(getValue() as number).toFixed(2)} h` : "—"
-      ),
+      cell: ({ getValue }) =>
+        getValue() ? `${Number(getValue()).toFixed(2)} h` : "—",
     },
     {
       id: "actions",
+      header: "Actions",
       cell: ({ row }) => (
         <div className="flex gap-2">
           <Button
@@ -470,7 +344,6 @@ const AdminAttendancePage = () => {
     },
   ];
 
-  // ── Dashboard Columns ──────────────────────────────────────────────────────
   const dashboardColumns: ColumnDef<AttendanceWithUser>[] = [
     {
       accessorKey: "user.name",
@@ -478,7 +351,9 @@ const AdminAttendancePage = () => {
       cell: ({ row }) => (
         <div>
           <div className="font-medium">{row.original.user?.name ?? "—"}</div>
-          <div className="text-sm text-muted-foreground">{row.original.user?.email ?? "—"}</div>
+          <div className="text-xs text-muted-foreground">
+            {row.original.user?.email ?? "—"}
+          </div>
         </div>
       ),
     },
@@ -495,16 +370,13 @@ const AdminAttendancePage = () => {
     {
       accessorKey: "clockOutTime",
       header: "Out",
-      cell: ({ getValue }) => (
-        getValue() ? formatTime(getValue() as string) : <span className="italic text-muted-foreground">—</span>
-      ),
+      cell: ({ getValue }) => (getValue() ? formatTime(getValue() as string) : "—"),
     },
     {
       accessorKey: "hoursWorked",
       header: "Hours",
-      cell: ({ getValue }) => (
-        getValue() ? `${(getValue() as number).toFixed(2)} h` : "—"
-      ),
+      cell: ({ getValue }) =>
+        getValue() ? `${Number(getValue()).toFixed(2)} h` : "—",
     },
     {
       accessorKey: "status",
@@ -513,120 +385,25 @@ const AdminAttendancePage = () => {
     },
   ];
 
-  // ── Earnings Columns ───────────────────────────────────────────────────────
-  const earningsColumns: ColumnDef<StaffEarnings>[] = [
-    {
-      accessorKey: "name",
-      header: "Staff",
-      cell: ({ row }) => (
-        <div>
-          <div className="font-medium">{row.original.name}</div>
-          <div className="text-sm text-muted-foreground">{row.original.email}</div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "totalEarnings",
-      header: "Total Earnings",
-      cell: ({ getValue }) => (
-        <div className="text-right font-medium text-emerald-700">
-          {formatCurrency(getValue() as number)}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "regularEarnings",
-      header: "Regular Pay",
-      cell: ({ getValue }) => (
-        <div className="text-right">{formatCurrency(getValue() as number)}</div>
-      ),
-    },
-    {
-      accessorKey: "overtimeEarnings",
-      header: "Overtime Pay",
-      cell: ({ getValue }) => (
-        <div className="text-right text-amber-700">{formatCurrency(getValue() as number)}</div>
-      ),
-    },
-    {
-      accessorKey: "totalHours",
-      header: "Total Hours",
-      cell: ({ getValue }) => <div className="text-right font-medium">{(getValue() as number).toFixed(1)} h</div>,
-    },
-    {
-      accessorKey: "regularHours",
-      header: "Regular Hrs",
-      cell: ({ getValue }) => <div className="text-right">{(getValue() as number).toFixed(1)} h</div>,
-    },
-    {
-      accessorKey: "overtimeHours",
-      header: "Overtime Hrs",
-      cell: ({ getValue }) => <div className="text-right">{(getValue() as number).toFixed(1)} h</div>,
-    },
-    {
-      accessorKey: "daysPresent",
-      header: "Days",
-      cell: ({ getValue }) => <div className="text-right">{getValue() as number}</div>,
-    },
-    {
-      accessorKey: "recordCount",
-      header: "Records",
-      cell: ({ getValue }) => <div className="text-right">{getValue() as number}</div>,
-    },
-  ];
-
-  // ── Earnings Footer ────────────────────────────────────────────────────────
-  const renderEarningsFooter = () => (
-    <tfoot className="border-t-2 border-muted bg-muted/20">
-      <tr>
-        <th className="px-4 py-3 font-medium">TOTAL</th>
-        <td className="px-4 py-3 text-right font-bold text-emerald-700">
-          {formatCurrency(earningsSummary?.totalPayroll || 0)}
-        </td>
-        <td className="px-4 py-3 text-right font-medium">
-          {formatCurrency(earningsSummary?.totalRegularPay || 0)}
-        </td>
-        <td className="px-4 py-3 text-right font-medium text-amber-700">
-          {formatCurrency(earningsSummary?.totalOvertimePay || 0)}
-        </td>
-        <td className="px-4 py-3 text-right font-medium">
-          {earningsData.reduce((sum, e) => sum + e.totalHours, 0).toFixed(1)} h
-        </td>
-        <td colSpan={4} />
-      </tr>
-    </tfoot>
-  );
-
-  // ── Loading state ──────────────────────────────────────────────────────────
-  if (pendingLoading && activeTab === "pending" && pendingRecords.length === 0) {
-    return (
-      <div className="container mx-auto p-6 space-y-8">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-        </div>
-        <Skeleton className="h-[500px] rounded-xl" />
-      </div>
-    );
-  }
-
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="container mx-auto p-6 space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Staff Attendance</h1>
-          <p className="text-muted-foreground">Manage attendance and view earnings</p>
+          <p className="text-muted-foreground">
+            Review pending entries and view attendance analytics
+          </p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-lg grid-cols-3">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="pending" className="gap-2">
             <Clock className="h-4 w-4" />
             Pending
             {pendingRecords.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 px-2">
+              <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
                 {pendingRecords.length}
               </Badge>
             )}
@@ -635,17 +412,14 @@ const AdminAttendancePage = () => {
             <TrendingUp className="h-4 w-4" />
             Dashboard
           </TabsTrigger>
-          <TabsTrigger value="earnings" className="gap-2">
-            <DollarSign className="h-4 w-4" />
-            Earnings
-          </TabsTrigger>
         </TabsList>
 
-        {/* Pending Tab */}
+        {/* ── Pending Tab ────────────────────────────────────────────────────── */}
         <TabsContent value="pending" className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="text-xs text-muted-foreground">
-              Last updated: {Math.round((Date.now() - pendingLastRefresh.getTime()) / 1000 / 60)}m ago
+              Last updated:{" "}
+              {Math.round((Date.now() - pendingLastRefresh.getTime()) / 60000)} min ago
             </div>
             <Button
               variant="outline"
@@ -653,7 +427,9 @@ const AdminAttendancePage = () => {
               onClick={() => fetchPendingAttendance(true)}
               disabled={pendingRefreshing}
             >
-              <RefreshCw className={`mr-2 h-4 w-4 ${pendingRefreshing ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${pendingRefreshing ? "animate-spin" : ""}`}
+              />
               Refresh
             </Button>
           </div>
@@ -665,17 +441,24 @@ const AdminAttendancePage = () => {
             </Alert>
           )}
 
-          <div className="grid gap-6 sm:grid-cols-3">
-            <StatCard title="Pending" value={pendingRecords.length} icon={Clock} desc="Awaiting review" />
+          <div className="grid gap-5 sm:grid-cols-3">
+            <StatCard
+              title="Pending"
+              value={pendingRecords.length}
+              icon={Clock}
+              desc="Awaiting review"
+            />
             <StatCard
               title="Unique Staff"
-              value={new Set(pendingRecords.map(r => r.userId)).size}
+              value={new Set(pendingRecords.map((r) => r.userId)).size}
               icon={Users}
-              desc="Staff with pending entries"
+              desc="With pending entries"
             />
             <StatCard
               title="Total Hours"
-              value={`${pendingRecords.reduce((s, r) => s + (r.hoursWorked || 0), 0).toFixed(1)} h`}
+              value={`${pendingRecords
+                .reduce((s, r) => s + (r.hoursWorked || 0), 0)
+                .toFixed(1)} h`}
               icon={Clock}
               desc="Pending approval"
             />
@@ -683,15 +466,17 @@ const AdminAttendancePage = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Pending Attendance</CardTitle>
-              <CardDescription>Review and confirm / reject submissions</CardDescription>
+              <CardTitle>Pending Attendance Records</CardTitle>
+              <CardDescription>
+                Review clock-ins/clock-outs and confirm or reject
+              </CardDescription>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-1">
               {pendingRecords.length === 0 ? (
                 <EmptyState
                   icon={CheckCircle}
                   title="All caught up!"
-                  description="No pending attendance records"
+                  description="No pending attendance records to review"
                 />
               ) : (
                 <DataTable
@@ -705,38 +490,56 @@ const AdminAttendancePage = () => {
           </Card>
         </TabsContent>
 
-        {/* Dashboard Tab */}
+        {/* ── Dashboard Tab ──────────────────────────────────────────────────── */}
         <TabsContent value="dashboard" className="space-y-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs text-muted-foreground">
-              Last updated: {Math.round((Date.now() - dashboardLastRefresh.getTime()) / 1000 / 60)}m ago
+              Last updated:{" "}
+              {Math.round((Date.now() - dashboardLastRefresh.getTime()) / 60000)} min ago
             </div>
-            <Button variant="outline" size="sm" onClick={() => {
-              if (records.length === 0) {
-                toast.warning("No data to export");
-                return;
-              }
-              const filename = generateFilename(
-                startDate?.toISOString().split("T")[0],
-                endDate?.toISOString().split("T")[0],
-                selectedStaff !== "all" ? staff.find(s => s.id === selectedStaff)?.name : "all-staff"
-              );
 
-              // Convert records to CSV format
-              const headers = ["Staff Name", "Email", "Date", "Clock In", "Clock Out", "Hours Worked", "Status"];
-              const rows = records.map(r => [
-                r.user?.name || "Unknown",
-                r.user?.email || "",
-                formatDate(r.date),
-                formatTime(r.clockInTime),
-                r.clockOutTime ? formatTime(r.clockOutTime) : "Not clocked out",
-                r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
-                r.status
-              ]);
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (records.length === 0) {
+                  toast.warning("No records to export");
+                  return;
+                }
 
-              exportToCSV([headers, ...rows], filename);
-              toast.success("Exported as CSV");
-            }}>
+                const filename = generateFilename(
+                  startDate?.toISOString().split("T")[0],
+                  endDate?.toISOString().split("T")[0],
+                  selectedStaff !== "all"
+                    ? staff.find((s) => s.id === selectedStaff)?.name?.replace(/\s+/g, "-") || "filtered"
+                    : "all-staff"
+                );
+
+                const headers = [
+                  "Staff Name",
+                  "Email",
+                  "Date",
+                  "Clock In",
+                  "Clock Out",
+                  "Hours Worked",
+                  "Status",
+                ];
+
+                const rows = records.map((r) => [
+                  r.user?.name || "Unknown",
+                  r.user?.email || "",
+                  formatDate(r.date),
+                  formatTime(r.clockInTime),
+                  r.clockOutTime ? formatTime(r.clockOutTime) : "Not clocked out",
+                  r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
+                  r.status,
+                ]);
+
+                exportToCSV([headers, ...rows], filename);
+                toast.success("Attendance exported as CSV");
+              }}
+              disabled={dashboardLoading || records.length === 0}
+            >
               <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
@@ -749,6 +552,8 @@ const AdminAttendancePage = () => {
             </Alert>
           )}
 
+          {/* Filters */}
+          {/* Filters */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -757,6 +562,32 @@ const AdminAttendancePage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* ← New: Active range summary */}
+              <div className="mb-5 text-sm text-muted-foreground">
+                {startDate && endDate ? (
+                  <>
+                    Showing records from{" "}
+                    <span className="font-medium text-foreground">
+                      {startDate.toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-medium text-foreground">
+                      {endDate.toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </>
+                ) : (
+                  "Select a date range to filter records"
+                )}
+              </div>
+
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Staff</label>
@@ -780,11 +611,15 @@ const AdminAttendancePage = () => {
                   <Button
                     variant="outline"
                     className="w-full justify-start text-left font-normal"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    onClick={() => setShowDatePicker((prev) => !prev)}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {startDate ? startDate.toLocaleDateString() : "Pick start date"}
                   </Button>
+                  {/* ← New: small helper text */}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    First day of the period to include
+                  </p>
                 </div>
 
                 <div>
@@ -792,18 +627,22 @@ const AdminAttendancePage = () => {
                   <Button
                     variant="outline"
                     className="w-full justify-start text-left font-normal"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    onClick={() => setShowDatePicker((prev) => !prev)}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {endDate ? endDate.toLocaleDateString() : "Pick end date"}
                   </Button>
+                  {/* ← New: small helper text */}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Last day of the period to include
+                  </p>
                 </div>
               </div>
 
               {showDatePicker && (
-                <div className="mt-5 flex flex-wrap justify-center gap-8">
+                <div className="mt-6 flex flex-wrap justify-center gap-10 border-t pt-6">
                   <div>
-                    <p className="mb-2 text-sm font-medium">Start Date</p>
+                    <p className="mb-2 text-sm font-medium text-center">Start Date</p>
                     <Calendar
                       mode="single"
                       selected={startDate}
@@ -812,7 +651,7 @@ const AdminAttendancePage = () => {
                     />
                   </div>
                   <div>
-                    <p className="mb-2 text-sm font-medium">End Date</p>
+                    <p className="mb-2 text-sm font-medium text-center">End Date</p>
                     <Calendar
                       mode="single"
                       selected={endDate}
@@ -825,247 +664,41 @@ const AdminAttendancePage = () => {
             </CardContent>
           </Card>
 
-          {dashboardLoading && !records.length ? (
+          {dashboardLoading && records.length === 0 ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+              {Array(4)
+                .fill(0)
+                .map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-xl" />
+                ))}
             </div>
           ) : (
             <>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Records" value={stats?.totalRecords ?? 0} icon={Clock} desc="Total entries" />
-                <StatCard title="Total Hours" value={`${stats?.totalHours?.toFixed(1) ?? 0} h`} icon={Clock} desc="All tracked" />
-                <StatCard title="Staff" value={stats?.uniqueStaff ?? 0} icon={Users} desc="Unique employees" />
-                <StatCard title="Avg Hours" value={`${stats?.averageHours?.toFixed(1) ?? 0} h`} icon={TrendingUp} desc="Per record" />
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Daily Hours Trend</CardTitle>
-                    <CardDescription>Last 14 days</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-80">
-                    {getChartData().length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={getChartData()}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
-                          <YAxis />
-                          <Tooltip />
-                          <Line type="monotone" dataKey="hours" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="grid h-full place-items-center text-muted-foreground">No data yet</div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Top Staff by Hours</CardTitle>
-                    <CardDescription>Top 10 performers</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-80">
-                    {getStaffHoursData().length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={getStaffHoursData()} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" />
-                          <YAxis dataKey="name" type="category" width={140} />
-                          <Tooltip />
-                          <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 4, 4]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="grid h-full place-items-center text-muted-foreground">No data yet</div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Attendance Records</CardTitle>
-                  <CardDescription>Filtered results</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  {records.length === 0 ? (
-                    <EmptyState
-                      icon={AlertCircle}
-                      title="No records found"
-                      description="Try adjusting filters or wait for new entries"
-                    />
-                  ) : (
-                    <DataTable
-                      columns={dashboardColumns}
-                      data={records}
-                      enablePagination
-                      enableSorting
-                      emptyMessage="No records found"
-                      loading={dashboardLoading}
-                      loadingMessage="Loading records..."
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </TabsContent>
-
-        {/* Earnings Tab */}
-        <TabsContent value="earnings" className="space-y-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="text-xs text-muted-foreground">
-              Last updated: {Math.round((Date.now() - earningsLastRefresh.getTime()) / 60000)} min ago
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchEarningsData(true)}
-                disabled={earningsLoading}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${earningsLoading ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportEarnings}
-                disabled={earningsData.length === 0}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </Button>
-            </div>
-          </div>
-
-          {earningsError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{earningsError}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Filters card (reuse same filters) */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Staff</label>
-                  <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All staff" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Staff</SelectItem>
-                      {staff.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Start Date</label>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? startDate.toLocaleDateString() : "Pick start date"}
-                  </Button>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">End Date</label>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? endDate.toLocaleDateString() : "Pick end date"}
-                  </Button>
-                </div>
-              </div>
-
-              {showDatePicker && (
-                <div className="mt-5 flex flex-wrap justify-center gap-8">
-                  <div>
-                    <p className="mb-2 text-sm font-medium">Start Date</p>
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      className="rounded-md border"
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-sm font-medium">End Date</p>
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      className="rounded-md border"
-                    />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {earningsLoading ? (
-            <div className="space-y-6">
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-              </div>
-              <Skeleton className="h-80 w-full" />
-              <Skeleton className="h-64 w-full" />
-            </div>
-          ) : earningsData.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                No earnings data found for the selected period/filter.
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              {/* Summary Cards */}
+              {/* Stats */}
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                  title="Total Payroll"
-                  value={formatCompactCurrency(earningsSummary?.totalPayroll || 0)}
-                  icon={DollarSign}
-                  desc="Total earnings (all staff)"
+                  title="Total Records"
+                  value={stats?.totalRecords ?? 0}
+                  icon={Clock}
+                  desc="All entries"
                 />
                 <StatCard
-                  title="Regular Pay"
-                  value={formatCompactCurrency(earningsSummary?.totalRegularPay || 0)}
-                  icon={DollarSign}
-                  desc="Base salary payments"
+                  title="Total Hours"
+                  value={`${stats?.totalHours?.toFixed(1) ?? "0.0"} h`}
+                  icon={Clock}
+                  desc="Tracked time"
                 />
                 <StatCard
-                  title="Overtime Pay"
-                  value={formatCompactCurrency(earningsSummary?.totalOvertimePay || 0)}
-                  icon={TrendingUp}
-                  desc="Extra hours compensation"
-                />
-                <StatCard
-                  title="Avg per Staff"
-                  value={formatCompactCurrency(earningsSummary?.averageEarningsPerStaff || 0)}
+                  title="Unique Staff"
+                  value={stats?.uniqueStaff ?? 0}
                   icon={Users}
-                  desc={`Across ${earningsSummary?.staffCount || 0} staff`}
+                  desc="Employees"
+                />
+                <StatCard
+                  title="Avg Hours / Record"
+                  value={`${stats?.averageHours?.toFixed(1) ?? "0.0"} h`}
+                  icon={TrendingUp}
+                  desc="Per entry"
                 />
               </div>
 
@@ -1073,81 +706,83 @@ const AdminAttendancePage = () => {
               <div className="grid gap-6 lg:grid-cols-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <PieChart className="h-5 w-5" />
-                      Pay Breakdown
-                    </CardTitle>
-                    <CardDescription>Regular vs Overtime</CardDescription>
+                    <CardTitle>Daily Hours Trend</CardTitle>
+                    <CardDescription>Last 14 days</CardDescription>
                   </CardHeader>
                   <CardContent className="h-80">
-                    {getEarningsPieData().some(d => d.value > 0) ? (
+                    {getDailyHoursTrend().length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <RePieChart>
-                          <Pie
-                            data={getEarningsPieData()}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {getEarningsPieData().map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                        </RePieChart>
+                        <LineChart data={getDailyHoursTrend()}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line
+                            type="monotone"
+                            dataKey="hours"
+                            stroke="#3b82f6"
+                            strokeWidth={2}
+                            dot={{ r: 4 }}
+                          />
+                        </LineChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="grid h-full place-items-center text-muted-foreground">No data available</div>
+                      <div className="h-full grid place-items-center text-muted-foreground">
+                        No data for selected period
+                      </div>
                     )}
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Top Earners
-                    </CardTitle>
-                    <CardDescription>Highest paid staff</CardDescription>
+                    <CardTitle>Top Staff by Hours</CardTitle>
+                    <CardDescription>Top 10</CardDescription>
                   </CardHeader>
                   <CardContent className="h-80">
-                    {getTopEarnersData().length > 0 ? (
+                    {getTopStaffByHours().length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={getTopEarnersData()} layout="vertical">
+                        <BarChart data={getTopStaffByHours()} layout="vertical">
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis type="number" />
-                          <YAxis dataKey="name" type="category" width={100} />
-                          <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                          <Bar dataKey="earnings" fill="#3b82f6" radius={[4, 4, 4, 4]} />
+                          <YAxis dataKey="name" type="category" width={160} />
+                          <Tooltip />
+                          <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 4, 4]} />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="grid h-full place-items-center text-muted-foreground">No data available</div>
+                      <div className="h-full grid place-items-center text-muted-foreground">
+                        No data for selected period
+                      </div>
                     )}
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Earnings Table */}
+              {/* Table */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Staff Earnings Summary</CardTitle>
-                  <CardDescription>
-                    Aggregated confirmed earnings for the selected period
-                  </CardDescription>
+                  <CardTitle>Attendance Records</CardTitle>
+                  <CardDescription>Filtered results</CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <DataTable
-                    columns={earningsColumns}
-                    data={earningsData}
-                    enablePagination={false}
-                    emptyMessage="No earnings data"
-                    renderFooter={() => renderEarningsFooter()}
-                  />
+                <CardContent className="pt-1">
+                  {records.length === 0 ? (
+                    <EmptyState
+                      icon={AlertCircle}
+                      title="No records found"
+                      description="Adjust filters or wait for new entries"
+                    />
+                  ) : (
+                    <DataTable
+                      columns={dashboardColumns}
+                      data={records}
+                      enablePagination
+                      enableSorting
+                      emptyMessage="No records match the current filters"
+                      loading={dashboardLoading}
+                      loadingMessage="Loading attendance records..."
+                    />
+                  )}
                 </CardContent>
               </Card>
             </>
@@ -1159,7 +794,6 @@ const AdminAttendancePage = () => {
 };
 
 // ── Helper Components ────────────────────────────────────────────────────────
-
 function StatCard({
   title,
   value,
@@ -1168,18 +802,18 @@ function StatCard({
 }: {
   title: string;
   value: number | string;
-  icon: React.ComponentType<{ className?: string }>; // Fix: Proper icon type
+  icon: React.ComponentType<{ className?: string }>;
   desc: string;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <Icon className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-        <p className="text-xs text-muted-foreground">{desc}</p>
+        <p className="text-xs text-muted-foreground mt-1">{desc}</p>
       </CardContent>
     </Card>
   );
@@ -1190,15 +824,15 @@ function EmptyState({
   title,
   description,
 }: {
-  icon: React.ComponentType<{ className?: string }>; // Fix: Proper icon type
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
 }) {
   return (
     <div className="grid place-items-center py-16 text-center">
-      <Icon className="mx-auto mb-4 h-12 w-12 text-muted-foreground/70" />
+      <Icon className="mx-auto mb-5 h-14 w-14 text-muted-foreground/60" />
       <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <p className="mt-2 text-sm text-muted-foreground max-w-md">{description}</p>
     </div>
   );
 }
