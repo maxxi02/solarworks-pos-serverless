@@ -6,22 +6,12 @@ import DashboardLayout from "../DashboardLayout";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageCircle, Bell, X } from "lucide-react";
 
-import { ConversationList } from "@/components/chat/ConversationList";
-import { ChatWindow } from "@/components/chat/ChatWindow";
-import { useChat } from "@/hooks/useChat";
 import { useSession } from "@/lib/auth-client";
 
-// ─── Notifications section (unchanged — kept as-is) ───────────────
-// Import and use your existing notification component here.
-// Omitted for brevity; slot it in below where indicated.
-
 const queryClient = new QueryClient();
-
-// ─── Inner component — needs to be inside QueryClientProvider ─────
 
 function ChatAndNotifications() {
   const { data: session } = useSession();
@@ -29,19 +19,6 @@ function ChatAndNotifications() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chats" | "notifications">("chats");
-  const [showMobileList, setShowMobileList] = useState(true);
-
-  const chat = useChat();
-
-  // When selecting a conversation on mobile, hide the list to show the window
-  const handleSelectConversation = (id: string) => {
-    chat.selectConversation(id);
-    setShowMobileList(false);
-  };
-
-  const handleBack = () => {
-    setShowMobileList(true);
-  };
 
   if (!currentUser) return null;
 
@@ -54,11 +31,7 @@ function ChatAndNotifications() {
         aria-label="Toggle messages"
       >
         <MessageCircle className="h-6 w-6" />
-        {chat.totalUnread > 0 && (
-          <Badge className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 p-0 text-[10px] text-white">
-            {chat.totalUnread > 9 ? "9+" : chat.totalUnread}
-          </Badge>
-        )}
+        {/* Unread count removed */}
       </button>
 
       {/* Full-screen drawer — CSS transform so hook state persists when closed */}
@@ -76,11 +49,7 @@ function ChatAndNotifications() {
               <TabsTrigger value="chats" className="flex items-center gap-1.5">
                 <MessageCircle className="h-4 w-4" />
                 Chats
-                {chat.totalUnread > 0 && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    {chat.totalUnread}
-                  </Badge>
-                )}
+                {/* Unread badge removed */}
               </TabsTrigger>
               <TabsTrigger
                 value="notifications"
@@ -106,69 +75,12 @@ function ChatAndNotifications() {
         {/* Body */}
         <div className="flex min-h-0 flex-1">
           {activeTab === "chats" ? (
-            <div className="flex h-full w-full">
-              {/* Conversation list sidebar */}
-              <div
-                className={`${showMobileList ? "flex" : "hidden"
-                  } md:flex w-full md:w-72 lg:w-80 flex-col border-r shrink-0`}
-              >
-                <ConversationList
-                  conversations={chat.conversations}
-                  selectedId={chat.selectedConversationId}
-                  localUnread={chat.localUnread}
-                  allUsers={chat.allUsers}
-                  isLoadingUsers={chat.isLoadingUsers}
-                  currentUserId={currentUser.id}
-                  isLoadingConversations={chat.isLoadingConversations}
-                  getDisplayName={chat.getDisplayName}
-                  getOtherUserAvatar={chat.getOtherUserAvatar}
-                  onSelect={handleSelectConversation}
-                  onStartDM={chat.startDM}
-                />
-              </div>
-
-              {/* Chat window or empty state */}
-              <div
-                className={`${!showMobileList ? "flex" : "hidden"
-                  } md:flex flex-1 flex-col min-w-0`}
-              >
-                {chat.selectedConversation ? (
-                  <ChatWindow
-                    conversation={chat.selectedConversation}
-                    messages={
-                      chat.messages[chat.selectedConversationId ?? ""] ?? []
-                    }
-                    typingUsers={
-                      chat.typingUsers[chat.selectedConversationId ?? ""] ?? []
-                    }
-                    hasMore={
-                      chat.hasMoreMessages[chat.selectedConversationId ?? ""] ??
-                      false
-                    }
-                    isLoadingMessages={chat.isLoadingMessages}
-                    currentUserId={currentUser.id}
-                    getDisplayName={chat.getDisplayName}
-                    getOtherUserAvatar={chat.getOtherUserAvatar}
-                    onSendMessage={chat.sendMessage}
-                    onLoadMore={chat.loadMoreMessages}
-                    onUpdateTyping={chat.updateTyping}
-                    onBack={handleBack}
-                  />
-                ) : (
-                  <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-                    <MessageCircle className="h-14 w-14 text-muted-foreground/40" />
-                    <div>
-                      <p className="font-semibold">No conversation selected</p>
-                      <p className="text-sm text-muted-foreground">
-                        Pick a channel or start a direct message
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
+            // ── Placeholder for Chats panel ──
+            <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
+              Chats panel (slot your existing component here)
             </div>
           ) : (
-            // ── Slot your existing Notifications component here ──
+            // ── Placeholder for Notifications panel ──
             <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
               Alerts panel (slot your existing component here)
             </div>
