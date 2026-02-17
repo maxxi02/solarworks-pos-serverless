@@ -1,17 +1,9 @@
 import { io, Socket } from "socket.io-client";
-import type {
-  ConversationsLoadedPayload,
-  MessagesLoadedPayload,
-  MessageNewPayload,
-  ConversationNewPayload,
-  DirectReadyPayload,
-  TypingPayload,
-  ChatErrorPayload,
-} from "@/types/chat.type";
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL ||
-  "https://rendezvous-server-gpmv.onrender.com";
+// const SOCKET_URL =
+//   process.env.NEXT_PUBLIC_SOCKET_URL ||
+//   "https://rendezvous-server-gpmv.onrender.com";
+const SOCKET_URL = "http://localhost:8080";
 
 // ─── Existing types (unchanged) ───────────────────────────────────
 
@@ -145,60 +137,6 @@ class SocketClient {
   emitChatMessagesRead(conversationId: string): void {
     this.socket?.emit("chat:messages:read", { conversationId });
   }
-
-  // ─── Chat listeners ───────────────────────────────────────────────
-
-  onChatConversationsLoaded(cb: (p: ConversationsLoadedPayload) => void): void {
-    this.socket?.on("chat:conversations:loaded", cb);
-  }
-  offChatConversationsLoaded(
-    cb?: (p: ConversationsLoadedPayload) => void,
-  ): void {
-    this.socket?.off("chat:conversations:loaded", cb);
-  }
-
-  onChatMessagesLoaded(cb: (p: MessagesLoadedPayload) => void): void {
-    this.socket?.on("chat:messages:loaded", cb);
-  }
-  offChatMessagesLoaded(cb?: (p: MessagesLoadedPayload) => void): void {
-    this.socket?.off("chat:messages:loaded", cb);
-  }
-
-  onChatMessageNew(cb: (p: MessageNewPayload) => void): void {
-    this.socket?.on("chat:message:new", cb);
-  }
-  offChatMessageNew(cb?: (p: MessageNewPayload) => void): void {
-    this.socket?.off("chat:message:new", cb);
-  }
-
-  onChatConversationNew(cb: (p: ConversationNewPayload) => void): void {
-    this.socket?.on("chat:conversation:new", cb);
-  }
-  offChatConversationNew(cb?: (p: ConversationNewPayload) => void): void {
-    this.socket?.off("chat:conversation:new", cb);
-  }
-
-  onChatDirectReady(cb: (p: DirectReadyPayload) => void): void {
-    this.socket?.on("chat:direct:ready", cb);
-  }
-  offChatDirectReady(cb?: (p: DirectReadyPayload) => void): void {
-    this.socket?.off("chat:direct:ready", cb);
-  }
-
-  onChatTyping(cb: (p: TypingPayload) => void): void {
-    this.socket?.on("chat:typing", cb);
-  }
-  offChatTyping(cb?: (p: TypingPayload) => void): void {
-    this.socket?.off("chat:typing", cb);
-  }
-
-  onChatError(cb: (p: ChatErrorPayload) => void): void {
-    this.socket?.on("chat:error", cb);
-  }
-  offChatError(cb?: (p: ChatErrorPayload) => void): void {
-    this.socket?.off("chat:error", cb);
-  }
-
   // ─── Existing status listeners (unchanged) ────────────────────────
 
   onStatusChanged(callback: (data: UserStatusUpdate) => void): void {
