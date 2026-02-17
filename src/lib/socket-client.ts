@@ -1,11 +1,19 @@
-// lib/socket.ts
 import { io, Socket } from "socket.io-client";
+import type {
+  ConversationsLoadedPayload,
+  MessagesLoadedPayload,
+  MessageNewPayload,
+  ConversationNewPayload,
+  DirectReadyPayload,
+  TypingPayload,
+  ChatErrorPayload,
+} from "@/types/chat.type";
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL ||
   "https://rendezvous-server-gpmv.onrender.com";
 
-// ─── Types ───────────────────────────────────────────────────────
+// ─── Existing types (unchanged) ───────────────────────────────────
 
 export interface UserStatusUpdate {
   userId: string;
@@ -47,9 +55,10 @@ class SocketClient {
   private userId: string | null = null;
 
   /**
-   * Connect to Socket.IO server with user authentication
+   * Connect with full user context so the server can attach name/avatar
+   * to chat messages without a DB lookup on every send.
    */
-  connect(userId: string): Socket {
+  connect(userId: string, userName?: string, userAvatar?: string): Socket {
     if (this.socket?.connected && this.userId === userId) {
       console.log("ℹ️  Using existing socket connection");
       return this.socket;
@@ -62,7 +71,11 @@ class SocketClient {
     this.userId = userId;
 
     this.socket = io(SOCKET_URL, {
-      auth: { userId },
+      auth: {
+        userId,
+        userName: userName ?? "",
+        userAvatar: userAvatar ?? "",
+      },
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 1000,
@@ -77,9 +90,6 @@ class SocketClient {
     return this.socket;
   }
 
-  /**
-   * Disconnect from Socket.IO server
-   */
   disconnect(): void {
     if (this.socket) {
       this.socket.disconnect();
@@ -90,121 +100,160 @@ class SocketClient {
     }
   }
 
-  /**
-   * Emit user:online event
-   */
+  // ─── Existing presence emitters ──────────────────────────────────
+
   emitOnline(): void {
-    if (!this.socket?.connected) {
-      console.warn("⚠️  Socket not connected");
-      return;
-    }
+    if (!this.socket?.connected) return;
     this.socket.emit("user:online");
   }
 
-  /**
-   * Emit user:activity event
-   */
   emitActivity(): void {
-    if (!this.socket?.connected) {
-      console.warn("⚠️  Socket not connected");
-      return;
-    }
+    if (!this.socket?.connected) return;
     this.socket.emit("user:activity");
   }
 
-  // ─── User Status Listeners ───────────────────────────────────────
+  // ─── Chat emitters ────────────────────────────────────────────────
 
-  /**
-   * Listen for user status changes
-   */
+  emitChatConversationsLoad(): void {
+    this.socket?.emit("chat:conversations:load");
+  }
+
+  emitChatMessagesLoad(conversationId: string, cursor?: string): void {
+    this.socket?.emit("chat:messages:load", { conversationId, cursor });
+  }
+
+  emitChatMessageSend(conversationId: string, content: string): void {
+    this.socket?.emit("chat:message:send", { conversationId, content });
+  }
+
+  emitChatDirectGetOrCreate(
+    targetUserId: string,
+    targetUserName: string,
+    targetUserAvatar?: string,
+  ): void {
+    this.socket?.emit("chat:direct:get-or-create", {
+      targetUserId,
+      targetUserName,
+      targetUserAvatar: targetUserAvatar ?? "",
+    });
+  }
+
+  emitChatTypingUpdate(conversationId: string, isTyping: boolean): void {
+    this.socket?.emit("chat:typing:update", { conversationId, isTyping });
+  }
+
+  emitChatMessagesRead(conversationId: string): void {
+    this.socket?.emit("chat:messages:read", { conversationId });
+  }
+
+  // ─── Chat listeners ───────────────────────────────────────────────
+
+  onChatConversationsLoaded(cb: (p: ConversationsLoadedPayload) => void): void {
+    this.socket?.on("chat:conversations:loaded", cb);
+  }
+  offChatConversationsLoaded(
+    cb?: (p: ConversationsLoadedPayload) => void,
+  ): void {
+    this.socket?.off("chat:conversations:loaded", cb);
+  }
+
+  onChatMessagesLoaded(cb: (p: MessagesLoadedPayload) => void): void {
+    this.socket?.on("chat:messages:loaded", cb);
+  }
+  offChatMessagesLoaded(cb?: (p: MessagesLoadedPayload) => void): void {
+    this.socket?.off("chat:messages:loaded", cb);
+  }
+
+  onChatMessageNew(cb: (p: MessageNewPayload) => void): void {
+    this.socket?.on("chat:message:new", cb);
+  }
+  offChatMessageNew(cb?: (p: MessageNewPayload) => void): void {
+    this.socket?.off("chat:message:new", cb);
+  }
+
+  onChatConversationNew(cb: (p: ConversationNewPayload) => void): void {
+    this.socket?.on("chat:conversation:new", cb);
+  }
+  offChatConversationNew(cb?: (p: ConversationNewPayload) => void): void {
+    this.socket?.off("chat:conversation:new", cb);
+  }
+
+  onChatDirectReady(cb: (p: DirectReadyPayload) => void): void {
+    this.socket?.on("chat:direct:ready", cb);
+  }
+  offChatDirectReady(cb?: (p: DirectReadyPayload) => void): void {
+    this.socket?.off("chat:direct:ready", cb);
+  }
+
+  onChatTyping(cb: (p: TypingPayload) => void): void {
+    this.socket?.on("chat:typing", cb);
+  }
+  offChatTyping(cb?: (p: TypingPayload) => void): void {
+    this.socket?.off("chat:typing", cb);
+  }
+
+  onChatError(cb: (p: ChatErrorPayload) => void): void {
+    this.socket?.on("chat:error", cb);
+  }
+  offChatError(cb?: (p: ChatErrorPayload) => void): void {
+    this.socket?.off("chat:error", cb);
+  }
+
+  // ─── Existing status listeners (unchanged) ────────────────────────
+
   onStatusChanged(callback: (data: UserStatusUpdate) => void): void {
     this.socket?.on("user:status:changed", callback);
   }
-
-  /**
-   * Listen for user activity updates
-   */
-  onActivityUpdated(callback: (data: UserActivityUpdate) => void): void {
-    this.socket?.on("user:activity:updated", callback);
-  }
-
-  /**
-   * Remove status changed listener
-   */
   offStatusChanged(callback?: (data: UserStatusUpdate) => void): void {
     this.socket?.off("user:status:changed", callback);
   }
 
-  /**
-   * Remove activity updated listener
-   */
+  onActivityUpdated(callback: (data: UserActivityUpdate) => void): void {
+    this.socket?.on("user:activity:updated", callback);
+  }
   offActivityUpdated(callback?: (data: UserActivityUpdate) => void): void {
     this.socket?.off("user:activity:updated", callback);
   }
 
-  // ─── Attendance Event Listeners ──────────────────────────────────
-
-  /**
-   * Listen for attendance approval notifications
-   */
   onAttendanceApproved(callback: (data: AttendanceApprovedData) => void): void {
     this.socket?.on("attendance:approved", callback);
   }
-
-  /**
-   * Listen for attendance rejection notifications
-   */
-  onAttendanceRejected(callback: (data: AttendanceRejectedData) => void): void {
-    this.socket?.on("attendance:rejected", callback);
-  }
-
-  /**
-   * Listen for attendance status changes
-   */
-  onAttendanceStatusChanged(callback: (data: AttendanceStatusChangedData) => void): void {
-    this.socket?.on("attendance:status:changed", callback);
-  }
-
-  /**
-   * Remove attendance approved listener
-   */
-  offAttendanceApproved(callback?: (data: AttendanceApprovedData) => void): void {
+  offAttendanceApproved(
+    callback?: (data: AttendanceApprovedData) => void,
+  ): void {
     this.socket?.off("attendance:approved", callback);
   }
 
-  /**
-   * Remove attendance rejected listener
-   */
-  offAttendanceRejected(callback?: (data: AttendanceRejectedData) => void): void {
+  onAttendanceRejected(callback: (data: AttendanceRejectedData) => void): void {
+    this.socket?.on("attendance:rejected", callback);
+  }
+  offAttendanceRejected(
+    callback?: (data: AttendanceRejectedData) => void,
+  ): void {
     this.socket?.off("attendance:rejected", callback);
   }
 
-  /**
-   * Remove attendance status changed listener
-   */
-  offAttendanceStatusChanged(callback?: (data: AttendanceStatusChangedData) => void): void {
+  onAttendanceStatusChanged(
+    callback: (data: AttendanceStatusChangedData) => void,
+  ): void {
+    this.socket?.on("attendance:status:changed", callback);
+  }
+  offAttendanceStatusChanged(
+    callback?: (data: AttendanceStatusChangedData) => void,
+  ): void {
     this.socket?.off("attendance:status:changed", callback);
   }
 
-  // ─── Utility Methods ─────────────────────────────────────────────
+  // ─── Utilities ────────────────────────────────────────────────────
 
-  /**
-   * Get the current socket instance
-   */
   getSocket(): Socket | null {
     return this.socket;
   }
 
-  /**
-   * Check if socket is connected
-   */
   isConnected(): boolean {
     return this.socket?.connected ?? false;
   }
 
-  /**
-   * Register global event listeners
-   */
   private registerEventListeners(): void {
     if (!this.socket) return;
 
@@ -218,7 +267,6 @@ class SocketClient {
 
     this.socket.on("disconnect", (reason: string) => {
       console.log("🔌 Disconnected:", reason);
-
       if (reason === "io server disconnect") {
         this.socket?.connect();
       }
@@ -227,10 +275,12 @@ class SocketClient {
     this.socket.on("reconnect", (attemptNumber: number) => {
       console.log("🔄 Reconnected after", attemptNumber, "attempts");
       this.emitOnline();
+      // Re-request conversations after reconnect — server rejoins rooms automatically
+      this.emitChatConversationsLoad();
     });
 
-    this.socket.on("reconnect_attempt", (attemptNumber: number) => {
-      console.log("🔄 Reconnection attempt", attemptNumber);
+    this.socket.on("reconnect_attempt", (n: number) => {
+      console.log("🔄 Reconnection attempt", n);
     });
 
     this.socket.on("reconnect_error", (error: Error) => {
@@ -238,7 +288,7 @@ class SocketClient {
     });
 
     this.socket.on("reconnect_failed", () => {
-      console.error("❌ Reconnection failed after all attempts");
+      console.error("❌ Reconnection failed");
     });
 
     this.socket.on("error", (error: Error) => {
@@ -246,7 +296,5 @@ class SocketClient {
     });
   }
 }
-
-// ─── Export Singleton ────────────────────────────────────────────
 
 export const socketClient = new SocketClient();
