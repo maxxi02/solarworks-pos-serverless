@@ -99,186 +99,229 @@ export default function ReceiptSettings() {
     await testPrint(type);
   };
 
-  // Receipt Preview Component
-  const ReceiptPreview = () => {
-    const is58mm = settings.receiptWidth === '58mm';
-    
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 dark:bg-black/90">
-        <div className={`w-full ${is58mm ? 'max-w-[220px]' : 'max-w-md'} rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-4`}>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Receipt Preview</h3>
-            <button
-              onClick={() => setShowPreview(false)}
-              className="text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          
-          {/* Receipt Preview Content */}
-          <div className={`font-mono ${is58mm ? 'text-[10px]' : 'text-xs'} bg-white dark:bg-black p-4 border border-dashed border-gray-300 dark:border-gray-700`}>
+  // Receipt Preview Component - VAT REMOVED
+// Receipt Preview Component - LARGER FONTS for better readability
+const ReceiptPreview = () => {
+  const is58mm = settings.receiptWidth === '58mm';
+  
+  // Calculate preview amounts without VAT
+  const subtotal = 428.57;
+  const discount = 71.43;
+  const total = subtotal - discount; // 357.14 
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 dark:bg-black/90 p-4">
+      <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[400px]'} rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 shadow-xl overflow-hidden`}>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">Receipt Preview</h3>
+          <button
+            onClick={() => setShowPreview(false)}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        {/* Receipt Preview Content - LARGER FONTS */}
+        <div className="p-5 bg-white dark:bg-black">
+          <div 
+            className={`font-mono ${is58mm ? 'text-sm' : 'text-base'} bg-white dark:bg-black p-5 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg`}
+            style={{ lineHeight: '1.6' }}
+          >
             {/* Logo */}
             {settings.showLogo && settings.logoPreview && (
-              <div className="mb-2 flex justify-center">
-                <img src={settings.logoPreview} alt="Logo" className="h-12 object-contain" />
+              <div className="mb-4 flex justify-center">
+                <img src={settings.logoPreview} alt="Logo" className="h-16 object-contain" />
               </div>
             )}
             
-            {/* Store Name */}
+            {/* Store Name - LARGER BOLD */}
             {settings.sections.storeName?.header && !settings.sections.storeName?.disabled && (
-              <div className="text-center font-bold mb-1">{settings.businessName}</div>
+              <div className="text-center font-black text-xl mb-2">{settings.businessName}</div>
             )}
             
-            {/* Location Address */}
+            {/* Location Address - LARGER */}
             {settings.sections.locationAddress?.header && !settings.sections.locationAddress?.disabled && (
-              <div className="text-center mb-1 text-[10px]">{settings.locationAddress}</div>
+              <div className="text-center mb-1 text-sm font-bold">{settings.locationAddress}</div>
             )}
             
-            {/* Phone Number */}
+            {/* Phone Number - LARGER */}
             {settings.sections.phoneNumber?.header && !settings.sections.phoneNumber?.disabled && (
-              <div className="text-center mb-1 text-[10px]">{settings.phoneNumber}</div>
+              <div className="text-center mb-2 text-sm font-bold">{settings.phoneNumber}</div>
             )}
             
-            {/* Separator */}
-            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
+            {/* Separator - LARGER */}
+            <div className="text-center font-bold text-sm text-gray-500 my-3">{"•".repeat(is58mm ? 32 : 42)}</div>
             
-            {/* Order Details */}
-            <div className="mb-1 text-[10px]">
-              <div>Order #: PREVIEW-001</div>
-              <div>Date: {new Date().toLocaleDateString()}, {new Date().toLocaleTimeString()}</div>
-              <div>Cashier: Test Cashier</div>
-              <div>Customer: Test Customer</div>
+            {/* Order Details - LARGER */}
+            <div className="mb-3 text-sm space-y-1.5 font-bold">
+              <div className="flex justify-between">
+                <span className="font-extrabold">Order #:</span>
+                <span>PREVIEW-001</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-extrabold">Date:</span>
+                <span>{new Date().toLocaleDateString()}, {new Date().toLocaleTimeString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-extrabold">Cashier:</span>
+                <span>Test Cashier</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-extrabold">Customer:</span>
+                <span>Test Customer</span>
+              </div>
               {settings.sections.transactionType?.header && !settings.sections.transactionType?.disabled && (
-                <div>Type: DINE-IN</div>
-              )}
-              {settings.sections.orderType?.header && !settings.sections.orderType?.disabled && (
-                <div>Table: 5</div>
-              )}
-            </div>
-            
-            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
-            
-            {/* Customer Info */}
-            {settings.sections.customerInfo?.footer && !settings.sections.customerInfo?.disabled && (
-              <div className="mb-1 text-[10px]">
-                <div>Senior/PWD IDs: ID-12345, ID-67890</div>
-              </div>
-            )}
-            
-            {/* Items */}
-            <div className="mb-1 text-[10px]">
-              <div className="flex justify-between font-bold mb-1">
-                <span>Item</span>
-                <span>Qty Amount</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Mocha latte</span>
-                <span>2  P357.14</span>
-              </div>
-              <div className="flex justify-between text-green-600">
-                <span>  (20% Senior/PWD)</span>
-                <span>-P71.43</span>
-              </div>
-              {settings.showSKU && (
-                <div className="text-[8px] text-gray-500">SKU: PROD-001</div>
-              )}
-            </div>
-            
-            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
-            
-            {/* Totals */}
-            <div className="mb-1 text-[10px]">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>P428.57</span>
-              </div>
-              <div className="flex justify-between text-green-600">
-                <span>Discount:</span>
-                <span>-P71.43</span>
-              </div>
-              {settings.showTaxPIN && (
                 <div className="flex justify-between">
-                  <span>VAT (12%):</span>
-                  <span>P42.86</span>
+                  <span className="font-extrabold">Type:</span>
+                  <span className="font-bold">DINE-IN</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold mt-1">
+              {settings.sections.orderType?.header && !settings.sections.orderType?.disabled && (
+                <div className="flex justify-between">
+                  <span className="font-extrabold">Table:</span>
+                  <span className="font-bold">5</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Separator */}
+            <div className="text-center font-bold text-sm text-gray-500 my-3">{"•".repeat(is58mm ? 32 : 42)}</div>
+            
+            {/* Customer Info - LARGER */}
+            {settings.sections.customerInfo?.footer && !settings.sections.customerInfo?.disabled && (
+              <div className="mb-3 text-sm font-bold">
+                <div className="font-extrabold mb-1">Senior/PWD IDs:</div>
+                <div className="pl-3">ID-12345, ID-67890</div>
+              </div>
+            )}
+            
+            {/* Items Header - LARGER */}
+            <div className="mb-2 text-sm">
+              <div className="flex justify-between font-extrabold border-b border-dashed border-gray-400 pb-1 mb-2">
+                <span>ITEM</span>
+                <span>QTY  AMOUNT</span>
+              </div>
+              
+              {/* Regular Item - LARGER */}
+              <div className="flex justify-between font-bold mb-1">
+                <span>Mocha latte</span>
+                <span>2  P428.57</span>
+              </div>
+              
+              {/* Discounted Item - LARGER */}
+              <div className="mb-2">
+                <div className="flex justify-between font-bold">
+                  <span>Cappuccino</span>
+                  <span>1  P150.00</span>
+                </div>
+                <div className="flex justify-between text-green-600 text-xs pl-3 mt-0.5">
+                  <span className="font-bold">(20% Senior/PWD)</span>
+                  <span className="font-bold">-P30.00</span>
+                </div>
+              </div>
+              
+              {/* SKU - if enabled */}
+              {settings.showSKU && (
+                <div className="text-xs text-gray-500 font-bold mt-1">SKU: PROD-001, PROD-002</div>
+              )}
+            </div>
+            
+            {/* Separator */}
+            <div className="text-center font-bold text-sm text-gray-500 my-3">{"•".repeat(is58mm ? 32 : 42)}</div>
+            
+            {/* Totals - LARGER */}
+            <div className="mb-3 text-sm space-y-1.5">
+              <div className="flex justify-between font-bold">
+                <span className="font-extrabold">Subtotal:</span>
+                <span>P428.57</span>
+              </div>
+              <div className="flex justify-between text-green-600 font-bold">
+                <span className="font-extrabold">Discount:</span>
+                <span>-P71.43</span>
+              </div>
+              <div className="flex justify-between font-extrabold text-base mt-2 pt-2 border-t-2 border-dashed border-gray-400">
                 <span>TOTAL:</span>
-                <span>P357.14</span>
+                <span className="text-lg">P357.14</span>
               </div>
             </div>
             
-            <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
+            {/* Separator */}
+            <div className="text-center font-bold text-sm text-gray-500 my-3">{"•".repeat(is58mm ? 32 : 42)}</div>
             
-            {/* Payment */}
-            <div className="mb-1 text-[10px]">
-              <div className="flex justify-between">
-                <span>Payment:</span>
-                <span>CASH</span>
+            {/* Payment - LARGER */}
+            <div className="mb-3 text-sm space-y-1.5">
+              <div className="flex justify-between font-bold">
+                <span className="font-extrabold">Payment:</span>
+                <span className="font-extrabold">CASH</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between font-bold">
                 <span>Cash Received:</span>
                 <span>P400.00</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between font-bold">
                 <span>Change:</span>
                 <span>P42.86</span>
               </div>
             </div>
             
-            {/* Barcode */}
+            {/* Barcode - LARGER */}
             {settings.sections.barcode?.header && !settings.sections.barcode?.disabled && (
-              <div className="mt-2 text-center text-[8px]">
-                <div>[BARCODE: PREVIEW-001]</div>
+              <div className="mt-4 text-center font-bold text-sm">
+                <div className="font-mono tracking-widest">*PREVIEW-001*</div>
+                <div className="font-mono text-base tracking-widest text-gray-700 mt-1">|||| |||| |||| ||||</div>
               </div>
             )}
             
-            {/* Business Hours */}
-            {settings.showBusinessHours && (
-              <div className="mt-2 text-center text-[8px]">
-                <div>{settings.businessHours}</div>
+            {/* Business Hours - LARGER */}
+            {settings.showBusinessHours && settings.businessHours && (
+              <div className="mt-3 text-center font-bold text-xs">
+                {settings.businessHours}
               </div>
             )}
             
-            {/* Tax PIN */}
-            {settings.showTaxPIN && (
-              <div className="mt-1 text-center text-[8px]">
-                <div>Tax PIN: {settings.taxPin}</div>
+            {/* Tax PIN - LARGER */}
+            {settings.showTaxPIN && settings.taxPin && (
+              <div className="mt-2 text-center font-bold text-xs">
+                Tax PIN: {settings.taxPin}
               </div>
             )}
             
-            {/* Receipt Message */}
-            {settings.sections.message?.footer && !settings.sections.message?.disabled && (
-              <div className="mt-2 text-center text-[8px]">
-                <div>{settings.receiptMessage}</div>
+            {/* Receipt Message - LARGER */}
+            {settings.sections.message?.footer && !settings.sections.message?.disabled && settings.receiptMessage && (
+              <div className="mt-3 text-center font-bold text-sm italic">
+                {settings.receiptMessage}
               </div>
             )}
             
-            {/* Disclaimer */}
-            {!settings.sections.disclaimer?.disabled && (
-              <div className="mt-1 text-center text-[8px]">
-                <div>{settings.disclaimer}</div>
+            {/* Disclaimer - LARGER */}
+            {!settings.sections.disclaimer?.disabled && settings.disclaimer && (
+              <div className="mt-2 text-center font-bold text-xs text-gray-500">
+                {settings.disclaimer}
               </div>
             )}
           </div>
           
-          <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            Receipt Width: {settings.receiptWidth}
+          {/* Width Indicator */}
+          <div className="mt-4 text-center text-base font-medium text-gray-600 dark:text-gray-400">
+            Receipt Width: <span className="font-bold text-blue-600">{settings.receiptWidth}</span>
           </div>
           
-          <div className="mt-4 flex justify-end gap-2">
+          {/* Close Button */}
+          <div className="mt-5 flex justify-center">
             <button
               onClick={() => setShowPreview(false)}
-              className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+              className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-lg transition-colors shadow-lg"
             >
-              Close
+              Close Preview
             </button>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   if (isLoading) {
     return (
@@ -294,35 +337,31 @@ export default function ReceiptSettings() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Receipt Settings</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-2">
-                Customize your receipt layout and printer settings
-              </p>
-            </div>
-            <div className="flex gap-2 mt-4 sm:mt-0">
-              <button
-                onClick={() => setShowPreview(true)}
-                className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
-              >
-                <Eye className="h-4 w-4" />
-                Preview
-              </button>
-              <button
-                onClick={handleSave}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
-              >
-                <Save className="h-4 w-4" />
-                Save Settings
-              </button>
-            </div>
+        {/* Header - CENTERED */}
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Receipt Settings</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Customize your receipt layout and printer settings
+          </p>
+          <div className="flex gap-2 justify-center mt-4">
+            <button
+              onClick={() => setShowPreview(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+            >
+              <Eye className="h-4 w-4" />
+              Preview
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
+            >
+              <Save className="h-4 w-4" />
+              Save Settings
+            </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mt-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex gap-2 justify-center mt-6 border-b border-gray-200 dark:border-gray-800">
             <button
               onClick={() => setActiveTab('general')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -418,7 +457,7 @@ export default function ReceiptSettings() {
                   </div>
                 </div>
 
-                {/* Display Settings Card */}
+                {/* Display Settings Card - VAT CHECKBOX REMOVED */}
                 <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Display Settings</h3>
                   
@@ -437,6 +476,7 @@ export default function ReceiptSettings() {
                         </label>
                       </div>
                       
+                      {/* TAX PIN CHECKBOX - KEPT but only for Tax PIN, not VAT */}
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
