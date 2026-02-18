@@ -83,6 +83,8 @@ interface SavedOrder {
   cashier?: string;
   cashierId?: string;
   seniorPwdIds?: string[];
+  amountPaid?: number;
+  change?: number;
 }
 
 interface StockAlert {
@@ -130,7 +132,79 @@ const generateOrderNumber = () => {
 
 // ============ Components ============
 
-// Split Payment Input Component
+// Cash Payment Input Component with Receipt-style Change Calculation
+const CashPaymentInput = ({ total, amountPaid, setAmountPaid, disabled }: {
+  total: number;
+  amountPaid: number;
+  setAmountPaid: (value: number) => void;
+  disabled?: boolean;
+}) => {
+  const [error, setError] = useState('');
+  
+  const change = amountPaid - total;
+  const isInsufficient = amountPaid > 0 && change < 0;
+
+  const handleAmountChange = (value: string) => {
+    const paid = parseFloat(value) || 0;
+    setAmountPaid(paid);
+    
+    if (paid > 0 && paid < total) {
+      setError(`Need ${formatCurrency(total - paid)} more`);
+    } else {
+      setError('');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-sm flex items-center justify-between">
+          <span>Amount Received</span>
+          <span className="text-muted-foreground">Total: {formatCurrency(total)}</span>
+        </Label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
+          <Input
+            type="number"
+            value={amountPaid || ''}
+            onChange={(e) => handleAmountChange(e.target.value)}
+            placeholder="0.00"
+            className={`pl-7 h-10 text-base ${isInsufficient ? 'border-red-500' : ''}`}
+            step="0.01"
+            min="0"
+            disabled={disabled}
+          />
+        </div>
+      </div>
+
+      {/* Receipt-style Change Display */}
+      {amountPaid > 0 && (
+        <div className={`rounded-lg p-4 space-y-1 mt-3 font-mono ${
+          change >= 0 ? 'bg-green-50' : 'bg-red-50'
+        }`}>
+          <div className="text-right text-lg font-bold">
+            {formatCurrency(amountPaid)}
+          </div>
+          <div className="text-right text-lg font-bold text-muted-foreground">
+            -{formatCurrency(total)}
+          </div>
+          <div className="border-t border-dashed border-gray-300 my-2"></div>
+          <div className="flex justify-between text-lg font-bold">
+            <span className="text-gray-600">CHANGE:</span>
+            <span className={change >= 0 ? 'text-green-600' : 'text-red-600'}>
+              {formatCurrency(Math.abs(change))}
+            </span>
+          </div>
+          {error && (
+            <p className="text-xs text-red-500 mt-2">{error}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Split Payment Input Component with Receipt-style Display
 const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
   total: number;
   splitPayment: { cash: number; gcash: number };
@@ -138,6 +212,9 @@ const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
   disabled?: boolean;
 }) => {
   const [error, setError] = useState('');
+  const totalPaid = splitPayment.cash + splitPayment.gcash;
+  const change = totalPaid - total;
+  const isInsufficient = totalPaid > 0 && totalPaid < total;
 
   const handleCashChange = (value: string) => {
     const cashAmount = parseFloat(value) || 0;
@@ -164,20 +241,20 @@ const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
   };
 
   return (
-    <div className="space-y-4"> {/* Increased spacing */}
+    <div className="space-y-4">
       <div className="space-y-2">
-        <Label className="text-sm flex items-center justify-between"> {/* Larger text */}
+        <Label className="text-sm flex items-center justify-between">
           <span>Cash Amount</span>
           <span className="text-muted-foreground">Remaining: {formatCurrency(total - splitPayment.gcash)}</span>
         </Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span> {/* Larger text */}
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
           <Input
             type="number"
             value={splitPayment.cash || ''}
             onChange={(e) => handleCashChange(e.target.value)}
             placeholder="0.00"
-            className="pl-7 h-10 text-base" 
+            className="pl-7 h-10 text-base"
             step="0.01"
             min="0"
             max={total}
@@ -187,18 +264,18 @@ const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
       </div>
 
       <div className="space-y-2">
-        <Label className="text-sm flex items-center justify-between"> {/* Larger text */}
+        <Label className="text-sm flex items-center justify-between">
           <span>GCash Amount</span>
           <span className="text-muted-foreground">Remaining: {formatCurrency(total - splitPayment.cash)}</span>
         </Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span> {/* Larger text */}
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
           <Input
             type="number"
             value={splitPayment.gcash || ''}
             onChange={(e) => handleGcashChange(e.target.value)}
             placeholder="0.00"
-            className="pl-7 h-10 text-base" 
+            className="pl-7 h-10 text-base"
             step="0.01"
             min="0"
             max={total}
@@ -207,13 +284,13 @@ const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
         </div>
       </div>
 
-      {/* Quick Split Buttons - Larger */}
-      <div className="grid grid-cols-3 gap-2 pt-2"> {/* Increased gap */}
+      {/* Quick Split Buttons */}
+      <div className="grid grid-cols-3 gap-2 pt-2">
         <Button
           size="default"
           variant="outline"
           onClick={() => setSplitPayment({ cash: total / 2, gcash: total / 2 })}
-          className="h-9 text-sm" 
+          className="h-9 text-sm"
           disabled={disabled}
         >
           50/50
@@ -222,43 +299,64 @@ const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
           size="default"
           variant="outline"
           onClick={() => setSplitPayment({ cash: total, gcash: 0 })}
-          className="h-9 text-sm" 
+          className="h-9 text-sm"
           disabled={disabled}
         >
           All Cash
         </Button>
         <Button
-          size="default" 
+          size="default"
           variant="outline"
           onClick={() => setSplitPayment({ cash: 0, gcash: total })}
-          className="h-9 text-sm" 
+          className="h-9 text-sm"
           disabled={disabled}
         >
           All GCash
         </Button>
       </div>
 
-      {/* Summary - Larger */}
-      <div className="bg-muted/30 rounded-lg p-3 space-y-2 mt-3"> {/* Increased padding and spacing */}
-        <div className="flex justify-between text-sm"> {/* Larger text */}
-          <span>Cash:</span>
-          <span className="font-medium">{formatCurrency(splitPayment.cash)}</span>
+      {/* Receipt-style Summary */}
+      <div className={`rounded-lg p-4 space-y-1 mt-3 font-mono ${
+        totalPaid >= total ? 'bg-green-50' : 'bg-red-50'
+      }`}>
+        <div className="space-y-1">
+          <div className="flex justify-between text-sm">
+            <span>Cash:</span>
+            <span className="font-medium">{formatCurrency(splitPayment.cash)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span>GCash:</span>
+            <span className="font-medium">{formatCurrency(splitPayment.gcash)}</span>
+          </div>
         </div>
-        <div className="flex justify-between text-sm"> {/* Larger text */}
-          <span>GCash:</span>
-          <span className="font-medium">{formatCurrency(splitPayment.gcash)}</span>
+        
+        <div className="border-t border-dashed border-gray-300 my-2"></div>
+        
+        <div className="text-right text-lg font-bold">
+          {formatCurrency(totalPaid)}
         </div>
-        <Separator className="my-2" /> {/* Increased margin */}
-        <div className="flex justify-between text-base font-bold"> {/* Larger text */}
-          <span>Total Paid:</span>
-          <span className={error ? 'text-red-500' : 'text-green-600'}>
-            {formatCurrency(splitPayment.cash + splitPayment.gcash)}
-          </span>
+        <div className="text-right text-lg font-bold text-muted-foreground">
+          -{formatCurrency(total)}
         </div>
-        <div className="flex justify-between text-sm"> {/* Larger text */}
-          <span>Bill Total:</span>
-          <span>{formatCurrency(total)}</span>
-        </div>
+        
+        <div className="border-t border-dashed border-gray-300 my-2"></div>
+        
+        {totalPaid > total ? (
+          <div className="flex justify-between text-lg font-bold">
+            <span className="text-gray-600">CHANGE:</span>
+            <span className="text-green-600">{formatCurrency(totalPaid - total)}</span>
+          </div>
+        ) : totalPaid < total ? (
+          <div className="flex justify-between text-lg font-bold">
+            <span className="text-gray-600">NEED:</span>
+            <span className="text-red-600">{formatCurrency(total - totalPaid)}</span>
+          </div>
+        ) : (
+          <div className="text-center text-green-600 font-bold text-lg">
+            EXACT AMOUNT
+          </div>
+        )}
+        
         {error && (
           <p className="text-xs text-red-500 mt-2">{error}</p>
         )}
@@ -267,8 +365,7 @@ const SplitPaymentInput = ({ total, splitPayment, setSplitPayment, disabled }: {
   );
 };
 
-// Receipt Modal - Follows Settings for Alignment
-// Receipt Modal - EXACTLY matches the Receipt Settings preview design
+// Receipt Modal with Receipt-style Payment Display
 const ReceiptModal = ({ receipt, settings, onClose, onPrint }: { 
   receipt: (SavedOrder & { cashier?: string; seniorPwdIds?: string[]; isReprint?: boolean }) | null; 
   settings: any;
@@ -280,20 +377,8 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
   const is58mm = settings.receiptWidth === '58mm';
   const DISCOUNT_RATE = 0.2; // 20% senior/PWD discount
 
-  // Helper function to get alignment class based on settings
-  const getAlignmentClass = (section: string) => {
-    if (!settings.sections?.[section]) return 'text-left';
-    
-    switch(settings.sections[section].alignment) {
-      case 'center': return 'text-center';
-      case 'right': return 'text-right';
-      default: return 'text-left';
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-      {/* MODAL - Medium size for easy viewing */}
       <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[380px]'} rounded-xl bg-white dark:bg-gray-900 border shadow-xl overflow-hidden`}>
         {/* Header */}
         <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-800">
@@ -311,13 +396,13 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
           </Button>
         </div>
 
-        {/* Receipt Content - EXACTLY like the preview design */}
+        {/* Receipt Content */}
         <div className="max-h-[70vh] overflow-y-auto">
           <div 
             id="receipt-content" 
             className={`font-mono ${is58mm ? 'text-[10px]' : 'text-xs'} bg-white dark:bg-black p-4`}
           >
-            {/* Logo - EXACT match to preview */}
+            {/* Logo */}
             {settings.showLogo && settings.logoPreview && (
               <div className="mb-2 flex justify-center">
                 <img 
@@ -329,25 +414,25 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
               </div>
             )}
             
-            {/* Store Name - CENTERED AND BOLD - EXACT match to preview */}
+            {/* Store Name */}
             {settings.sections?.storeName?.header && !settings.sections?.storeName?.disabled && (
               <div className="text-center font-bold mb-1">{settings.businessName}</div>
             )}
             
-            {/* Location Address - EXACT match to preview */}
+            {/* Location Address */}
             {settings.sections?.locationAddress?.header && !settings.sections?.locationAddress?.disabled && settings.locationAddress && (
               <div className="text-center mb-1 text-[10px]">{settings.locationAddress}</div>
             )}
             
-            {/* Phone Number - EXACT match to preview */}
+            {/* Phone Number */}
             {settings.sections?.phoneNumber?.header && !settings.sections?.phoneNumber?.disabled && settings.phoneNumber && (
               <div className="text-center mb-1 text-[10px]">{settings.phoneNumber}</div>
             )}
             
-            {/* Separator - EXACT match to preview */}
+            {/* Separator */}
             <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
-            {/* Order Details - EXACT match to preview */}
+            {/* Order Details */}
             <div className="mb-1 text-[10px]">
               <div className="flex justify-between">
                 <span>Order #:</span>
@@ -388,14 +473,14 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
             {/* Separator */}
             <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
-            {/* Customer Info (Senior/PWD) - EXACT match to preview */}
+            {/* Customer Info (Senior/PWD) */}
             {settings.sections?.customerInfo?.footer && !settings.sections?.customerInfo?.disabled && receipt.seniorPwdIds && receipt.seniorPwdIds.length > 0 && (
               <div className="mb-1 text-[10px]">
                 <div>Senior/PWD IDs: {receipt.seniorPwdIds.join(', ')}</div>
               </div>
             )}
             
-            {/* Items Header - EXACT match to preview */}
+            {/* Items Header */}
             <div className="mb-1 text-[10px]">
               <div className="flex justify-between font-bold mb-1">
                 <span>Item</span>
@@ -438,7 +523,7 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
             {/* Separator */}
             <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
-            {/* Totals - EXACT match to preview (NO VAT) */}
+            {/* Totals */}
             <div className="mb-1 text-[10px]">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
@@ -459,31 +544,58 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
             {/* Separator */}
             <div className="text-center mb-1">{"-".repeat(is58mm ? 24 : 32)}</div>
             
-            {/* Payment Details - EXACT match to preview */}
+            {/* Payment Details - Receipt Style */}
             <div className="mb-1 text-[10px]">
-              <div className="flex justify-between">
+              <div className="flex justify-between mb-1">
                 <span>Payment:</span>
                 <span className="uppercase">{receipt.paymentMethod}</span>
               </div>
               
               {receipt.paymentMethod === 'split' && receipt.splitPayment && (
                 <>
-                  <div className="flex justify-between pl-2 text-[8px]">
-                    <span>Cash Received:</span>
-                    <span>{formatCurrency(receipt.splitPayment.cash)}</span>
+                  <div className="space-y-1 text-[8px] mb-1">
+                    <div className="flex justify-between">
+                      <span>Cash:</span>
+                      <span>{formatCurrency(receipt.splitPayment.cash)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>GCash:</span>
+                      <span>{formatCurrency(receipt.splitPayment.gcash)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between pl-2 text-[8px]">
-                    <span>GCash:</span>
-                    <span>{formatCurrency(receipt.splitPayment.gcash)}</span>
+                  <div className="border-t border-dashed border-gray-300 my-1"></div>
+                  <div className="text-right font-bold">
+                    {formatCurrency(receipt.splitPayment.cash + receipt.splitPayment.gcash)}
                   </div>
+                  <div className="text-right text-muted-foreground">
+                    -{formatCurrency(receipt.total)}
+                  </div>
+                  <div className="border-t border-dashed border-gray-300 my-1"></div>
+                  {(receipt.splitPayment.cash + receipt.splitPayment.gcash) > receipt.total && (
+                    <div className="flex justify-between font-bold">
+                      <span>CHANGE:</span>
+                      <span className="text-green-600">
+                        {formatCurrency((receipt.splitPayment.cash + receipt.splitPayment.gcash) - receipt.total)}
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
               
-              {receipt.paymentMethod === 'cash' && (
-                <div className="flex justify-between">
-                  <span>Cash Received:</span>
-                  <span>{formatCurrency(receipt.total)}</span>
-                </div>
+              {receipt.paymentMethod === 'cash' && receipt.amountPaid && (
+                <>
+                  <div className="text-right font-bold">
+                    {formatCurrency(receipt.amountPaid)}
+                  </div>
+                  <div className="text-right text-muted-foreground">
+                    -{formatCurrency(receipt.total)}
+                  </div>
+                  <div className="border-t border-dashed border-gray-300 my-1"></div>
+                  <div className="flex justify-between font-bold">
+                    <span>CHANGE:</span>
+                    <span className="text-green-600">{formatCurrency(receipt.change || 0)}</span>
+                  </div>
+                </>
               )}
               
               {receipt.paymentMethod === 'gcash' && (
@@ -494,35 +606,35 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
               )}
             </div>
             
-            {/* Barcode - EXACT match to preview */}
+            {/* Barcode */}
             {settings.sections?.barcode?.header && !settings.sections?.barcode?.disabled && (
               <div className="mt-2 text-center text-[8px]">
                 <div>[BARCODE: {receipt.orderNumber}]</div>
               </div>
             )}
             
-            {/* Business Hours - EXACT match to preview */}
+            {/* Business Hours */}
             {settings.showBusinessHours && settings.businessHours && (
               <div className="mt-2 text-center text-[8px]">
                 <div>{settings.businessHours}</div>
               </div>
             )}
             
-            {/* Tax PIN - EXACT match to preview (KEPT separate from VAT) */}
+            {/* Tax PIN */}
             {settings.showTaxPIN && settings.taxPin && (
               <div className="mt-1 text-center text-[8px]">
                 <div>Tax PIN: {settings.taxPin}</div>
               </div>
             )}
             
-            {/* Receipt Message - EXACT match to preview */}
+            {/* Receipt Message */}
             {settings.sections?.message?.footer && !settings.sections?.message?.disabled && settings.receiptMessage && (
               <div className="mt-2 text-center text-[8px]">
                 <div>{settings.receiptMessage}</div>
               </div>
             )}
             
-            {/* Disclaimer - EXACT match to preview */}
+            {/* Disclaimer */}
             {!settings.sections?.disclaimer?.disabled && settings.disclaimer && (
               <div className="mt-1 text-center text-[8px]">
                 <div>{settings.disclaimer}</div>
@@ -556,7 +668,8 @@ const ReceiptModal = ({ receipt, settings, onClose, onPrint }: {
     </div>
   );
 };
-// Discount Modal - Larger
+
+// Discount Modal
 const DiscountModal = ({ isOpen, onClose, onApply, cartItems }: {
   isOpen: boolean;
   onClose: () => void;
@@ -596,17 +709,17 @@ const DiscountModal = ({ isOpen, onClose, onApply, cartItems }: {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg"> {/* Larger max width */}
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl">Apply Senior/PWD Discount</DialogTitle> {/* Larger text */}
-          <DialogDescription className="text-base">Select items and enter IDs for 20% discount</DialogDescription> {/* Larger text */}
+          <DialogTitle className="text-xl">Apply Senior/PWD Discount</DialogTitle>
+          <DialogDescription className="text-base">Select items and enter IDs for 20% discount</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-5"> {/* Increased spacing and padding */}
-          <div className="space-y-3"> {/* Increased spacing */}
-            <Label className="text-base">ID Numbers</Label> {/* Larger text */}
+        <div className="space-y-5 py-5">
+          <div className="space-y-3">
+            <Label className="text-base">ID Numbers</Label>
             {ids.map((id, index) => (
-              <div key={index} className="flex gap-3"> {/* Increased gap */}
+              <div key={index} className="flex gap-3">
                 <Input 
                   placeholder={`ID #${index + 1}`} 
                   value={id} 
@@ -649,11 +762,11 @@ const DiscountModal = ({ isOpen, onClose, onApply, cartItems }: {
                   onClick={() => handleToggleItem(item._id)}
                 >
                   <div className="flex-1">
-                    <p className="text-base font-medium">{item.name}</p> {/* Larger text */}
-                    <p className="text-sm text-muted-foreground">Qty: {item.quantity} • {formatCurrency(item.price)} each</p> {/* Larger text */}
+                    <p className="text-base font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">Qty: {item.quantity} • {formatCurrency(item.price)} each</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-base font-medium">{formatCurrency(item.price * item.quantity)}</p> {/* Larger text */}
+                    <p className="text-base font-medium">{formatCurrency(item.price * item.quantity)}</p>
                     {selectedItems.includes(item._id) && (
                       <Badge variant="default" className="text-xs mt-2">Selected</Badge> 
                     )}
@@ -664,16 +777,16 @@ const DiscountModal = ({ isOpen, onClose, onApply, cartItems }: {
           </div>
         </div>
 
-        <DialogFooter className="gap-3"> {/* Increased gap */}
-          <Button variant="outline" onClick={onClose} size="lg" className="text-base h-11">Cancel</Button> {/* Larger button */}
-          <Button onClick={handleApply} size="lg" className="text-base h-11">Apply Discount</Button> {/* Larger button */}
+        <DialogFooter className="gap-3">
+          <Button variant="outline" onClick={onClose} size="lg" className="text-base h-11">Cancel</Button>
+          <Button onClick={handleApply} size="lg" className="text-base h-11">Apply Discount</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
 
-// Order History Modal - Larger
+// Order History Modal
 const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }: {
   isOpen: boolean;
   onClose: () => void;
@@ -708,16 +821,16 @@ const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden"> {/* Larger max width */}
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl"> {/* Larger text */}
-            <History className="w-6 h-6" />Order History {/* Larger icon */}
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <History className="w-6 h-6" />Order History
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-5"> {/* Increased spacing and padding */}
-          <div className="flex gap-3 flex-wrap"> {/* Increased gap */}
-            <div className="flex-1 min-w-[250px]"> {/* Larger min width */}
+        <div className="space-y-5 py-5">
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[250px]">
               <Input 
                 placeholder="Search by order # or customer..." 
                 value={searchTerm} 
@@ -726,8 +839,8 @@ const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[160px] h-10 text-base"> {/* Larger trigger */}
-                <Filter className="w-5 h-5 mr-2" /> {/* Larger icon */}
+              <SelectTrigger className="w-[160px] h-10 text-base">
+                <Filter className="w-5 h-5 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -738,8 +851,8 @@ const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }
               </SelectContent>
             </Select>
             <Select value={dateRange} onValueChange={(value: 'today' | 'week' | 'month' | 'all') => setDateRange(value)}>
-              <SelectTrigger className="w-[160px] h-10 text-base"> {/* Larger trigger */}
-                <Calendar className="w-5 h-5 mr-2" /> {/* Larger icon */}
+              <SelectTrigger className="w-[80px] h-10 text-base">
+                <Calendar className="w-5 h-5 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -752,37 +865,42 @@ const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }
           </div>
 
           <div className="border rounded-lg overflow-hidden">
-            <div className="max-h-[500px] overflow-y-auto divide-y"> {/* Larger max height */}
+            <div className="max-h-[500px] overflow-y-auto divide-y">
               {!filteredOrders.length ? (
-                <div className="text-center py-12 text-muted-foreground"> {/* Increased padding */}
-                  <History className="h-16 w-16 mx-auto mb-4 opacity-20" /> {/* Larger icon */}
-                  <p className="text-base">No orders found</p> {/* Larger text */}
+                <div className="text-center py-12 text-muted-foreground">
+                  <History className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                  <p className="text-base">No orders found</p>
                 </div>
               ) : (
                 filteredOrders.map(order => (
-                  <div key={order.id} className="p-5 hover:bg-gray-50 dark:hover:bg-gray-900"> {/* Increased padding */}
+                  <div key={order.id} className="p-5 hover:bg-gray-50 dark:hover:bg-gray-900">
                     <div className="flex justify-between items-start">
-                      <div className="space-y-2"> {/* Increased spacing */}
-                        <div className="flex items-center gap-3"> {/* Increased gap */}
-                          <span className="font-mono font-medium text-base">{order.orderNumber}</span> {/* Larger text */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-medium text-base">{order.orderNumber}</span>
                           <Badge variant={order.status === 'completed' ? 'default' : order.status === 'pending' ? 'secondary' : 'destructive'} className="text-xs px-2 py-1">
                             {order.status}
                           </Badge>
                         </div>
-                        <p className="text-base"> {/* Larger text */}
+                        <p className="text-base">
                           <span className="font-medium">{order.customerName}</span> • 
-                          <span className="text-muted-foreground ml-2">{order.items.length} items • {formatCurrency(order.total)}</span> {/* Larger margin */}
+                          <span className="text-muted-foreground ml-2">{order.items.length} items • {formatCurrency(order.total)}</span>
                         </p>
-                        <p className="text-sm text-muted-foreground flex items-center gap-2"> {/* Larger text */}
-                          <Clock className="w-4 h-4" />{formatDate(order.timestamp)} {/* Larger icon */}
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
+                          <Clock className="w-4 h-4" />{formatDate(order.timestamp)}
                         </p>
+                        {order.paymentMethod === 'cash' && order.amountPaid && (
+                          <p className="text-xs text-muted-foreground">
+                            Paid: {formatCurrency(order.amountPaid)} | Change: {formatCurrency(order.change || 0)}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex gap-2"> {/* Increased gap */}
-                        <Button size="default" variant="ghost" onClick={() => onViewDetails(order)} className="h-9 w-9"> {/* Larger button */}
-                          <Eye className="w-5 h-5" /> {/* Larger icon */}
+                      <div className="flex gap-2">
+                        <Button size="default" variant="ghost" onClick={() => onViewDetails(order)} className="h-9 w-9">
+                          <Eye className="w-5 h-5" />
                         </Button>
-                        <Button size="default" variant="ghost" onClick={() => onReprint(order)} className="h-9 w-9"> {/* Larger button */}
-                          <Printer className="w-5 h-5" /> {/* Larger icon */}
+                        <Button size="default" variant="ghost" onClick={() => onReprint(order)} className="h-9 w-9">
+                          <Printer className="w-5 h-5" />
                         </Button>
                       </div>
                     </div>
@@ -792,21 +910,21 @@ const OrderHistoryModal = ({ isOpen, onClose, orders, onReprint, onViewDetails }
             </div>
           </div>
 
-          <div className="flex justify-between text-base"> {/* Larger text */}
+          <div className="flex justify-between text-base">
             <span>Total Orders: {filteredOrders.length}</span>
             <span>Total Sales: {formatCurrency(filteredOrders.filter(o => o.status === 'completed').reduce((sum, o) => sum + o.total, 0))}</span>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} size="lg" className="text-base h-11">Close</Button> {/* Larger button */}
+          <Button variant="outline" onClick={onClose} size="lg" className="text-base h-11">Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
 
-// Stock Alert Badge - Larger
+// Stock Alert Badge
 const StockAlertsBadge = ({ alerts, show, onToggle, onRefresh }: {
   alerts: StockAlert[];
   show: boolean;
@@ -820,39 +938,39 @@ const StockAlertsBadge = ({ alerts, show, onToggle, onRefresh }: {
 
   return (
     <div className="relative">
-      <Button variant="outline" size="default" onClick={onToggle} className={`h-10 text-sm gap-2 ${ /* Larger button */
+      <Button variant="outline" size="default" onClick={onToggle} className={`h-10 text-sm gap-2 ${
         criticalCount ? 'border-red-500 bg-red-50 text-red-700' : 'border-yellow-500 bg-yellow-50 text-yellow-700'
       }`}>
-        <Bell className="w-4 h-4" /> {/* Larger icon */}
+        <Bell className="w-4 h-4" />
         <span className="hidden sm:inline">Stock Alerts</span>
-        <Badge className={`ml-2 h-6 px-2 text-xs ${criticalCount ? 'bg-red-600' : 'bg-yellow-600'}`}>{totalAlerts}</Badge> {/* Larger badge */}
+        <Badge className={`ml-2 h-6 px-2 text-xs ${criticalCount ? 'bg-red-600' : 'bg-yellow-600'}`}>{totalAlerts}</Badge>
       </Button>
 
       {show && (
-        <div className="absolute right-0 mt-3 w-96 rounded-lg bg-white dark:bg-black border shadow-lg z-50"> {/* Larger width */}
-          <div className="p-4 border-b flex justify-between items-center"> {/* Increased padding */}
-            <h4 className="font-medium text-base">Low Stock Alerts</h4> {/* Larger text */}
-            <div className="flex items-center gap-2"> {/* Increased gap */}
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRefresh} title="Refresh"> {/* Larger button */}
-                <RefreshCw className="h-4 w-4" /> {/* Larger icon */}
+        <div className="absolute right-0 mt-3 w-96 rounded-lg bg-white dark:bg-black border shadow-lg z-50">
+          <div className="p-4 border-b flex justify-between items-center">
+            <h4 className="font-medium text-base">Low Stock Alerts</h4>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRefresh} title="Refresh">
+                <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggle}> {/* Larger button */}
-                <X className="h-4 w-4" /> {/* Larger icon */}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggle}>
+                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
-          <div className="max-h-[500px] overflow-y-auto p-3 space-y-3"> {/* Increased padding and spacing */}
+          <div className="max-h-[500px] overflow-y-auto p-3 space-y-3">
             {alerts.map((alert, i) => (
-              <div key={i} className={`p-4 rounded-lg ${ /* Increased padding */
+              <div key={i} className={`p-4 rounded-lg ${
                 alert.status === 'critical' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
               } border`}>
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-base font-medium">{alert.itemName}</p> {/* Larger text */}
-                    <p className="text-sm text-gray-600 mt-2"> {/* Larger text */}
+                    <p className="text-base font-medium">{alert.itemName}</p>
+                    <p className="text-sm text-gray-600 mt-2">
                       Stock: {alert.currentStock} {alert.unit} • Min: {alert.minStock} {alert.unit}
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">Location: {alert.location}</p> {/* Larger text */}
+                    <p className="text-sm text-gray-500 mt-1">Location: {alert.location}</p>
                   </div>
                   <Badge className={`text-xs px-2 py-1 ${alert.status === 'critical' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     {alert.status}
@@ -870,7 +988,7 @@ const StockAlertsBadge = ({ alerts, show, onToggle, onRefresh }: {
   );
 };
 
-// Printer Status Component - Larger
+// Printer Status Component
 const PrinterStatus = ({ settings }: PrinterStatusProps) => {
   const [customerStatus, setCustomerStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const [kitchenStatus, setKitchenStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
@@ -887,9 +1005,9 @@ const PrinterStatus = ({ settings }: PrinterStatusProps) => {
   }, [settings]);
 
   return (
-    <div className="flex items-center gap-4 text-sm"> {/* Larger gap and text */}
-      <div className="flex items-center gap-2"> {/* Increased gap */}
-        <Printer className="w-4 h-4" /> {/* Larger icon */}
+    <div className="flex items-center gap-4 text-sm">
+      <div className="flex items-center gap-2">
+        <Printer className="w-4 h-4" />
         <span>Customer:</span>
         {customerStatus === 'connected' ? (
           <Wifi className="w-4 h-4 text-green-500" /> 
@@ -899,8 +1017,8 @@ const PrinterStatus = ({ settings }: PrinterStatusProps) => {
           <WifiOff className="w-4 h-4 text-red-500" />
         )}
       </div>
-      <div className="flex items-center gap-2"> {/* Increased gap */}
-        <Utensils className="w-4 h-4" /> {/* Larger icon */}
+      <div className="flex items-center gap-2">
+        <Utensils className="w-4 h-4" />
         <span>Kitchen:</span>
         {kitchenStatus === 'connected' ? (
           <Bluetooth className="w-4 h-4 text-blue-500" /> 
@@ -938,6 +1056,7 @@ export default function OrdersPage() {
   const [customerName, setCustomerName] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash' | 'split'>('cash');
   const [splitPayment, setSplitPayment] = useState({ cash: 0, gcash: 0 });
+  const [amountPaid, setAmountPaid] = useState(0);
   const [orderType, setOrderType] = useState<'dine-in' | 'takeaway'>('takeaway');
   const [selectedTable, setSelectedTable] = useState('');
   const [orderNote, setOrderNote] = useState('');
@@ -997,12 +1116,32 @@ export default function OrdersPage() {
   // Computed Values
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
   const discountTotal = useMemo(() => {
-    const DISCOUNT_RATE = 0.2; // 20% fixed for senior/PWD
+    const DISCOUNT_RATE = 0.2;
     return cart.reduce((sum, item) => 
       item.hasDiscount ? sum + item.price * item.quantity * DISCOUNT_RATE : sum, 0);
   }, [cart]);
   const total = subtotal - discountTotal;
   const seniorPwdCount = cart.filter(i => i.hasDiscount).length;
+  
+  // Payment validation
+  const canProcessPayment = useMemo(() => {
+    if (!cart.length) return false;
+    
+    if (paymentMethod === 'cash') {
+      return amountPaid >= total;
+    }
+    
+    if (paymentMethod === 'split') {
+      const totalPaid = splitPayment.cash + splitPayment.gcash;
+      return totalPaid >= total && !splitError;
+    }
+    
+    if (paymentMethod === 'gcash') {
+      return true;
+    }
+    
+    return false;
+  }, [cart.length, paymentMethod, amountPaid, total, splitPayment, splitError]);
 
   const categories = useMemo(() => 
     ['All', ...Array.from(new Set(products
@@ -1120,12 +1259,11 @@ export default function OrdersPage() {
     }
   };
 
-  // Save order to database para makita sa sales analytics
+  // Save order to database
   const saveOrderToDatabase = async (order: SavedOrder) => {
     try {
       console.log('Saving order to database for analytics:', order);
       
-      // Prepare items with revenue calculation
       const itemsWithRevenue = order.items.map(item => {
         const itemTotal = item.price * item.quantity;
         const discountedTotal = item.hasDiscount ? itemTotal * (1 - 0.2) : itemTotal;
@@ -1144,13 +1282,11 @@ export default function OrdersPage() {
         };
       });
 
-      // Calculate totals
       const calculatedSubtotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const calculatedDiscount = order.items.reduce((sum, item) => 
         item.hasDiscount ? sum + (item.price * item.quantity * 0.2) : sum, 0);
       const calculatedTotal = calculatedSubtotal - calculatedDiscount;
 
-      // Save to payments collection
       const paymentData = {
         orderNumber: order.orderNumber,
         orderId: order.id,
@@ -1169,6 +1305,8 @@ export default function OrdersPage() {
         cashier: 'Cashier',
         cashierId: 'current-user-id',
         status: 'completed',
+        amountPaid: order.amountPaid,
+        change: order.change,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -1257,6 +1395,7 @@ export default function OrdersPage() {
   const clearCart = useCallback(() => {
     setCart([]);
     setCustomerName('');
+    setAmountPaid(0);
     setSplitPayment({ cash: 0, gcash: 0 });
     setPaymentMethod('cash');
     setSelectedTable('');
@@ -1312,6 +1451,7 @@ export default function OrdersPage() {
     setCustomerName(order.customerName);
     setPaymentMethod(order.paymentMethod);
     if (order.splitPayment) setSplitPayment(order.splitPayment);
+    if (order.amountPaid) setAmountPaid(order.amountPaid);
     setOrderType(order.orderType);
     setSelectedTable(order.tableNumber || '');
     setOrderNote(order.orderNote || '');
@@ -1341,243 +1481,220 @@ export default function OrdersPage() {
     playSuccess();
   }, [clockOut, playSuccess]);
 
-// Print Receipt Function - LARGER FONTS for thermal printers
-const handlePrintReceipt = useCallback(async () => {
-  if (!currentReceipt || !settings) return;
+  // Print Receipt Function
+  const handlePrintReceipt = useCallback(async () => {
+    if (!currentReceipt || !settings) return;
 
-  setIsPrinting(true);
-  try {
-    const receiptContent = document.getElementById('receipt-content');
-    if (!receiptContent) return;
+    setIsPrinting(true);
+    try {
+      const receiptContent = document.getElementById('receipt-content');
+      if (!receiptContent) return;
 
-    const is58mm = settings.receiptWidth === '58mm';
-    
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    iframe.style.opacity = '0';
-    document.body.appendChild(iframe);
-
-    const printDocument = iframe.contentWindow?.document;
-    if (printDocument) {
-      printDocument.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Receipt - ${currentReceipt.orderNumber}</title>
-            <meta charset="utf-8">
-            <style>
-              /* 🟢🟢🟢 THERMAL PRINTER OPTIMIZED - LARGER FONTS 🟢🟢🟢 */
-              @page {
-                size: ${is58mm ? '58mm' : '80mm'} auto;
-                margin: 0;
-              }
-              
-              * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-              
-              body {
-                font-family: 'Courier New', 'Courier', monospace;
-                /* 🟢🟢🟢 BASE FONTS - MUCH LARGER 🟢🟢🟢 */
-                font-size: ${is58mm ? '14px' : '16px'} !important;
-                font-weight: bold !important;
-                width: ${is58mm ? '58mm' : '80mm'};
-                max-width: ${is58mm ? '58mm' : '80mm'};
-                margin: 0 auto;
-                padding: 2mm;
-                background: white;
-                line-height: 1.5 !important;
-                color: black;
-              }
-              
-              /* 🟢🟢🟢 ALL TEXT MUST BE LARGE AND CLEAR 🟢🟢🟢 */
-              .text-center { text-align: center !important; }
-              .text-left { text-align: left !important; }
-              .text-right { text-align: right !important; }
-              
-              /* 🟢🟢🟢 LARGER FONT SIZES FOR ALL ELEMENTS 🟢🟢🟢 */
-              .text-\\[8px\\] { font-size: 12px !important; }  /* Was 8px → Now 12px */
-              .text-\\[10px\\] { font-size: 14px !important; } /* Was 10px → Now 14px */
-              .text-xs { font-size: 14px !important; }        /* Was 12px → Now 14px */
-              .text-sm { font-size: 16px !important; }        /* Was 14px → Now 16px */
-              .text-base { font-size: 18px !important; }      /* Was 16px → Now 18px */
-              .text-lg { font-size: 20px !important; }        /* Was 18px → Now 20px */
-              .text-xl { font-size: 22px !important; }        /* Was 20px → Now 22px */
-              
-              /* 🟢🟢🟢 EXTRA LARGE FOR HEADERS 🟢🟢🟢 */
-              h1, h2, h3, .font-extrabold, .font-black {
-                font-size: ${is58mm ? '18px' : '20px'} !important;
-                font-weight: 900 !important;
-              }
-              
-              /* 🟢🟢🟢 FONT WEIGHTS - EXTRA BOLD 🟢🟢🟢 */
-              .font-bold, strong, b { font-weight: 900 !important; }
-              .font-extrabold { font-weight: 900 !important; }
-              .font-black { font-weight: 900 !important; }
-              .font-mono { font-family: 'Courier New', 'Courier', monospace; }
-              
-              /* 🟢🟢🟢 SPACING - MORE ROOM FOR LARGER FONTS 🟢🟢🟢 */
-              .mb-1 { margin-bottom: 4px; }
-              .mb-2 { margin-bottom: 8px; }
-              .mt-1 { margin-top: 4px; }
-              .mt-2 { margin-top: 8px; }
-              .mt-3 { margin-top: 12px; }
-              .pl-2 { padding-left: 8px; }
-              .pl-3 { padding-left: 12px; }
-              
-              /* 🟢🟢🟢 LARGER GAPS 🟢🟢🟢 */
-              .gap-1 { gap: 4px; }
-              .gap-2 { gap: 8px; }
-              
-              /* 🟢🟢🟢 COLORS - HIGH CONTRAST 🟢🟢🟢 */
-              .text-green-600 { color: #16a34a; font-weight: 900; }
-              .text-gray-500 { color: #4b5563; }
-              .text-gray-600 { color: #4b5563; }
-              
-              /* 🟢🟢🟢 FLEX LAYOUT 🟢🟢🟢 */
-              .flex { display: flex; }
-              .justify-between { justify-content: space-between; }
-              .items-center { align-items: center; }
-              
-              /* 🟢🟢🟢 SEPARATOR - LARGER 🟢🟢🟢 */
-              .separator, .text-center:has(> :contains("-")) {
-                text-align: center;
-                letter-spacing: 2px;
-                font-size: 16px !important;
-                font-weight: 900;
-                margin: 6px 0;
-              }
-              
-              /* 🟢🟢🟢 ITEMS LIST - LARGER 🟢🟢🟢 */
-              .flex.justify-between {
-                font-size: ${is58mm ? '14px' : '16px'} !important;
-                margin-bottom: 4px;
-              }
-              
-              /* 🟢🟢🟢 ITEM NAMES - LARGER 🟢🟢🟢 */
-              .flex.justify-between span:first-child {
-                font-size: ${is58mm ? '14px' : '16px'} !important;
-                max-width: 70%;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-              }
-              
-              /* 🟢🟢🟢 ITEM PRICES - LARGER 🟢🟢🟢 */
-              .flex.justify-between span:last-child {
-                font-size: ${is58mm ? '14px' : '16px'} !important;
-                font-weight: 900;
-              }
-              
-              /* 🟢🟢🟢 TOTALS - EXTRA LARGE 🟢🟢🟢 */
-              .font-bold.mt-1 {
-                font-size: ${is58mm ? '16px' : '18px'} !important;
-                margin-top: 8px;
-                padding-top: 4px;
-                border-top: 2px dashed #000;
-              }
-              
-              .font-bold.mt-1 span:first-child {
-                font-size: ${is58mm ? '16px' : '18px'} !important;
-                font-weight: 900;
-              }
-              
-              .font-bold.mt-1 span:last-child {
-                font-size: ${is58mm ? '18px' : '20px'} !important;
-                font-weight: 900;
-                color: #000;
-              }
-              
-              /* 🟢🟢🟢 DISCOUNT TEXT - LARGER 🟢🟢🟢 */
-              .text-green-600.text-\\[8px\\] {
-                font-size: 12px !important;
-                padding-left: 8px;
-                margin-bottom: 2px;
-              }
-              
-              /* 🟢🟢🟢 ORDER DETAILS - LARGER 🟢🟢🟢 */
-              .mb-1.text-\\[10px\\] {
-                font-size: ${is58mm ? '14px' : '15px'} !important;
-                line-height: 1.6;
-              }
-              
-              .mb-1.text-\\[10px\\] div {
-                margin-bottom: 3px;
-              }
-              
-              /* 🟢🟢🟢 BARCODE - LARGER 🟢🟢🟢 */
-              .mt-2.text-center.text-\\[8px\\] {
-                font-size: 12px !important;
-                margin-top: 8px;
-              }
-              
-              .tracking-widest {
-                letter-spacing: 3px;
-                font-size: 14px !important;
-              }
-              
-              /* 🟢🟢🟢 FOOTER MESSAGES - LARGER 🟢🟢🟢 */
-              .mt-2.text-center.text-\\[8px\\] div,
-              .mt-1.text-center.text-\\[8px\\] div {
-                font-size: 12px !important;
-                line-height: 1.5;
-              }
-              
-              /* 🟢🟢🟢 STORE NAME - LARGEST 🟢🟢🟢 */
-              .text-center.font-bold.mb-1 {
-                font-size: ${is58mm ? '18px' : '20px'} !important;
-                margin-bottom: 6px;
-              }
-              
-              /* 🟢🟢🟢 ADDRESS/PHONE - LARGER 🟢🟢🟢 */
-              .text-center.mb-1.text-\\[10px\\] {
-                font-size: 13px !important;
-                margin-bottom: 3px;
-              }
-              
-              @media print {
-                body {
-                  width: ${is58mm ? '58mm' : '80mm'};
-                  padding: 1.5mm;
-                  /* Keep fonts large in print */
-                  font-size: ${is58mm ? '14px' : '16px'} !important;
-                }
-              }
-            </style>
-          </head>
-          <body>
-            ${receiptContent.outerHTML}
-          </body>
-        </html>
-      `);
+      const is58mm = settings.receiptWidth === '58mm';
       
-      printDocument.close();
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      iframe.style.opacity = '0';
+      document.body.appendChild(iframe);
 
-      iframe.onload = () => {
-        setTimeout(() => {
-          iframe.contentWindow?.print();
+      const printDocument = iframe.contentWindow?.document;
+      if (printDocument) {
+        printDocument.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Receipt - ${currentReceipt.orderNumber}</title>
+              <meta charset="utf-8">
+              <style>
+                @page {
+                  size: ${is58mm ? '58mm' : '80mm'} auto;
+                  margin: 0;
+                }
+                
+                * {
+                  margin: 0;
+                  padding: 0;
+                  box-sizing: border-box;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                
+                body {
+                  font-family: 'Courier New', 'Courier', monospace;
+                  font-size: ${is58mm ? '14px' : '16px'} !important;
+                  font-weight: bold !important;
+                  width: ${is58mm ? '58mm' : '80mm'};
+                  max-width: ${is58mm ? '58mm' : '80mm'};
+                  margin: 0 auto;
+                  padding: 2mm;
+                  background: white;
+                  line-height: 1.5 !important;
+                  color: black;
+                }
+                
+                .text-center { text-align: center !important; }
+                .text-left { text-align: left !important; }
+                .text-right { text-align: right !important; }
+                
+                .text-\\[8px\\] { font-size: 12px !important; }
+                .text-\\[10px\\] { font-size: 14px !important; }
+                .text-xs { font-size: 14px !important; }
+                .text-sm { font-size: 16px !important; }
+                .text-base { font-size: 18px !important; }
+                .text-lg { font-size: 20px !important; }
+                .text-xl { font-size: 22px !important; }
+                
+                h1, h2, h3, .font-extrabold, .font-black {
+                  font-size: ${is58mm ? '18px' : '20px'} !important;
+                  font-weight: 900 !important;
+                }
+                
+                .font-bold, strong, b { font-weight: 900 !important; }
+                .font-extrabold { font-weight: 900 !important; }
+                .font-black { font-weight: 900 !important; }
+                .font-mono { font-family: 'Courier New', 'Courier', monospace; }
+                
+                .mb-1 { margin-bottom: 4px; }
+                .mb-2 { margin-bottom: 8px; }
+                .mt-1 { margin-top: 4px; }
+                .mt-2 { margin-top: 8px; }
+                .mt-3 { margin-top: 12px; }
+                .pl-2 { padding-left: 8px; }
+                .pl-3 { padding-left: 12px; }
+                
+                .gap-1 { gap: 4px; }
+                .gap-2 { gap: 8px; }
+                
+                .text-green-600 { color: #16a34a; font-weight: 900; }
+                .text-gray-500 { color: #4b5563; }
+                .text-gray-600 { color: #4b5563; }
+                
+                .flex { display: flex; }
+                .justify-between { justify-content: space-between; }
+                .items-center { align-items: center; }
+                
+                .separator, .text-center:has(> :contains("-")) {
+                  text-align: center;
+                  letter-spacing: 2px;
+                  font-size: 16px !important;
+                  font-weight: 900;
+                  margin: 6px 0;
+                }
+                
+                .flex.justify-between {
+                  font-size: ${is58mm ? '14px' : '16px'} !important;
+                  margin-bottom: 4px;
+                }
+                
+                .flex.justify-between span:first-child {
+                  font-size: ${is58mm ? '14px' : '16px'} !important;
+                  max-width: 70%;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+                
+                .flex.justify-between span:last-child {
+                  font-size: ${is58mm ? '14px' : '16px'} !important;
+                  font-weight: 900;
+                }
+                
+                .font-bold.mt-1 {
+                  font-size: ${is58mm ? '16px' : '18px'} !important;
+                  margin-top: 8px;
+                  padding-top: 4px;
+                  border-top: 2px dashed #000;
+                }
+                
+                .font-bold.mt-1 span:first-child {
+                  font-size: ${is58mm ? '16px' : '18px'} !important;
+                  font-weight: 900;
+                }
+                
+                .font-bold.mt-1 span:last-child {
+                  font-size: ${is58mm ? '18px' : '20px'} !important;
+                  font-weight: 900;
+                  color: #000;
+                }
+                
+                .text-green-600.text-\\[8px\\] {
+                  font-size: 12px !important;
+                  padding-left: 8px;
+                  margin-bottom: 2px;
+                }
+                
+                .mb-1.text-\\[10px\\] {
+                  font-size: ${is58mm ? '14px' : '15px'} !important;
+                  line-height: 1.6;
+                }
+                
+                .mb-1.text-\\[10px\\] div {
+                  margin-bottom: 3px;
+                }
+                
+                .mt-2.text-center.text-\\[8px\\] {
+                  font-size: 12px !important;
+                  margin-top: 8px;
+                }
+                
+                .tracking-widest {
+                  letter-spacing: 3px;
+                  font-size: 14px !important;
+                }
+                
+                .mt-2.text-center.text-\\[8px\\] div,
+                .mt-1.text-center.text-\\[8px\\] div {
+                  font-size: 12px !important;
+                  line-height: 1.5;
+                }
+                
+                .text-center.font-bold.mb-1 {
+                  font-size: ${is58mm ? '18px' : '20px'} !important;
+                  margin-bottom: 6px;
+                }
+                
+                .text-center.mb-1.text-\\[10px\\] {
+                  font-size: 13px !important;
+                  margin-bottom: 3px;
+                }
+                
+                @media print {
+                  body {
+                    width: ${is58mm ? '58mm' : '80mm'};
+                    padding: 1.5mm;
+                    font-size: ${is58mm ? '14px' : '16px'} !important;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              ${receiptContent.outerHTML}
+            </body>
+          </html>
+        `);
+        
+        printDocument.close();
+
+        iframe.onload = () => {
           setTimeout(() => {
-            document.body.removeChild(iframe);
-            setIsPrinting(false);
-            toast.success('Receipt sent to printer');
-          }, 500);
-        }, 200);
-      };
+            iframe.contentWindow?.print();
+            setTimeout(() => {
+              document.body.removeChild(iframe);
+              setIsPrinting(false);
+              toast.success('Receipt sent to printer');
+            }, 500);
+          }, 200);
+        };
+      }
+    } catch (error) {
+      console.error('Print failed:', error);
+      toast.error('Failed to print receipt');
+      setIsPrinting(false);
     }
-  } catch (error) {
-    console.error('Print failed:', error);
-    toast.error('Failed to print receipt');
-    setIsPrinting(false);
-  }
-}, [currentReceipt, settings]);
-
+  }, [currentReceipt, settings]);
 
   const processPayment = async () => {
     if (!cart.length) {
@@ -1586,8 +1703,20 @@ const handlePrintReceipt = useCallback(async () => {
       return;
     }
     
+    // Validate payment
+    if (paymentMethod === 'cash' && amountPaid < total) {
+      toast.error(`Need ${formatCurrency(total - amountPaid)} more`);
+      playError();
+      return;
+    }
+    
     if (paymentMethod === 'split') {
       const totalPaid = splitPayment.cash + splitPayment.gcash;
+      if (totalPaid < total) {
+        toast.error(`Need ${formatCurrency(total - totalPaid)} more`);
+        playError();
+        return;
+      }
       if (Math.abs(totalPaid - total) > 0.01) {
         toast.error(`Split amounts must equal ${formatCurrency(total)}`);
         playError();
@@ -1606,6 +1735,9 @@ const handlePrintReceipt = useCallback(async () => {
         quantity: item.quantity, 
         ingredients: item.ingredients || []
       }));
+
+      // Calculate change for cash payments
+      const change = paymentMethod === 'cash' ? amountPaid - total : 0;
 
       // Check stock
       try {
@@ -1638,6 +1770,8 @@ const handlePrintReceipt = useCallback(async () => {
         total, 
         paymentMethod,
         splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+        amountPaid: paymentMethod === 'cash' ? amountPaid : undefined,
+        change: paymentMethod === 'cash' ? change : undefined,
         orderType, 
         tableNumber: orderType === 'dine-in' ? selectedTable : undefined,
         timestamp: new Date(), 
@@ -1744,16 +1878,16 @@ const handlePrintReceipt = useCallback(async () => {
     e.dataTransfer.effectAllowed = 'copy';
     
     const dragPreview = document.createElement('div');
-    dragPreview.className = 'fixed top-0 left-0 w-[160px] bg-card border-2 border-primary shadow-lg rounded-lg p-3'; // Larger preview
+    dragPreview.className = 'fixed top-0 left-0 w-[160px] bg-card border-2 border-primary shadow-lg rounded-lg p-3';
     dragPreview.style.position = 'absolute';
     dragPreview.style.top = '-1000px';
-    dragPreview.innerHTML = `<div class="space-y-2"><div class="font-bold text-sm">${product.name}</div> /* Larger text */
-      <div class="text-xs text-muted-foreground">${product.category || 'Product'}</div> /* Larger text */
+    dragPreview.innerHTML = `<div class="space-y-2"><div class="font-bold text-sm">${product.name}</div>
+      <div class="text-xs text-muted-foreground">${product.category || 'Product'}</div>
       <div class="flex justify-between"><span class="font-bold text-sm text-primary">${formatCurrency(product.price)}</span>
       <span class="text-xs text-muted-foreground">+ Drop</span></div></div>`;
     
     document.body.appendChild(dragPreview);
-    e.dataTransfer.setDragImage(dragPreview, 80, 45); // Adjusted position
+    e.dataTransfer.setDragImage(dragPreview, 80, 45);
     setTimeout(() => document.body.removeChild(dragPreview), 0);
   }, []);
 
@@ -1782,12 +1916,12 @@ const handlePrintReceipt = useCallback(async () => {
     setDraggedItem(product);
     
     const preview = document.createElement('div');
-    preview.className = 'fixed z-50 w-[160px] bg-card border-2 border-primary shadow-lg rounded-lg p-3'; // Larger preview
-    preview.style.left = `${e.touches[0].clientX - 80}px`; // Adjusted position
-    preview.style.top = `${e.touches[0].clientY - 60}px`; // Adjusted position
+    preview.className = 'fixed z-50 w-[160px] bg-card border-2 border-primary shadow-lg rounded-lg p-3';
+    preview.style.left = `${e.touches[0].clientX - 80}px`;
+    preview.style.top = `${e.touches[0].clientY - 60}px`;
     preview.style.pointerEvents = 'none';
-    preview.innerHTML = `<div class="space-y-2"><div class="font-bold text-sm">${product.name}</div> /* Larger text */
-      <div class="text-xs text-muted-foreground">${product.category || 'Product'}</div> /* Larger text */
+    preview.innerHTML = `<div class="space-y-2"><div class="font-bold text-sm">${product.name}</div>
+      <div class="text-xs text-muted-foreground">${product.category || 'Product'}</div>
       <div class="flex justify-between"><span class="font-bold text-sm text-primary">${formatCurrency(product.price)}</span>
       <span class="text-xs text-muted-foreground">Release to add</span></div></div>`;
     
@@ -1799,8 +1933,8 @@ const handlePrintReceipt = useCallback(async () => {
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     if (touchPreview) {
-      touchPreview.style.left = `${e.touches[0].clientX - 80}px`; // Adjusted position
-      touchPreview.style.top = `${e.touches[0].clientY - 60}px`; // Adjusted position
+      touchPreview.style.left = `${e.touches[0].clientX - 80}px`;
+      touchPreview.style.top = `${e.touches[0].clientY - 60}px`;
     }
     
     const touch = e.touches[0];
@@ -1835,7 +1969,7 @@ const handlePrintReceipt = useCallback(async () => {
   // Category Scroll Handlers
   const scrollCategories = (direction: 'left' | 'right') => {
     if (categoriesContainerRef.current) {
-      categoriesContainerRef.current.scrollBy({ left: direction === 'left' ? -250 : 250, behavior: 'smooth' }); // Larger scroll
+      categoriesContainerRef.current.scrollBy({ left: direction === 'left' ? -250 : 250, behavior: 'smooth' });
     }
   };
 
@@ -1850,7 +1984,7 @@ const handlePrintReceipt = useCallback(async () => {
     if (!isDraggingCategory || !categoriesContainerRef.current) return;
     e.preventDefault();
     const x = e.pageX - categoriesContainerRef.current.offsetLeft;
-    const walk = (x - startX) * 2.5; // Increased multiplier for faster scrolling
+    const walk = (x - startX) * 2.5;
     categoriesContainerRef.current.scrollLeft = scrollLeft - walk;
   }, [isDraggingCategory, startX, scrollLeft]);
 
@@ -1863,8 +1997,8 @@ const handlePrintReceipt = useCallback(async () => {
       <div className="min-h-screen bg-background">
         <div className="container max-w-7xl mx-auto p-6">
           <div className="animate-pulse space-y-6">
-            <div className="h-10 w-56 bg-muted rounded"></div> {/* Larger placeholder */}
-            <div className="h-72 bg-muted rounded-xl"></div> {/* Larger placeholder */}
+            <div className="h-10 w-56 bg-muted rounded"></div>
+            <div className="h-72 bg-muted rounded-xl"></div>
           </div>
         </div>
       </div>
@@ -1876,10 +2010,10 @@ const handlePrintReceipt = useCallback(async () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="max-w-lg w-full">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-10 text-center shadow-sm"> {/* Increased padding */}
-            <AlertTriangle className="h-20 w-20 text-yellow-600 mx-auto mb-8" /> {/* Larger icon */}
-            <h2 className="text-3xl font-bold mb-4">Clock In Required</h2> {/* Larger text */}
-            <p className="text-lg text-muted-foreground mb-8"> {/* Larger text */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-10 text-center shadow-sm">
+            <AlertTriangle className="h-20 w-20 text-yellow-600 mx-auto mb-8" />
+            <h2 className="text-3xl font-bold mb-4">Clock In Required</h2>
+            <p className="text-lg text-muted-foreground mb-8">
               You need to start your shift before accessing orders and POS system.
             </p>
 
@@ -1906,21 +2040,21 @@ const handlePrintReceipt = useCallback(async () => {
 
   // Clocked in - Main POS Interface
   return (
-    <div className="min-h-screen bg-background p-5"> {/* Increased padding */}
+    <div className="min-h-screen bg-background p-5">
       {/* Attendance Status Bar */}
-      <div className="border-b bg-card sticky top-0 z-20 backdrop-blur-sm mb-5"> {/* Increased margin */}
-        <div className="max-w-7xl mx-auto px-8 py-4"> {/* Increased padding */}
+      <div className="border-b bg-card sticky top-0 z-20 backdrop-blur-sm mb-5">
+        <div className="max-w-7xl mx-auto px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-5"> {/* Increased gap */}
-              <div className="flex items-center gap-3"> {/* Increased gap */}
-                <div className="h-4 w-4 rounded-full bg-green-500 animate-pulse" /> {/* Larger indicator */}
-                <span className="font-medium text-base">On Shift</span> {/* Larger text */}
+            <div className="flex items-center gap-5">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 rounded-full bg-green-500 animate-pulse" />
+                <span className="font-medium text-base">On Shift</span>
               </div>
 
               {attendance && (
-                <div className="hidden sm:flex items-center gap-3 text-sm text-muted-foreground"> {/* Increased gap */}
-                  <Clock className="h-5 w-5" /> {/* Larger icon */}
-                  <span className="text-base"> {/* Larger text */}
+                <div className="hidden sm:flex items-center gap-3 text-sm text-muted-foreground">
+                  <Clock className="h-5 w-5" />
+                  <span className="text-base">
                     Since {new Date(attendance.clockInTime).toLocaleTimeString([], {
                       hour: "numeric",
                       minute: "2-digit",
@@ -1937,7 +2071,7 @@ const handlePrintReceipt = useCallback(async () => {
 
               {attendance?.status === "confirmed" && (
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-sm px-3 py-1">
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> {/* Larger icon */}
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
                   Confirmed
                 </Badge>
               )}
@@ -1946,26 +2080,26 @@ const handlePrintReceipt = useCallback(async () => {
             {/* Attendance Sheet */}
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" size="default" className="gap-2 h-10 text-sm"> {/* Larger button */}
+                <Button variant="outline" size="default" className="gap-2 h-10 text-sm">
                   Attendance
-                  <ChevronRightIcon className="h-5 w-5" /> {/* Larger icon */}
+                  <ChevronRightIcon className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
 
-              <SheetContent side="right" className="w-full sm:w-[450px] sm:max-w-[450px]"> {/* Larger width */}
-                <SheetHeader className="mb-8"> {/* Increased margin */}
-                  <SheetTitle className="flex items-center gap-2 text-xl"> {/* Larger text */}
-                    <Clock className="h-6 w-6 text-primary" /> {/* Larger icon */}
+              <SheetContent side="right" className="w-full sm:w-[450px] sm:max-w-[450px]">
+                <SheetHeader className="mb-8">
+                  <SheetTitle className="flex items-center gap-2 text-xl">
+                    <Clock className="h-6 w-6 text-primary" />
                     Shift Controls
                   </SheetTitle>
                 </SheetHeader>
 
-                <div className="space-y-8"> {/* Increased spacing */}
+                <div className="space-y-8">
                   <ClockInCard />
 
                   <Separator />
 
-                  <div className="space-y-5"> {/* Increased spacing */}
+                  <div className="space-y-5">
                     {!attendance?.clockOutTime ? (
                       <Button
                         onClick={handleClockOut}
@@ -1976,7 +2110,7 @@ const handlePrintReceipt = useCallback(async () => {
                       >
                         {attendanceLoading ? (
                           <>
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {/* Larger icon */}
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                             Ending shift…
                           </>
                         ) : (
@@ -1984,12 +2118,12 @@ const handlePrintReceipt = useCallback(async () => {
                         )}
                       </Button>
                     ) : (
-                      <div className="text-center text-muted-foreground py-5 text-base"> {/* Larger text */}
+                      <div className="text-center text-muted-foreground py-5 text-base">
                         Shift completed
                       </div>
                     )}
 
-                    <p className="text-sm text-center text-muted-foreground"> {/* Larger text */}
+                    <p className="text-sm text-center text-muted-foreground">
                       Remember to clock out at the end of your shift.
                       {attendance?.status === "pending" && (
                         <span className="block mt-2 text-yellow-700">
@@ -2007,16 +2141,16 @@ const handlePrintReceipt = useCallback(async () => {
 
       <div className="max-w-7xl mx-auto">
         {/* POS Header */}
-        <header className="bg-card rounded-xl shadow-sm p-6 mb-5 border"> {/* Increased padding */}
+        <header className="bg-card rounded-xl shadow-sm p-6 mb-5 border">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3"> {/* Larger text */}
-                <ShoppingCart className="h-8 w-8" /> {/* Larger icon */}
+              <h1 className="text-3xl font-bold flex items-center gap-3">
+                <ShoppingCart className="h-8 w-8" />
                 POS System / Orders
               </h1>
-              <p className="text-sm text-muted-foreground mt-2">Swipe categories • Drag items to cart</p> {/* Larger text */}
+              <p className="text-sm text-muted-foreground mt-2">Swipe categories • Drag items to cart</p>
             </div>
-            <div className="flex items-center gap-4"> {/* Increased gap */}
+            <div className="flex items-center gap-4">
               {/* Printer Status */}
               {settings && <PrinterStatus settings={settings} />}
               
@@ -2029,43 +2163,43 @@ const handlePrintReceipt = useCallback(async () => {
               />
               
               {/* Order History Button */}
-              <Button variant="outline" size="default" onClick={() => setShowOrderHistory(true)} className="h-10 text-sm gap-2"> {/* Larger button */}
-                <History className="w-4 h-4" /> {/* Larger icon */}
+              <Button variant="outline" size="default" onClick={() => setShowOrderHistory(true)} className="h-10 text-sm gap-2">
+                <History className="w-4 h-4" />
                 <span className="hidden sm:inline">History</span>
               </Button>
               
               {/* Saved Orders Button */}
-              <Button variant="outline" size="default" onClick={() => setShowSavedOrders(!showSavedOrders)} className="h-10 text-sm gap-2"> {/* Larger button */}
-                <Save className="w-4 h-4" /> {/* Larger icon */}
+              <Button variant="outline" size="default" onClick={() => setShowSavedOrders(!showSavedOrders)} className="h-10 text-sm gap-2">
+                <Save className="w-4 h-4" />
                 <span className="hidden sm:inline">Saved ({savedOrders.length})</span>
               </Button>
 
               {/* Quick Actions Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-10 w-10"> {/* Larger button */}
-                    <Menu className="h-5 w-5" /> {/* Larger icon */}
+                  <Button variant="ghost" size="icon" className="h-10 w-10">
+                    <Menu className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56"> {/* Larger width */}
-                  <DropdownMenuLabel className="text-base py-2">Quick Actions</DropdownMenuLabel> {/* Larger text */}
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-base py-2">Quick Actions</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setShowOrderHistory(true)} className="text-base py-2">
-                    <History className="w-5 h-5 mr-3" />View History {/* Larger icon */}
+                    <History className="w-5 h-5 mr-3" />View History
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={fetchStockAlerts} className="text-base py-2">
-                    <RefreshCw className="w-5 h-5 mr-3" />Refresh Stock {/* Larger icon */}
+                    <RefreshCw className="w-5 h-5 mr-3" />Refresh Stock
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleTestPrint} className="text-base py-2">
-                    <Printer className="w-5 h-5 mr-3" />Test Print Receipt {/* Larger icon */}
+                    <Printer className="w-5 h-5 mr-3" />Test Print Receipt
                   </DropdownMenuItem>
                   {currentReceipt && (
                     <>
                       <DropdownMenuItem onClick={() => handlePreviewReceipt('customer')} className="text-base py-2">
-                        <Eye className="w-5 h-5 mr-3" />Preview Customer Receipt {/* Larger icon */}
+                        <Eye className="w-5 h-5 mr-3" />Preview Customer Receipt
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handlePreviewReceipt('kitchen')} className="text-base py-2">
-                        <Utensils className="w-5 h-5 mr-3" />Preview Kitchen Order {/* Larger icon */}
+                        <Utensils className="w-5 h-5 mr-3" />Preview Kitchen Order
                       </DropdownMenuItem>
                     </>
                   )}
@@ -2076,38 +2210,38 @@ const handlePrintReceipt = useCallback(async () => {
         </header>
 
         {/* Main POS Layout */}
-        <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-220px)]"> {/* Increased gap */}
+        <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-220px)]">
           {/* Left Panel - Products */}
           <div className="lg:w-7/12 flex flex-col h-full">
             {/* Menu Type Filter */}
-            <div className="grid grid-cols-3 gap-3 mb-5"> {/* Increased gap and margin */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
               {(['all', 'food', 'drink'] as const).map(type => (
                 <Button key={type} variant={selectedMenuType === type ? 'default' : 'outline'}
                   onClick={() => { setSelectedMenuType(type); setSelectedCategory('All'); }} 
-                  className="h-11 text-base"> {/* Larger button */}
-                  {type === 'food' && <Utensils className="w-4 h-4 mr-2" />} {/* Larger icon */}
-                  {type === 'drink' && <Coffee className="w-4 h-4 mr-2" />} {/* Larger icon */}
+                  className="h-11 text-base">
+                  {type === 'food' && <Utensils className="w-4 h-4 mr-2" />}
+                  {type === 'drink' && <Coffee className="w-4 h-4 mr-2" />}
                   {type === 'all' ? 'All' : type}
                 </Button>
               ))}
             </div>
 
             {/* Categories */}
-            <div className="mb-5 relative"> {/* Increased margin */}
-              <div className="flex justify-between items-center mb-2"> {/* Increased margin */}
-                <Label className="text-sm">Categories</Label> {/* Larger text */}
-                <span className="text-xs text-muted-foreground">← Swipe →</span> {/* Larger text */}
+            <div className="mb-5 relative">
+              <div className="flex justify-between items-center mb-2">
+                <Label className="text-sm">Categories</Label>
+                <span className="text-xs text-muted-foreground">← Swipe →</span>
               </div>
               
               <div className="relative group">
                 {showLeftScroll && (
                   <Button variant="secondary" size="icon" className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => scrollCategories('left')}>
-                    <ChevronLeft className="w-4 h-4" /> {/* Larger icon */}
+                    <ChevronLeft className="w-4 h-4" />
                   </Button>
                 )}
                 
-                <div ref={categoriesContainerRef} className="flex gap-2 overflow-x-auto scrollbar-hide px-2 py-1 select-none" /* Increased gap */
+                <div ref={categoriesContainerRef} className="flex gap-2 overflow-x-auto scrollbar-hide px-2 py-1 select-none"
                   style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', cursor: isDraggingCategory ? 'grabbing' : 'grab' }}
                   onMouseDown={handleCategoryMouseDown}
                   onMouseMove={handleCategoryMouseMove}
@@ -2116,7 +2250,7 @@ const handlePrintReceipt = useCallback(async () => {
                   {categories.map(cat => (
                     <Button key={cat} variant={selectedCategory === cat ? 'default' : 'outline'}
                       onClick={() => !isDraggingCategory && setSelectedCategory(cat)} 
-                      className="whitespace-nowrap text-sm shrink-0 px-4 py-2 h-10"> {/* Larger button */}
+                      className="whitespace-nowrap text-sm shrink-0 px-4 py-2 h-10">
                       {cat}
                     </Button>
                   ))}
@@ -2125,20 +2259,20 @@ const handlePrintReceipt = useCallback(async () => {
                 {showRightScroll && (
                   <Button variant="secondary" size="icon" className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => scrollCategories('right')}>
-                    <ChevronRight className="w-4 h-4" /> {/* Larger icon */}
+                    <ChevronRight className="w-4 h-4" />
                   </Button>
                 )}
               </div>
             </div>
 
             {/* Products Grid */}
-            <div className="overflow-y-auto flex-1 pr-3"> {/* Increased padding */}
+            <div className="overflow-y-auto flex-1 pr-3">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin mr-3" />Loading...</div> 
               ) : !filteredProducts.length ? (
                 <div className="text-center py-10 text-muted-foreground text-base">No products found</div> 
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"> {/* Increased gap */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {filteredProducts.map(product => (
                     <Card key={product._id} className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none ${
                       draggedItem?._id === product._id ? 'opacity-50 scale-95' : ''
@@ -2147,17 +2281,17 @@ const handlePrintReceipt = useCallback(async () => {
                       onTouchStart={(e) => handleTouchStart(e, product)} 
                       onTouchMove={handleTouchMove} 
                       onTouchEnd={handleTouchEnd}>
-                      <CardContent className="p-3"> {/* Increased padding */}
-                        <div className="space-y-2"> {/* Increased spacing */}
+                      <CardContent className="p-3">
+                        <div className="space-y-2">
                           <div className="flex items-start justify-between">
-                            <h3 className="font-bold text-sm line-clamp-2 flex-1">{product.name}</h3> {/* Larger text */}
-                            <GripVertical className="w-4 h-4 text-muted-foreground ml-2 flex-shrink-0" /> {/* Larger icon */}
+                            <h3 className="font-bold text-sm line-clamp-2 flex-1">{product.name}</h3>
+                            <GripVertical className="w-4 h-4 text-muted-foreground ml-2 flex-shrink-0" />
                           </div>
-                          <Badge variant="outline" className="text-xs px-2 py-1 h-5">{product.category}</Badge> {/* Larger badge */}
-                          <p className="text-xs text-muted-foreground line-clamp-2"> {/* Larger text */}
+                          <Badge variant="outline" className="text-xs px-2 py-1 h-5">{product.category}</Badge>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
                             {product.description || product.ingredients?.map(i => i.name).join(', ')}
                           </p>
-                          <span className="font-bold text-sm text-primary">{formatCurrency(product.price)}</span> {/* Larger text */}
+                          <span className="font-bold text-sm text-primary">{formatCurrency(product.price)}</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -2168,52 +2302,52 @@ const handlePrintReceipt = useCallback(async () => {
           </div>
 
           {/* Right Panel - Cart */}
-          <div className="lg:w-5/12 h-full flex gap-3"> {/* Increased gap */}
+          <div className="lg:w-5/12 h-full flex gap-3">
             <div ref={cartDropZoneRef} className="flex-1 transition-all" 
               onDragOver={handleDragOver} 
               onDragLeave={handleDragLeave} 
               onDrop={handleDrop}>
               <Card className="h-full flex flex-col border">
-                <CardHeader className="pb-3"> {/* Increased padding */}
+                <CardHeader className="pb-3">
                   <div className="flex justify-between items-center">
-                    <CardTitle className="flex items-center gap-2 text-lg"> {/* Larger text */}
-                      <ShoppingCart className="w-5 h-5" />Current Order ({cart.length}) {/* Larger icon */}
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <ShoppingCart className="w-5 h-5" />Current Order ({cart.length})
                     </CardTitle>
-                    <div className="flex gap-2"> {/* Increased gap */}
+                    <div className="flex gap-2">
                       <Button variant="outline" size="default" onClick={() => setShowDiscountModal(true)} 
                         disabled={!cart.length || isProcessing || isCheckingStock || isPrinting} 
-                        className="h-9 text-sm px-3"> {/* Larger button */}
-                        <Percent className="w-4 h-4 mr-2" />Discount {/* Larger icon */}
+                        className="h-9 text-sm px-3">
+                        <Percent className="w-4 h-4 mr-2" />Discount
                       </Button>
                       <Button variant="outline" size="default" onClick={clearCart} disabled={!cart.length || isProcessing || isCheckingStock || isPrinting} 
-                        className="h-9 w-9 p-0"> {/* Larger button */}
-                        <Trash2 className="w-4 h-4" /> {/* Larger icon */}
+                        className="h-9 w-9 p-0">
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
                   {!cart.length && (
-                    <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30"> {/* Increased padding */}
-                      <p className="text-sm text-muted-foreground">↓ Drop products here ↓</p> {/* Larger text */}
+                    <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30">
+                      <p className="text-sm text-muted-foreground">↓ Drop products here ↓</p>
                     </div>
                   )}
                 </CardHeader>
 
-                <CardContent className="flex-1 overflow-y-auto space-y-4 p-4 pt-0"> {/* Increased spacing and padding */}
+                <CardContent className="flex-1 overflow-y-auto space-y-4 p-4 pt-0">
                   {/* Discount Summary */}
                   {seniorPwdCount > 0 && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3"> {/* Increased padding */}
-                      <p className="text-sm font-medium text-green-700 mb-2">Senior/PWD Discount Applied:</p> {/* Larger text */}
-                      <p className="text-xs text-green-600">{seniorPwdCount} item(s) with 20% discount</p> {/* Larger text */}
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-sm font-medium text-green-700 mb-2">Senior/PWD Discount Applied:</p>
+                      <p className="text-xs text-green-600">{seniorPwdCount} item(s) with 20% discount</p>
                     </div>
                   )}
 
                   {/* Order Type */}
                   <div>
-                    <Label className="text-sm">Order Type</Label> {/* Larger text */}
-                    <div className="flex gap-2 mt-2"> {/* Increased gap and margin */}
+                    <Label className="text-sm">Order Type</Label>
+                    <div className="flex gap-2 mt-2">
                       {(['dine-in', 'takeaway'] as const).map(type => (
                         <Button key={type} variant={orderType === type ? 'default' : 'outline'}
-                          onClick={() => setOrderType(type)} className="flex-1 h-9 text-sm" disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
+                          onClick={() => setOrderType(type)} className="flex-1 h-9 text-sm" disabled={isProcessing || isCheckingStock || isPrinting}>
                           {type === 'dine-in' ? 'Dine In' : 'Take Away'}
                         </Button>
                       ))}
@@ -2224,19 +2358,19 @@ const handlePrintReceipt = useCallback(async () => {
 
                   {/* Cart Items */}
                   <div>
-                    <Label className="text-sm">Items</Label> {/* Larger text */}
-                    <div className="space-y-2 mt-2 max-h-60 overflow-y-auto"> {/* Increased spacing */}
+                    <Label className="text-sm">Items</Label>
+                    <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                       {cart.map(item => {
                         const discountedPrice = item.price * (1 - 0.2);
                         return (
-                          <div key={item._id} className="flex flex-col p-2 border rounded"> {/* Increased padding */}
+                          <div key={item._id} className="flex flex-col p-2 border rounded">
                             <div className="flex justify-between items-center">
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2"> {/* Increased gap */}
-                                  <p className="font-medium text-sm truncate">{item.name}</p> {/* Larger text */}
-                                  {item.hasDiscount && <Badge variant="default" className="text-[10px] h-5 px-2 bg-green-600">20% OFF</Badge>} {/* Larger badge */}
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm truncate">{item.name}</p>
+                                  {item.hasDiscount && <Badge variant="default" className="text-[10px] h-5 px-2 bg-green-600">20% OFF</Badge>}
                                 </div>
-                                <div className="flex items-center gap-3"> {/* Increased gap */}
+                                <div className="flex items-center gap-3">
                                   {item.hasDiscount ? (
                                     <>
                                       <p className="text-xs text-muted-foreground line-through">{formatCurrency(item.price)}</p>
@@ -2248,25 +2382,25 @@ const handlePrintReceipt = useCallback(async () => {
                                   <p className="text-xs text-muted-foreground">× {item.quantity}</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 ml-3"> {/* Increased gap and margin */}
+                              <div className="flex items-center gap-2 ml-3">
                                 <Button size="default" variant="outline" onClick={() => updateQuantity(item._id, -1)} 
-                                  className="h-8 w-8 p-0" disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
-                                  <Minus className="w-3.5 h-3.5" /> {/* Larger icon */}
+                                  className="h-8 w-8 p-0" disabled={isProcessing || isCheckingStock || isPrinting}>
+                                  <Minus className="w-3.5 h-3.5" />
                                 </Button>
-                                <span className="w-6 text-center text-sm font-medium">{item.quantity}</span> {/* Larger text */}
+                                <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
                                 <Button size="default" variant="outline" onClick={() => updateQuantity(item._id, 1)} 
-                                  className="h-8 w-8 p-0" disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
-                                  <Plus className="w-3.5 h-3.5" /> {/* Larger icon */}
+                                  className="h-8 w-8 p-0" disabled={isProcessing || isCheckingStock || isPrinting}>
+                                  <Plus className="w-3.5 h-3.5" />
                                 </Button>
                                 {item.hasDiscount && (
                                   <Button size="default" variant="outline" onClick={() => removeDiscount(item._id)} 
-                                    className="h-8 w-8 p-0 text-yellow-600" disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
-                                    <Percent className="w-3.5 h-3.5" /> {/* Larger icon */}
+                                    className="h-8 w-8 p-0 text-yellow-600" disabled={isProcessing || isCheckingStock || isPrinting}>
+                                    <Percent className="w-3.5 h-3.5" />
                                   </Button>
                                 )}
                                 <Button size="default" variant="destructive" onClick={() => removeFromCart(item._id)} 
-                                  className="h-8 w-8 p-0" disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
-                                  <Trash2 className="w-3.5 h-3.5" /> {/* Larger icon */}
+                                  className="h-8 w-8 p-0" disabled={isProcessing || isCheckingStock || isPrinting}>
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
                             </div>
@@ -2280,19 +2414,19 @@ const handlePrintReceipt = useCallback(async () => {
 
                   {/* Summary */}
                   <div>
-                    <div className="space-y-1"> {/* Increased spacing */}
-                      <div className="flex justify-between text-sm"> {/* Larger text */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
                         <span>Subtotal:</span>
                         <span>{formatCurrency(subtotal)}</span>
                       </div>
                       {discountTotal > 0 && (
-                        <div className="flex justify-between text-sm text-green-600"> {/* Larger text */}
+                        <div className="flex justify-between text-sm text-green-600">
                           <span>Discount:</span>
                           <span>-{formatCurrency(discountTotal)}</span>
                         </div>
                       )}
-                      <Separator className="my-2" /> {/* Increased margin */}
-                      <div className="flex justify-between font-bold text-lg"> {/* Larger text */}
+                      <Separator className="my-2" />
+                      <div className="flex justify-between font-bold text-lg">
                         <span>Total:</span>
                         <span className="text-primary">{formatCurrency(total)}</span>
                       </div>
@@ -2303,19 +2437,29 @@ const handlePrintReceipt = useCallback(async () => {
 
                   {/* Payment Method */}
                   <div>
-                    <Label className="text-sm">Payment</Label> {/* Larger text */}
-                    <div className="grid grid-cols-3 gap-2 mt-2"> {/* Increased gap */}
+                    <Label className="text-sm">Payment</Label>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
                       {(['cash', 'gcash', 'split'] as const).map(method => (
                         <Button key={method} variant={paymentMethod === method ? 'default' : 'outline'}
-                          onClick={() => setPaymentMethod(method)} className="h-9 text-sm" disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
-                          {method === 'cash' && <DollarSign className="w-4 h-4 mr-2" />} {/* Larger icon */}
-                          {method === 'gcash' && <Smartphone className="w-4 h-4 mr-2" />} {/* Larger icon */}
-                          {method === 'split' && <Receipt className="w-4 h-4 mr-2" />} {/* Larger icon */}
+                          onClick={() => setPaymentMethod(method)} className="h-9 text-sm" disabled={isProcessing || isCheckingStock || isPrinting}>
+                          {method === 'cash' && <DollarSign className="w-4 h-4 mr-2" />}
+                          {method === 'gcash' && <Smartphone className="w-4 h-4 mr-2" />}
+                          {method === 'split' && <Receipt className="w-4 h-4 mr-2" />}
                           {method === 'cash' ? 'Cash' : method === 'gcash' ? 'GCash' : 'Split'}
                         </Button>
                       ))}
                     </div>
                   </div>
+
+                  {/* Payment Input with Receipt-style Change Display */}
+                  {paymentMethod === 'cash' && (
+                    <CashPaymentInput
+                      total={total}
+                      amountPaid={amountPaid}
+                      setAmountPaid={setAmountPaid}
+                      disabled={isProcessing || isCheckingStock || isPrinting}
+                    />
+                  )}
 
                   {/* Split Payment Input */}
                   {paymentMethod === 'split' && (
@@ -2327,57 +2471,92 @@ const handlePrintReceipt = useCallback(async () => {
                     />
                   )}
 
+                  {/* GCash Note */}
+                  {paymentMethod === 'gcash' && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-700 flex items-center gap-2">
+                        <Smartphone className="w-4 h-4" />
+                        GCash payment of {formatCurrency(total)} will be processed.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Customer Info */}
                   <Input placeholder="Customer name (optional)" value={customerName} 
-                    onChange={(e) => setCustomerName(e.target.value)} className="h-10 text-sm" /* Larger input */
+                    onChange={(e) => setCustomerName(e.target.value)} className="h-10 text-sm"
                     disabled={isProcessing || isCheckingStock || isPrinting} />
                   <Input placeholder="Order notes" value={orderNote} 
-                    onChange={(e) => setOrderNote(e.target.value)} className="h-10 text-sm" /* Larger input */
+                    onChange={(e) => setOrderNote(e.target.value)} className="h-10 text-sm"
                     disabled={isProcessing || isCheckingStock || isPrinting} />
                   
                   {orderType === 'dine-in' && (
                     <Input placeholder="Table number" value={selectedTable} 
-                      onChange={(e) => setSelectedTable(e.target.value)} className="h-10 text-sm" /* Larger input */
+                      onChange={(e) => setSelectedTable(e.target.value)} className="h-10 text-sm"
                       disabled={isProcessing || isCheckingStock || isPrinting} />
                   )}
 
                   {/* Pay Button */}
-                  <Button onClick={processPayment} disabled={!cart.length || isProcessing || isCheckingStock || isPrinting || settingsLoading || !!splitError} 
-                    className="w-full h-12 text-base font-semibold" size="lg"> {/* Larger button */}
+                  <Button 
+                    onClick={processPayment} 
+                    disabled={!cart.length || isProcessing || isCheckingStock || isPrinting || settingsLoading || !canProcessPayment} 
+                    className="w-full h-12 text-base font-semibold" 
+                    size="lg"
+                    variant={canProcessPayment ? 'default' : 'secondary'}
+                  >
                     {isProcessing || isCheckingStock ? (
-                      <><RefreshCw className="w-5 h-5 mr-3 animate-spin" />{isCheckingStock ? 'Checking Stock...' : 'Processing...'}</> /* Larger icon */
+                      <><RefreshCw className="w-5 h-5 mr-3 animate-spin" />{isCheckingStock ? 'Checking Stock...' : 'Processing...'}</>
                     ) : isPrinting ? (
-                      <><Printer className="w-5 h-5 mr-3 animate-pulse" />Printing...</> /* Larger icon */
+                      <><Printer className="w-5 h-5 mr-3 animate-pulse" />Printing...</>
                     ) : (
-                      <><Receipt className="w-5 h-5 mr-3" />Pay {formatCurrency(total)}</> /* Larger icon */
+                      <>
+                        <Receipt className="w-5 h-5 mr-3" />
+                        {paymentMethod === 'cash' && amountPaid >= total 
+                          ? `Pay & Change: ₱${(amountPaid - total).toFixed(2)}` 
+                          : paymentMethod === 'split' && (splitPayment.cash + splitPayment.gcash) >= total
+                          ? `Pay (Split)`
+                          : `Pay ${formatCurrency(total)}`}
+                      </>
                     )}
                   </Button>
+
+                  {/* Payment Status */}
+                  {paymentMethod === 'cash' && amountPaid > 0 && amountPaid < total && (
+                    <p className="text-xs text-red-500 text-center">
+                      Need {formatCurrency(total - amountPaid)} more
+                    </p>
+                  )}
+                  {paymentMethod === 'split' && (splitPayment.cash + splitPayment.gcash) > 0 && 
+                   (splitPayment.cash + splitPayment.gcash) < total && (
+                    <p className="text-xs text-red-500 text-center">
+                      Need {formatCurrency(total - (splitPayment.cash + splitPayment.gcash))} more
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Side Buttons - Larger */}
-            <div className="flex flex-col gap-3 w-12"> {/* Increased gap and width */}
+            {/* Side Buttons */}
+            <div className="flex flex-col gap-3 w-12">
               <Button onClick={saveOrder} disabled={!cart.length || isProcessing || isCheckingStock || isPrinting} 
-                variant="default" size="icon" className="h-12 w-12 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg" title="Save Order"> {/* Larger button */}
-                <Save className="h-5 w-5" /> {/* Larger icon */}
+                variant="default" size="icon" className="h-12 w-12 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg" title="Save Order">
+                <Save className="h-5 w-5" />
               </Button>
               <Button onClick={() => setShowSavedOrders(!showSavedOrders)} variant="outline" size="icon" 
-                className="h-12 w-12 rounded-full" title="Saved Orders"> {/* Larger button */}
-                <History className="h-5 w-5" /> {/* Larger icon */}
+                className="h-12 w-12 rounded-full" title="Saved Orders">
+                <History className="h-5 w-5" />
               </Button>
               <Button onClick={fetchStockAlerts} variant="outline" size="icon" 
-                className="h-12 w-12 rounded-full" title="Refresh Stock Alerts"> {/* Larger button */}
-                <RefreshCw className="h-5 w-5" /> {/* Larger icon */}
+                className="h-12 w-12 rounded-full" title="Refresh Stock Alerts">
+                <RefreshCw className="h-5 w-5" />
               </Button>
             </div>
           </div>
         </div>
 
         {/* Shift Reminder */}
-        <div className="mt-8 bg-muted/40 border rounded-lg p-5 text-base"> {/* Increased padding and text */}
-          <p className="font-medium mb-2 flex items-center gap-3"> {/* Increased gap */}
-            <Clock className="h-5 w-5" /> {/* Larger icon */}
+        <div className="mt-8 bg-muted/40 border rounded-lg p-5 text-base">
+          <p className="font-medium mb-2 flex items-center gap-3">
+            <Clock className="h-5 w-5" />
             Quick reminder
           </p>
           <p className="text-muted-foreground">
@@ -2389,12 +2568,12 @@ const handlePrintReceipt = useCallback(async () => {
 
       {/* Saved Orders Panel */}
       {showSavedOrders && (
-        <div className="fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl z-50 overflow-hidden flex flex-col"> {/* Already larger width */}
-          <div className="p-5 border-b flex justify-between items-center"> {/* Increased padding */}
-            <h3 className="font-semibold text-lg flex items-center gap-2"> {/* Larger text */}
-              <Save className="w-5 h-5" />Saved Orders ({savedOrders.length}) {/* Larger icon */}
+        <div className="fixed inset-y-0 right-0 w-96 bg-card border-l shadow-xl z-50 overflow-hidden flex flex-col">
+          <div className="p-5 border-b flex justify-between items-center">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Save className="w-5 h-5" />Saved Orders ({savedOrders.length})
             </h3>
-            <div className="flex items-center gap-2"> {/* Increased gap */}
+            <div className="flex items-center gap-2">
               {savedOrders.length > 0 && (
                 <Button 
                   variant="destructive" 
@@ -2405,47 +2584,52 @@ const handlePrintReceipt = useCallback(async () => {
                   Clear All
                 </Button>
               )}
-              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setShowSavedOrders(false)}> {/* Larger button */}
-                <X className="h-5 w-5" /> {/* Larger icon */}
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setShowSavedOrders(false)}>
+                <X className="h-5 w-5" />
               </Button>
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-5 space-y-4"> {/* Increased padding and spacing */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {!savedOrders.length ? (
-              <div className="text-center py-10 text-muted-foreground"> {/* Increased padding */}
-                <Save className="h-16 w-16 mx-auto mb-4 opacity-20" /> {/* Larger icon */}
-                <p className="text-base">No saved orders</p> {/* Larger text */}
+              <div className="text-center py-10 text-muted-foreground">
+                <Save className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                <p className="text-base">No saved orders</p>
               </div>
             ) : (
               savedOrders.map(order => (
-                <Card key={order.id} className="p-4"> {/* Increased padding */}
-                  <div className="space-y-3"> {/* Increased spacing */}
+                <Card key={order.id} className="p-4">
+                  <div className="space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-sm font-mono font-medium">{order.orderNumber}</p> {/* Larger text */}
-                        <p className="text-sm text-muted-foreground">{formatDate(order.timestamp)}</p> {/* Larger text */}
+                        <p className="text-sm font-mono font-medium">{order.orderNumber}</p>
+                        <p className="text-sm text-muted-foreground">{formatDate(order.timestamp)}</p>
                       </div>
-                      <Badge variant="outline" className="text-xs px-2 py-1">{order.status}</Badge> {/* Larger badge */}
+                      <Badge variant="outline" className="text-xs px-2 py-1">{order.status}</Badge>
                     </div>
-                    <div className="text-sm"> {/* Larger text */}
+                    <div className="text-sm">
                       <p className="font-medium">{order.customerName}</p>
                       {order.seniorPwdCount && order.seniorPwdCount > 0 && (
-                        <p className="text-green-600 text-xs"> {/* Larger text */}
+                        <p className="text-green-600 text-xs">
                           Senior/PWD: {order.seniorPwdCount} item(s)
                         </p>
                       )}
                       <p className="text-muted-foreground">{order.items.length} items • {formatCurrency(order.total)}</p>
+                      {order.paymentMethod === 'cash' && order.amountPaid && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Paid: {formatCurrency(order.amountPaid)} | Change: {formatCurrency(order.change || 0)}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex gap-3 pt-2"> {/* Increased gap */}
-                      <Button size="default" variant="default" className="h-9 text-sm flex-1" onClick={() => loadSavedOrder(order)} disabled={isProcessing || isCheckingStock || isPrinting}> {/* Larger button */}
+                    <div className="flex gap-3 pt-2">
+                      <Button size="default" variant="default" className="h-9 text-sm flex-1" onClick={() => loadSavedOrder(order)} disabled={isProcessing || isCheckingStock || isPrinting}>
                         Load
                       </Button>
-                      <Button size="default" variant="outline" className="h-9 w-9 p-0" onClick={() => handleReprintReceipt(order)} title="Reprint" disabled={isPrinting}> {/* Larger button */}
-                        <Printer className="h-4 w-4" /> {/* Larger icon */}
+                      <Button size="default" variant="outline" className="h-9 w-9 p-0" onClick={() => handleReprintReceipt(order)} title="Reprint" disabled={isPrinting}>
+                        <Printer className="h-4 w-4" />
                       </Button>
-                      <Button size="default" variant="destructive" className="h-9 w-9 p-0" onClick={() => deleteSavedOrder(order.id)} title="Delete"> {/* Larger button */}
-                        <Trash2 className="h-4 w-4" /> {/* Larger icon */}
+                      <Button size="default" variant="destructive" className="h-9 w-9 p-0" onClick={() => deleteSavedOrder(order.id)} title="Delete">
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -2483,40 +2667,40 @@ const handlePrintReceipt = useCallback(async () => {
         />
       )}
 
-      {/* Insufficient Stock Modal - Larger */}
+      {/* Insufficient Stock Modal */}
       {showInsufficientStockModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"> {/* Increased padding */}
-          <div className="w-full max-w-xl rounded-lg bg-white dark:bg-black border p-8"> {/* Larger max width and padding */}
-            <div className="mb-6 flex items-center gap-4"> {/* Increased margin and gap */}
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100"><PackageX className="h-8 w-8 text-red-600" /></div> {/* Larger container */}
-              <div><h3 className="text-2xl font-semibold">Insufficient Stock</h3><p className="text-base text-gray-600">Some items cannot be fulfilled</p></div> {/* Larger text */}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6">
+          <div className="w-full max-w-xl rounded-lg bg-white dark:bg-black border p-8">
+            <div className="mb-6 flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100"><PackageX className="h-8 w-8 text-red-600" /></div>
+              <div><h3 className="text-2xl font-semibold">Insufficient Stock</h3><p className="text-base text-gray-600">Some items cannot be fulfilled</p></div>
             </div>
             
-            <div className="mb-8 max-h-80 overflow-y-auto space-y-4"> {/* Increased margin and spacing */}
+            <div className="mb-8 max-h-80 overflow-y-auto space-y-4">
               {insufficientStockItems.map((item, i) => (
-                <div key={i} className="rounded-lg border border-red-200 bg-red-50 p-4"> {/* Increased padding */}
+                <div key={i} className="rounded-lg border border-red-200 bg-red-50 p-4">
                   <div className="flex justify-between">
                     <div>
-                      <p className="font-medium text-base">{item.name}</p> {/* Larger text */}
-                      <p className="text-sm">Required: {item.requiredQuantity} {item.unit}</p> {/* Larger text */}
-                      <p className="text-sm">Available: {item.currentStock} {item.unit}</p> {/* Larger text */}
+                      <p className="font-medium text-base">{item.name}</p>
+                      <p className="text-sm">Required: {item.requiredQuantity} {item.unit}</p>
+                      <p className="text-sm">Available: {item.currentStock} {item.unit}</p>
                     </div>
-                    <span className="text-base font-medium text-red-600">Short: {item.shortBy} {item.unit}</span> {/* Larger text */}
+                    <span className="text-base font-medium text-red-600">Short: {item.shortBy} {item.unit}</span>
                   </div>
                 </div>
               ))}
             </div>
             
-            <div className="flex justify-end gap-4"> {/* Increased gap */}
+            <div className="flex justify-end gap-4">
               <Button variant="outline" onClick={() => { setShowInsufficientStockModal(false); setInsufficientStockItems([]); }} 
-                size="lg" className="text-base h-11 px-5">Close</Button> {/* Larger button */}
+                size="lg" className="text-base h-11 px-5">Close</Button>
               <Button variant="destructive" onClick={() => {
                 const names = new Set(insufficientStockItems.map((i: InsufficientStockItem) => i.name));
                 setCart(prev => prev.filter(item => !item.ingredients?.some(ing => names.has(ing.name))));
                 setShowInsufficientStockModal(false);
                 setInsufficientStockItems([]);
                 toast.info('Removed unavailable items');
-              }} size="lg" className="text-base h-11 px-5">Remove Unavailable</Button> {/* Larger button */}
+              }} size="lg" className="text-base h-11 px-5">Remove Unavailable</Button>
             </div>
           </div>
         </div>
