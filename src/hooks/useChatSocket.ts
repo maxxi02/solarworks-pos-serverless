@@ -53,8 +53,8 @@ export function useChatSocket({
     socket.on(
       "chat:conversations:loaded",
       (data: ConversationsLoadedPayload) => {
-        store.setConversations(data.conversations);
-        store.setLoadingConversations(false);
+        useChatStore.getState().setConversations(data.conversations);
+        useChatStore.getState().setLoadingConversations(false);
       },
     );
 
@@ -120,7 +120,7 @@ export function useChatSocket({
 
     // ─── DM created ───────────────────────────────────────────
     socket.on("chat:direct:created", (data: ConversationWithId) => {
-      store.upsertConversation(data);
+      useChatStore.getState().upsertConversation(data);
       openConversationRef.current(data._id);
     });
 

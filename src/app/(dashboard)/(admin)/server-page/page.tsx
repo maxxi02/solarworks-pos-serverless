@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSession } from "@/lib/auth-client"; // adjust to your better-auth client import
+import { useSession } from "@/lib/auth-client";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { useChatStore } from "@/store/chatStore";
 import { ConversationSidebar } from "./_components/ConversationSidebar";
@@ -21,7 +21,7 @@ export default function MessagingPage() {
   const [showDMModal, setShowDMModal] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const { isConnected, setActiveConversation, activeConversationId } =
+  const { isConnected, setActiveConversation } =
     useChatStore();
 
   const { openConversation, loadMoreMessages, openDM } = useChatSocket({
