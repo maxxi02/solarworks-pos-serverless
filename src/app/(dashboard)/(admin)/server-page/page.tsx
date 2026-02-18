@@ -21,7 +21,8 @@ export default function MessagingPage() {
   const [showDMModal, setShowDMModal] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const { isConnected, setActiveConversation, activeConversationId } = useChatStore();
+  const { isConnected, setActiveConversation, activeConversationId } =
+    useChatStore();
 
   const { openConversation, loadMoreMessages, openDM } = useChatSocket({
     userId: user?.id ?? "",
@@ -34,7 +35,7 @@ export default function MessagingPage() {
       openConversation(conversationId);
       setMobileSidebarOpen(false);
     },
-    [openConversation]
+    [openConversation],
   );
 
   const handleSelectConversation = useCallback(
@@ -43,7 +44,7 @@ export default function MessagingPage() {
       openConversation(id);
       setMobileSidebarOpen(false);
     },
-    [openConversation, setActiveConversation]
+    [openConversation, setActiveConversation],
   );
 
   const handleOpenDM = useCallback(
@@ -51,7 +52,7 @@ export default function MessagingPage() {
       openDM(userId, userName, userAvatar);
       setMobileSidebarOpen(false);
     },
-    [openDM]
+    [openDM],
   );
 
   if (!user) {
@@ -90,7 +91,9 @@ export default function MessagingPage() {
             "w-72 shrink-0 flex flex-col transition-transform duration-200 z-30",
             // Mobile: slide in from left
             "absolute inset-y-0 left-0 lg:relative lg:translate-x-0",
-            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+            mobileSidebarOpen
+              ? "translate-x-0"
+              : "-translate-x-full lg:translate-x-0",
           )}
         >
           <ConversationSidebar

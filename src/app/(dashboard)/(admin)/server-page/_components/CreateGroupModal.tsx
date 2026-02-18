@@ -32,7 +32,7 @@ export function CreateGroupModal({ isOpen, onClose, onCreated, currentUserId }: 
     useEffect(() => {
         if (!isOpen) return;
         setIsLoading(true);
-        fetch("/api/users")
+        fetch("/api/conversations/users")
             .then((r) => r.json())
             .then((data) => setUsers(data.users ?? data))
             .catch(() => setError("Failed to load users"))

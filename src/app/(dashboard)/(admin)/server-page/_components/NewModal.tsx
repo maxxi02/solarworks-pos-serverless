@@ -25,7 +25,7 @@ export function NewDMModal({ isOpen, onClose, onSelectUser, currentUserId }: New
     useEffect(() => {
         if (!isOpen) { setSearch(""); return; }
         setIsLoading(true);
-        fetch("/api/users")
+        fetch("/api/conversations/users")
             .then((r) => r.json())
             .then((data) => setUsers(data.users ?? data))
             .catch(console.error)

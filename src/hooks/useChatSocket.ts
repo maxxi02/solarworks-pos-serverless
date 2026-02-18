@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from "react";
-import { socketClient } from "@/lib/socket-client"; 
+import { socketClient } from "@/lib/socket-client";
 import { useChatStore } from "@/store/chatStore";
 import {
   ConversationWithId,
@@ -26,13 +26,14 @@ export function useChatSocket({
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
   );
+  const openConversationRef = useRef<(id: string) => void>(() => {});
 
-  // ─── Connect & wire listeners ────────────────────────────────
   useEffect(() => {
+    if (!userId) return;
+
     const socket = socketClient.connect(userId, userName, userAvatar);
 
-    store.setConnected(socket.connected);
-
+    // ─── Connection ───────────────────────────────────────────
     socket.on("connect", () => {
       store.setConnected(true);
       socketClient.emitOnline();
@@ -41,7 +42,14 @@ export function useChatSocket({
 
     socket.on("disconnect", () => store.setConnected(false));
 
-    // Conversations
+    // If already connected when effect runs
+    if (socket.connected) {
+      store.setConnected(true);
+      socketClient.emitOnline();
+      socketClient.emitChatConversationsLoad();
+    }
+
+    // ─── Conversations ────────────────────────────────────────
     socket.on(
       "chat:conversations:loaded",
       (data: ConversationsLoadedPayload) => {
@@ -54,7 +62,7 @@ export function useChatSocket({
       store.upsertConversation(data);
     });
 
-    // Messages
+    // ─── Messages ─────────────────────────────────────────────
     socket.on("chat:messages:loaded", (data: MessagesLoadedPayload) => {
       store.setMessages(
         data.conversationId,
@@ -67,7 +75,6 @@ export function useChatSocket({
 
     socket.on("chat:message:received", (data: MessageSentPayload) => {
       store.addMessage(data.conversationId, data.message);
-      // Update last message preview in conversation list
       store.upsertConversation({
         ...store.conversations.find((c) => c._id === data.conversationId)!,
         lastMessage: {
@@ -81,7 +88,6 @@ export function useChatSocket({
         updatedAt: new Date(),
       } as ConversationWithId);
 
-      // Increment unread if not active conversation
       if (
         data.conversationId !== store.activeConversationId &&
         data.message.senderId !== userId
@@ -90,12 +96,11 @@ export function useChatSocket({
       }
     });
 
-    // Typing
+    // ─── Typing ───────────────────────────────────────────────
     socket.on("chat:typing:updated", (payload: TypingPayload) => {
       if (payload.userId === userId) return;
       store.setTyping(payload);
 
-      // Auto-clear typing after 4 seconds
       if (payload.isTyping) {
         const key = `${payload.conversationId}:${payload.userId}`;
         clearTimeout(typingTimers.current[key]);
@@ -105,7 +110,7 @@ export function useChatSocket({
       }
     });
 
-    // Read receipts
+    // ─── Read receipts ────────────────────────────────────────
     socket.on(
       "chat:messages:read:ack",
       ({ conversationId }: { conversationId: string }) => {
@@ -113,18 +118,11 @@ export function useChatSocket({
       },
     );
 
-    // DM conversation created
+    // ─── DM created ───────────────────────────────────────────
     socket.on("chat:direct:created", (data: ConversationWithId) => {
       store.upsertConversation(data);
-      store.setActiveConversation(data._id);
+      openConversationRef.current(data._id);
     });
-
-    // Load initial data
-    store.setLoadingConversations(true);
-    if (socket.connected) {
-      socketClient.emitOnline();
-      socketClient.emitChatConversationsLoad();
-    }
 
     return () => {
       socket.off("connect");
@@ -153,6 +151,10 @@ export function useChatSocket({
     [userId, store],
   );
 
+  useEffect(() => {
+    openConversationRef.current = openConversation;
+  }, [openConversation]);
+
   const loadMoreMessages = useCallback(
     (conversationId: string) => {
       const cursor = store.cursors[conversationId];
@@ -171,7 +173,6 @@ export function useChatSocket({
       targetUserName: string,
       targetUserAvatar?: string,
     ) => {
-      // Check if DM already exists
       const existing = store.conversations.find(
         (c) =>
           c.type === "direct" &&
@@ -190,11 +191,11 @@ export function useChatSocket({
     [store.conversations, openConversation],
   );
 
-  let typingTimeout: ReturnType<typeof setTimeout> | null = null;
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleTyping = useCallback((conversationId: string) => {
     socketClient.emitChatTypingUpdate(conversationId, true);
-    if (typingTimeout) clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
       socketClient.emitChatTypingUpdate(conversationId, false);
     }, 2500);
   }, []);
