@@ -4,12 +4,16 @@ import { ObjectId } from "mongodb";
 
 export interface Conversation {
   _id: ObjectId | string;
-  participants: string[]; // user IDs (better-auth `id` field)
+  participants: string[];
   participantDetails: ConversationParticipant[];
+  isGroup: boolean;
+  groupName?: string;
+  groupImage?: string;
+  adminIds?: string[];
   lastMessage?: MessagePreview;
   createdAt: Date;
   updatedAt: Date;
-  unreadCount?: number; // populated per-user on fetch
+  unreadCount?: number;
 }
 
 export interface ConversationParticipant {
@@ -23,6 +27,7 @@ export interface ConversationParticipant {
 export interface MessagePreview {
   content: string;
   senderId: string;
+  senderName: string;
   sentAt: Date;
 }
 
@@ -33,7 +38,7 @@ export interface Message {
   senderName: string;
   senderImage?: string;
   content: string;
-  type: "text";
+  type: "text" | "system";
   readBy: ReadReceipt[];
   createdAt: Date;
   updatedAt: Date;
@@ -47,7 +52,10 @@ export interface ReadReceipt {
 // ─── API Response Types ───────────────────────────────────────────
 
 export interface ConversationWithDetails extends Conversation {
-  otherParticipant: ConversationParticipant;
+  // For DMs — the other person
+  otherParticipant?: ConversationParticipant;
+  // For groups — all members
+  members?: ConversationParticipant[];
 }
 
 export interface MessagesResponse {
@@ -61,7 +69,7 @@ export interface MessagesResponse {
 export interface DmSendPayload {
   conversationId: string;
   content: string;
-  tempId: string; // client-side temp ID for optimistic updates
+  tempId: string;
 }
 
 export interface DmReceivePayload {
@@ -84,6 +92,18 @@ export interface DmReadPayload {
 
 export interface DmConversationJoinPayload {
   conversationId: string;
+}
+
+// ─── Group Payloads ───────────────────────────────────────────────
+
+export interface GroupCreatePayload {
+  name: string;
+  memberIds: string[];
+}
+
+export interface GroupCreatedPayload {
+  conversationId: string;
+  name: string;
 }
 
 // ─── UI State Types ───────────────────────────────────────────────

@@ -14,7 +14,7 @@ interface MessagingPageProps {
     currentUserImage?: string;
 }
 
-export default function MessagesPage({
+export function MessagingPage({
     currentUserId,
     currentUserName,
     currentUserImage,
@@ -22,7 +22,7 @@ export default function MessagesPage({
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
-    const { conversations, isLoading, startConversation } =
+    const { conversations, isLoading, startConversation, createGroup } =
         useConversations(currentUserId);
 
     const activeConversation = conversations.find(
@@ -42,34 +42,35 @@ export default function MessagesPage({
         }
     };
 
+    const handleCreateGroup = async (groupName: string, memberIds: string[]) => {
+        const convId = await createGroup(groupName, memberIds);
+        if (convId) {
+            setActiveConversationId(convId);
+            setMobileView("chat");
+        }
+    };
+
     return (
         <div className="flex h-full w-full overflow-hidden bg-background">
-            {/* Sidebar - conversation list */}
-            <aside
-                className={cn(
-                    "w-full md:w-80 lg:w-72 xl:w-80 flex-shrink-0 h-full",
-                    // Mobile: show only when on list view
-                    mobileView === "chat" ? "hidden md:flex md:flex-col" : "flex flex-col"
-                )}
-            >
+            <aside className={cn(
+                "w-full md:w-80 lg:w-72 xl:w-80 flex-shrink-0 h-full",
+                mobileView === "chat" ? "hidden md:flex md:flex-col" : "flex flex-col"
+            )}>
                 <ConversationList
                     conversations={conversations}
                     isLoading={isLoading}
                     activeConversationId={activeConversationId}
                     onSelectConversation={handleSelectConversation}
                     onStartNewDM={handleStartNewDM}
+                    onCreateGroup={handleCreateGroup}
                     currentUserId={currentUserId}
                 />
             </aside>
 
-            {/* Main chat panel */}
-            <main
-                className={cn(
-                    "flex-1 h-full flex flex-col",
-                    // Mobile: show only when on chat view
-                    mobileView === "list" ? "hidden md:flex" : "flex"
-                )}
-            >
+            <main className={cn(
+                "flex-1 h-full flex flex-col",
+                mobileView === "list" ? "hidden md:flex" : "flex"
+            )}>
                 {activeConversation ? (
                     <ChatWindow
                         conversation={activeConversation}
@@ -94,7 +95,7 @@ function EmptyState() {
             </div>
             <h3 className="font-semibold text-base mb-1">Your messages</h3>
             <p className="text-sm text-muted-foreground max-w-xs">
-                Select a conversation from the sidebar or start a new one using the + button.
+                Select a conversation or use the buttons above to start a DM or create a group.
             </p>
         </div>
     );

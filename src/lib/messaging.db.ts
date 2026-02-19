@@ -1,25 +1,18 @@
 import { Db, ObjectId } from "mongodb";
 
-// ─── Collection Names ─────────────────────────────────────────────
-
 export const COLLECTIONS = {
   CONVERSATIONS: "conversations",
   MESSAGES: "messages",
-  USERS: "user", // better-auth uses "user" (singular)
+  USERS: "user",
 } as const;
 
-// ─── Index Setup (run once on startup) ───────────────────────────
-
 export async function ensureMessagingIndexes(db: Db): Promise<void> {
-  // Conversations: fast lookup by participant
   await db
     .collection(COLLECTIONS.CONVERSATIONS)
     .createIndex({ participants: 1 }, { background: true });
   await db
     .collection(COLLECTIONS.CONVERSATIONS)
     .createIndex({ participants: 1, updatedAt: -1 }, { background: true });
-
-  // Messages: fast lookup by conversation + time
   await db
     .collection(COLLECTIONS.MESSAGES)
     .createIndex({ conversationId: 1, createdAt: -1 }, { background: true });
@@ -29,11 +22,8 @@ export async function ensureMessagingIndexes(db: Db): Promise<void> {
       { conversationId: 1, "readBy.userId": 1 },
       { background: true },
     );
-
   console.log("✅ Messaging indexes ensured");
 }
-
-// ─── Conversation Helpers ─────────────────────────────────────────
 
 export function getConversationsCollection(db: Db) {
   return db.collection(COLLECTIONS.CONVERSATIONS);
@@ -47,7 +37,22 @@ export function getUsersCollection(db: Db) {
   return db.collection(COLLECTIONS.USERS);
 }
 
-// ─── Find or Create DM Conversation ──────────────────────────────
+// ─── User Resolution ──────────────────────────────────────────────
+
+export async function resolveUser(db: Db, userId: string) {
+  const users = getUsersCollection(db);
+  let user = await users.findOne({ id: userId });
+  if (user) return { user, resolvedId: userId };
+  try {
+    user = await users.findOne({ _id: new ObjectId(userId) });
+    if (user) return { user, resolvedId: user._id.toString() };
+  } catch {
+    /* not a valid ObjectId */
+  }
+  return { user: null, resolvedId: userId };
+}
+
+// ─── DM Conversation ──────────────────────────────────────────────
 
 export async function findOrCreateDMConversation(
   db: Db,
@@ -56,46 +61,84 @@ export async function findOrCreateDMConversation(
 ): Promise<string> {
   const conversations = getConversationsCollection(db);
 
-  // Check if DM already exists between these two users
+  const [resA, resB] = await Promise.all([
+    resolveUser(db, userAId),
+    resolveUser(db, userBId),
+  ]);
+
+  const idA = resA.resolvedId;
+  const idB = resB.resolvedId;
+
   const existing = await conversations.findOne({
-    participants: { $all: [userAId, userBId], $size: 2 },
+    participants: { $all: [idA, idB], $size: 2 },
     isGroup: false,
   });
 
-  if (existing) {
-    return existing._id.toString();
-  }
+  if (existing) return existing._id.toString();
 
-  const toUserFilter = (id: string) => ({
-    $or: [{ id }, { _id: new ObjectId(id) }],
-  });
-
-  // Fetch both users for participant details
-  const users = getUsersCollection(db);
-  const [userA, userB] = await Promise.all([
-    users.findOne(toUserFilter(userAId)),
-    users.findOne(toUserFilter(userBId)),
-  ]);
   const now = new Date();
   const result = await conversations.insertOne({
-    participants: [userAId, userBId],
+    participants: [idA, idB],
     participantDetails: [
       {
-        userId: userAId,
-        name: userA?.name || "Unknown",
-        image: userA?.image || null,
-        isOnline: userA?.isOnline || false,
-        lastSeen: userA?.lastSeen || now,
+        userId: idA,
+        name: (resA.user?.name as string) || "Unknown",
+        image: (resA.user?.image as string) || null,
+        isOnline: (resA.user?.isOnline as boolean) || false,
+        lastSeen: (resA.user?.lastSeen as Date) || now,
       },
       {
-        userId: userBId,
-        name: userB?.name || "Unknown",
-        image: userB?.image || null,
-        isOnline: userB?.isOnline || false,
-        lastSeen: userB?.lastSeen || now,
+        userId: idB,
+        name: (resB.user?.name as string) || "Unknown",
+        image: (resB.user?.image as string) || null,
+        isOnline: (resB.user?.isOnline as boolean) || false,
+        lastSeen: (resB.user?.lastSeen as Date) || now,
       },
     ],
     isGroup: false,
+    lastMessage: null,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return result.insertedId.toString();
+}
+
+// ─── Group Conversation ───────────────────────────────────────────
+
+export async function createGroupConversation(
+  db: Db,
+  creatorId: string,
+  memberIds: string[],
+  groupName: string,
+): Promise<string> {
+  const conversations = getConversationsCollection(db);
+
+  // Resolve all members including creator
+  const allIds = [...new Set([creatorId, ...memberIds])];
+  const resolved = await Promise.all(allIds.map((id) => resolveUser(db, id)));
+
+  const participants = resolved.map((r) => r.resolvedId);
+  const creatorResolved = resolved.find(
+    (r) => r.resolvedId === creatorId || r.user?._id.toString() === creatorId,
+  );
+  const creatorResolvedId = creatorResolved?.resolvedId ?? creatorId;
+
+  const now = new Date();
+
+  const result = await conversations.insertOne({
+    participants,
+    participantDetails: resolved.map((r) => ({
+      userId: r.resolvedId,
+      name: (r.user?.name as string) || "Unknown",
+      image: (r.user?.image as string) || null,
+      isOnline: (r.user?.isOnline as boolean) || false,
+      lastSeen: (r.user?.lastSeen as Date) || now,
+    })),
+    isGroup: true,
+    groupName,
+    groupImage: null,
+    adminIds: [creatorResolvedId], // creator is admin
     lastMessage: null,
     createdAt: now,
     updatedAt: now,
@@ -114,6 +157,7 @@ export async function insertMessage(
     senderName: string;
     senderImage?: string;
     content: string;
+    type?: "text" | "system";
   },
 ) {
   const messages = getMessagesCollection(db);
@@ -126,7 +170,7 @@ export async function insertMessage(
     senderName: data.senderName,
     senderImage: data.senderImage || null,
     content: data.content,
-    type: "text",
+    type: data.type ?? "text",
     readBy: [{ userId: data.senderId, readAt: now }],
     createdAt: now,
     updatedAt: now,
@@ -134,7 +178,6 @@ export async function insertMessage(
 
   const result = await messages.insertOne(messageDoc);
 
-  // Update conversation's lastMessage + updatedAt
   await conversations.updateOne(
     { _id: new ObjectId(data.conversationId) },
     {
@@ -142,6 +185,7 @@ export async function insertMessage(
         lastMessage: {
           content: data.content,
           senderId: data.senderId,
+          senderName: data.senderName,
           sentAt: now,
         },
         updatedAt: now,
@@ -162,7 +206,6 @@ export async function markMessagesAsRead(
   const messages = getMessagesCollection(db);
   const now = new Date();
 
-  // Find unread messages in this conversation not sent by this user
   const unread = await messages
     .find({
       conversationId,

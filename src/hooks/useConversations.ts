@@ -1,16 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { socketClient } from "@/lib/socket-client"; // ← your existing singleton
-import type {
-  ConversationWithDetails,
-  DmReceivePayload,
-} from "@/types/messaging.types";
+import { socketClient } from "@/lib/socket-client";
+import type { ConversationWithDetails, DmReceivePayload } from "@/types/messaging.types";
 
 export function useConversations(currentUserId: string) {
-  const [conversations, setConversations] = useState<ConversationWithDetails[]>(
-    [],
-  );
+  const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,9 +14,7 @@ export function useConversations(currentUserId: string) {
       setIsLoading(true);
       const res = await fetch("/api/conversations");
       if (!res.ok) throw new Error("Failed to fetch conversations");
-      const data = (await res.json()) as {
-        conversations: ConversationWithDetails[];
-      };
+      const data = await res.json() as { conversations: ConversationWithDetails[] };
       setConversations(data.conversations);
     } catch (err) {
       setError("Failed to load conversations");
@@ -35,7 +28,6 @@ export function useConversations(currentUserId: string) {
     fetchConversations();
   }, [fetchConversations]);
 
-  // ── Real-time updates via existing socketClient ───────────────
   useEffect(() => {
     const socket = socketClient.getSocket();
     if (!socket) return;
@@ -49,6 +41,7 @@ export function useConversations(currentUserId: string) {
             lastMessage: {
               content: payload.message.content,
               senderId: payload.message.senderId,
+              senderName: payload.message.senderName,
               sentAt: new Date(payload.message.createdAt),
             },
             updatedAt: new Date(payload.message.createdAt),
@@ -67,23 +60,22 @@ export function useConversations(currentUserId: string) {
       });
     };
 
-    const handleStatusChange = (data: {
-      userId: string;
-      isOnline: boolean;
-      lastSeen: Date;
-    }) => {
+    const handleStatusChange = (data: { userId: string; isOnline: boolean; lastSeen: Date }) => {
       setConversations((prev) =>
         prev.map((conv) => {
-          if (conv.otherParticipant.userId !== data.userId) return conv;
+          if (conv.isGroup) {
+            // Update member status in group
+            const members = conv.members?.map((m) =>
+              m.userId === data.userId ? { ...m, isOnline: data.isOnline, lastSeen: data.lastSeen } : m
+            );
+            return { ...conv, members };
+          }
+          if (conv.otherParticipant?.userId !== data.userId) return conv;
           return {
             ...conv,
-            otherParticipant: {
-              ...conv.otherParticipant,
-              isOnline: data.isOnline,
-              lastSeen: data.lastSeen,
-            },
+            otherParticipant: { ...conv.otherParticipant!, isOnline: data.isOnline, lastSeen: data.lastSeen },
           };
-        }),
+        })
       );
     };
 
@@ -91,22 +83,30 @@ export function useConversations(currentUserId: string) {
       if (data.userId !== currentUserId) return;
       setConversations((prev) =>
         prev.map((conv) =>
-          conv._id === data.conversationId ? { ...conv, unreadCount: 0 } : conv,
-        ),
+          conv._id === data.conversationId ? { ...conv, unreadCount: 0 } : conv
+        )
       );
+    };
+
+    // When a group is created, refresh the list
+    const handleGroupCreated = () => {
+      fetchConversations();
     };
 
     socket.on("dm:receive", handleNewMessage);
     socket.on("user:status:changed", handleStatusChange);
     socket.on("dm:read", handleRead);
+    socket.on("group:created", handleGroupCreated);
 
     return () => {
       socket.off("dm:receive", handleNewMessage);
       socket.off("user:status:changed", handleStatusChange);
       socket.off("dm:read", handleRead);
+      socket.off("group:created", handleGroupCreated);
     };
-  }, [currentUserId]);
+  }, [currentUserId, fetchConversations]);
 
+  // Start a DM
   const startConversation = useCallback(
     async (targetUserId: string): Promise<string | null> => {
       try {
@@ -116,7 +116,7 @@ export function useConversations(currentUserId: string) {
           body: JSON.stringify({ targetUserId }),
         });
         if (!res.ok) throw new Error("Failed to start conversation");
-        const data = (await res.json()) as { conversationId: string };
+        const data = await res.json() as { conversationId: string };
         await fetchConversations();
         return data.conversationId;
       } catch (err) {
@@ -127,11 +127,26 @@ export function useConversations(currentUserId: string) {
     [fetchConversations],
   );
 
-  return {
-    conversations,
-    isLoading,
-    error,
-    refetch: fetchConversations,
-    startConversation,
-  };
+  // Create a group
+  const createGroup = useCallback(
+    async (groupName: string, memberIds: string[]): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ groupName, memberIds }),
+        });
+        if (!res.ok) throw new Error("Failed to create group");
+        const data = await res.json() as { conversationId: string };
+        await fetchConversations();
+        return data.conversationId;
+      } catch (err) {
+        console.error(err);
+        return null;
+      }
+    },
+    [fetchConversations],
+  );
+
+  return { conversations, isLoading, error, refetch: fetchConversations, startConversation, createGroup };
 }

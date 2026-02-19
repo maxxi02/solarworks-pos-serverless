@@ -2,15 +2,14 @@
 
 import { useState, useRef, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
-
-import { Search, MessageSquarePlus, Loader2 } from "lucide-react";
+import type { ConversationWithDetails } from "@/types/messaging.types";
+import { Search, MessageSquarePlus, Users, Loader2, X, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { ConversationWithDetails } from "@/types/messaging.types";
 
 interface ConversationListProps {
     conversations: ConversationWithDetails[];
@@ -18,6 +17,7 @@ interface ConversationListProps {
     activeConversationId: string | null;
     onSelectConversation: (id: string) => void;
     onStartNewDM: (targetUserId: string) => void;
+    onCreateGroup: (groupName: string, memberIds: string[]) => void;
     currentUserId: string;
 }
 
@@ -30,52 +30,103 @@ interface UserSearchResult {
     role: string;
 }
 
+type PanelMode = "none" | "dm" | "group";
+
 export function ConversationList({
     conversations,
     isLoading,
     activeConversationId,
     onSelectConversation,
     onStartNewDM,
+    onCreateGroup,
     currentUserId,
 }: ConversationListProps) {
     const [searchQuery, setSearchQuery] = useState("");
-    const [showNewDM, setShowNewDM] = useState(false);
-    const [userSearch, setUserSearch] = useState("");
-    const [userResults, setUserResults] = useState<UserSearchResult[]>([]);
+    const [panelMode, setPanelMode] = useState<PanelMode>("none");
+
+    // DM state
+    const [dmSearch, setDmSearch] = useState("");
+    const [dmResults, setDmResults] = useState<UserSearchResult[]>([]);
+
+    // Group state
+    const [groupSearch, setGroupSearch] = useState("");
+    const [groupResults, setGroupResults] = useState<UserSearchResult[]>([]);
+    const [selectedMembers, setSelectedMembers] = useState<UserSearchResult[]>([]);
+    const [groupName, setGroupName] = useState("");
+    const [groupStep, setGroupStep] = useState<"members" | "name">("members");
+
     const [isSearching, setIsSearching] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
     const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Filter existing conversations by name
-    const filtered = conversations.filter((c) =>
-        c.otherParticipant.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filtered = conversations.filter((c) => {
+        const name = c.isGroup ? c.groupName : c.otherParticipant?.name;
+        return name?.toLowerCase().includes(searchQuery.toLowerCase());
+    });
 
-    // Search users for new DM
+    // Search users for DM or group
+    const searchQuery2 = panelMode === "dm" ? dmSearch : groupSearch;
     useEffect(() => {
-        if (!showNewDM) return;
-        if (userSearch.length < 2) {
-            setUserResults([]);
+        if (panelMode === "none") return;
+        if (searchQuery2.length < 2) {
+            if (panelMode === "dm") {
+                setDmResults([]);
+            } else {
+                setGroupResults([]);
+            }
             return;
         }
-
         clearTimeout(searchTimer.current!);
         searchTimer.current = setTimeout(async () => {
             setIsSearching(true);
             try {
-                const res = await fetch(`/api/users/search?q=${encodeURIComponent(userSearch)}`);
-                const data = await res.json();
-                setUserResults(data.users || []);
+                const res = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery2)}`);
+                const data = await res.json() as { users: UserSearchResult[] };
+                if (panelMode === "dm") setDmResults(data.users || []);
+                else {
+                    // Exclude already selected members
+                    setGroupResults((data.users || []).filter(
+                        (u) => !selectedMembers.some((m) => m.id === u.id)
+                    ));
+                }
             } finally {
                 setIsSearching(false);
             }
         }, 300);
-    }, [userSearch, showNewDM]);
+    }, [searchQuery2, panelMode, selectedMembers]);
+
+    const closePanel = () => {
+        setPanelMode("none");
+        setDmSearch(""); setDmResults([]);
+        setGroupSearch(""); setGroupResults([]);
+        setSelectedMembers([]); setGroupName("");
+        setGroupStep("members");
+    };
 
     const handleStartDM = (userId: string) => {
         onStartNewDM(userId);
-        setShowNewDM(false);
-        setUserSearch("");
-        setUserResults([]);
+        closePanel();
+    };
+
+    const toggleMember = (user: UserSearchResult) => {
+        setSelectedMembers((prev) =>
+            prev.some((m) => m.id === user.id)
+                ? prev.filter((m) => m.id !== user.id)
+                : [...prev, user]
+        );
+        setGroupSearch("");
+        setGroupResults([]);
+    };
+
+    const handleCreateGroup = async () => {
+        if (!groupName.trim() || selectedMembers.length === 0) return;
+        setIsCreating(true);
+        try {
+            onCreateGroup(groupName.trim(), selectedMembers.map((m) => m.id));
+            closePanel();
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     return (
@@ -84,53 +135,44 @@ export function ConversationList({
             <div className="px-4 py-4 border-b border-border">
                 <div className="flex items-center justify-between mb-3">
                     <h2 className="text-base font-semibold tracking-tight">Messages</h2>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setShowNewDM((v) => !v)}
-                        title="New message"
-                    >
-                        <MessageSquarePlus className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => panelMode === "group" ? closePanel() : (closePanel(), setPanelMode("group"))}
+                            title="New group"
+                        >
+                            <Users className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => panelMode === "dm" ? closePanel() : (closePanel(), setPanelMode("dm"))}
+                            title="New message"
+                        >
+                            <MessageSquarePlus className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
 
-                {/* New DM search */}
-                {showNewDM ? (
+                {/* DM search panel */}
+                {panelMode === "dm" && (
                     <div className="space-y-2">
                         <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input
-                                autoFocus
-                                placeholder="Search people..."
-                                className="pl-8 h-8 text-sm"
-                                value={userSearch}
-                                onChange={(e) => setUserSearch(e.target.value)}
-                            />
+                            <Input autoFocus placeholder="Search people..." className="pl-8 h-8 text-sm"
+                                value={dmSearch} onChange={(e) => setDmSearch(e.target.value)} />
                         </div>
-                        {isSearching && (
-                            <div className="flex justify-center py-2">
-                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                            </div>
-                        )}
-                        {userResults.length > 0 && (
+                        {isSearching && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
+                        {dmResults.length > 0 && (
                             <div className="rounded-md border bg-popover shadow-md overflow-hidden">
-                                {userResults.map((user) => (
-                                    <button
-                                        key={user.id}
-                                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left"
-                                        onClick={() => handleStartDM(user.id)}
-                                    >
+                                {dmResults.map((user) => (
+                                    <button key={user.id} onClick={() => handleStartDM(user.id)}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left">
                                         <div className="relative flex-shrink-0">
                                             <Avatar className="h-7 w-7">
                                                 <AvatarImage src={user.image} />
-                                                <AvatarFallback className="text-xs">
-                                                    {user.name.charAt(0).toUpperCase()}
-                                                </AvatarFallback>
+                                                <AvatarFallback className="text-xs">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
                                             </Avatar>
-                                            {user.isOnline && (
-                                                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-background" />
-                                            )}
+                                            {user.isOnline && <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-background" />}
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium truncate">{user.name}</p>
@@ -141,16 +183,96 @@ export function ConversationList({
                             </div>
                         )}
                     </div>
-                ) : (
-                    /* Filter existing conversations */
+                )}
+
+                {/* Group creation panel */}
+                {panelMode === "group" && (
+                    <div className="space-y-2">
+                        {groupStep === "members" ? (
+                            <>
+                                <p className="text-xs text-muted-foreground">Select members to add</p>
+
+                                {/* Selected members chips */}
+                                {selectedMembers.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {selectedMembers.map((m) => (
+                                            <span key={m.id} className="flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
+                                                {m.name}
+                                                <button onClick={() => toggleMember(m)}><X className="h-3 w-3" /></button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input autoFocus placeholder="Search people..." className="pl-8 h-8 text-sm"
+                                        value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} />
+                                </div>
+
+                                {isSearching && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
+                                {groupResults.length > 0 && (
+                                    <div className="rounded-md border bg-popover shadow-md overflow-hidden max-h-48 overflow-y-auto">
+                                        {groupResults.map((user) => {
+                                            const isSelected = selectedMembers.some((m) => m.id === user.id);
+                                            return (
+                                                <button key={user.id} onClick={() => toggleMember(user)}
+                                                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left">
+                                                    <Avatar className="h-7 w-7 flex-shrink-0">
+                                                        <AvatarImage src={user.image} />
+                                                        <AvatarFallback className="text-xs">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate">{user.name}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{user.role}</p>
+                                                    </div>
+                                                    {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <Button
+                                    className="w-full h-8 text-sm" size="sm"
+                                    disabled={selectedMembers.length === 0}
+                                    onClick={() => setGroupStep("name")}
+                                >
+                                    Next ({selectedMembers.length} selected)
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <button onClick={() => setGroupStep("members")}
+                                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                                    ← Back
+                                </button>
+                                <p className="text-xs text-muted-foreground">
+                                    {selectedMembers.length + 1} members (including you)
+                                </p>
+                                <Input
+                                    autoFocus placeholder="Group name..." className="h-8 text-sm"
+                                    value={groupName} onChange={(e) => setGroupName(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
+                                />
+                                <Button
+                                    className="w-full h-8 text-sm" size="sm"
+                                    disabled={!groupName.trim() || isCreating}
+                                    onClick={handleCreateGroup}
+                                >
+                                    {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Group"}
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {/* Search existing conversations */}
+                {panelMode === "none" && (
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                            placeholder="Search conversations..."
-                            className="pl-8 h-8 text-sm"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                        <Input placeholder="Search conversations..." className="pl-8 h-8 text-sm"
+                            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                     </div>
                 )}
             </div>
@@ -176,7 +298,7 @@ export function ConversationList({
                             {searchQuery ? "No conversations match" : "No messages yet"}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                            Use the + button to start a conversation
+                            Use the buttons above to start a chat or create a group
                         </p>
                     </div>
                 ) : (
@@ -210,62 +332,67 @@ function ConversationItem({
     currentUserId: string;
     onClick: () => void;
 }) {
-    const { otherParticipant, lastMessage, unreadCount } = conversation;
+    const { lastMessage, unreadCount, isGroup } = conversation;
     const hasUnread = (unreadCount || 0) > 0;
 
+    const displayName = isGroup
+        ? conversation.groupName
+        : conversation.otherParticipant?.name;
+
+    const displayImage = isGroup
+        ? conversation.groupImage
+        : conversation.otherParticipant?.image;
+
+    const isOnline = !isGroup && conversation.otherParticipant?.isOnline;
+
+    const lastMsgText = lastMessage
+        ? lastMessage.senderId === currentUserId
+            ? `You: ${lastMessage.content}`
+            : isGroup && lastMessage.senderName
+                ? `${lastMessage.senderName}: ${lastMessage.content}`
+                : lastMessage.content
+        : "Start a conversation";
+
     return (
-        <button
-            onClick={onClick}
+        <button onClick={onClick}
             className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/60 transition-colors text-left",
                 isActive && "bg-accent"
-            )}
-        >
-            {/* Avatar with online dot */}
+            )}>
             <div className="relative flex-shrink-0">
-                <Avatar className="h-9 w-9">
-                    <AvatarImage src={otherParticipant.image} />
-                    <AvatarFallback className="text-sm font-medium">
-                        {otherParticipant.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
-                {otherParticipant.isOnline && (
-                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+                {isGroup ? (
+                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-4 w-4 text-primary" />
+                    </div>
+                ) : (
+                    <>
+                        <Avatar className="h-9 w-9">
+                            <AvatarImage src={displayImage} />
+                            <AvatarFallback className="text-sm font-medium">
+                                {displayName?.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        {isOnline && (
+                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+                        )}
+                    </>
                 )}
             </div>
 
-            {/* Conversation info */}
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
-                    <span
-                        className={cn(
-                            "text-sm truncate",
-                            hasUnread ? "font-semibold" : "font-medium"
-                        )}
-                    >
-                        {otherParticipant.name}
+                    <span className={cn("text-sm truncate", hasUnread ? "font-semibold" : "font-medium")}>
+                        {displayName}
                     </span>
                     {lastMessage && (
                         <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-1">
-                            {formatDistanceToNow(new Date(lastMessage.sentAt), {
-                                addSuffix: false,
-                            })}
+                            {formatDistanceToNow(new Date(lastMessage.sentAt), { addSuffix: false })}
                         </span>
                     )}
                 </div>
-
                 <div className="flex items-center justify-between">
-                    <p
-                        className={cn(
-                            "text-xs truncate",
-                            hasUnread ? "text-foreground" : "text-muted-foreground"
-                        )}
-                    >
-                        {lastMessage
-                            ? lastMessage.senderId === currentUserId
-                                ? `You: ${lastMessage.content}`
-                                : lastMessage.content
-                            : "Start a conversation"}
+                    <p className={cn("text-xs truncate", hasUnread ? "text-foreground" : "text-muted-foreground")}>
+                        {lastMsgText}
                     </p>
                     {hasUnread && (
                         <Badge className="h-4 min-w-4 px-1 text-[10px] ml-1 flex-shrink-0 bg-primary">
