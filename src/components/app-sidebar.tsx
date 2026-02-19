@@ -30,7 +30,7 @@ import { authClient } from "@/lib/auth-client";
 import { ExtendedUser } from "@/types/user.type";
 import { UserRole } from "@/types/role.type";
 import { adminNavigation, staffNavigation } from "@/constants/navigation";
-import { SocketProvider, useSocket } from "@/hooks/useSocket"; // Import both
+import { useSocket } from "@/hooks/useSocket";
 
 const storeData = {
   name: "SolarWorks POS",
@@ -254,17 +254,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     // Wrap the profile content with SocketProvider
     return (
-      <SocketProvider
-        userId={user.id}
-        userName={user.name!}
-        userAvatar={user.image!}
-      >
-        <UserProfileContent
-          user={user}
-          isLoggingOut={isLoggingOut}
-          onLogout={handleLogout}
-        />
-      </SocketProvider>
+
+      <UserProfileContent
+        user={user}
+        isLoggingOut={isLoggingOut}
+        onLogout={handleLogout}
+      />
     );
   };
 

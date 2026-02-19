@@ -208,6 +208,11 @@ function MessageList({
     otherParticipantName: string;
     otherParticipantImage?: string;
 }) {
+
+    // Inside MessageList, before the map:
+    console.log("🔍 currentUserId:", currentUserId);
+    console.log("🔍 first message senderId:", messages[0]?.senderId);
+
     return (
         <>
             {messages.map((msg, i) => {
