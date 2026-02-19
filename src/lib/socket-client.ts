@@ -1,8 +1,8 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL =
-  process.env.SOCKET_URL || "https://rendezvous-server-gpmv.onrender.com";
-// const SOCKET_URL = "http://localhost:8080";
+// const SOCKET_URL =
+//   process.env.SOCKET_URL || "https://rendezvous-server-gpmv.onrender.com";
+const SOCKET_URL = "http://localhost:8080";
 
 export interface UserStatusUpdate {
   userId: string;

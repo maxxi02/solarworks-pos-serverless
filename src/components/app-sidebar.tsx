@@ -30,8 +30,7 @@ import { authClient } from "@/lib/auth-client";
 import { ExtendedUser } from "@/types/user.type";
 import { UserRole } from "@/types/role.type";
 import { adminNavigation, staffNavigation } from "@/constants/navigation";
-import { socketClient } from "@/lib/socket-client";
-
+import { SocketProvider, useSocket } from "@/hooks/useSocket"; // Import both
 
 const storeData = {
   name: "SolarWorks POS",
@@ -54,13 +53,11 @@ const getUserInitials = (name?: string | null): string => {
 
 // ─── Online Status Indicator ─────────────────────────────────────
 const OnlineStatusIndicator = () => {
-  const [isOnline, setIsOnline] = React.useState(false);
+  const { isConnected } = useSocket(); // Use the hook here
   const [isActive, setIsActive] = React.useState(true);
   const activityTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   React.useEffect(() => {
-    setIsOnline(socketClient.isConnected());
-
     const handleActivity = () => {
       setIsActive(true);
 
@@ -73,13 +70,6 @@ const OnlineStatusIndicator = () => {
         setIsActive(false);
       }, 2 * 60 * 1000);
     };
-
-    // Listen for socket connection changes
-    const socket = socketClient.getSocket();
-    if (socket) {
-      socket.on("connect", () => setIsOnline(true));
-      socket.on("disconnect", () => setIsOnline(false));
-    }
 
     // Track user activity
     window.addEventListener("mousemove", handleActivity, { passive: true });
@@ -99,7 +89,7 @@ const OnlineStatusIndicator = () => {
     };
   }, []);
 
-  if (!isOnline) {
+  if (!isConnected) {
     return (
       <span className="relative flex h-2.5 w-2.5">
         <span className="absolute inline-flex h-full w-full rounded-full bg-red-500/30" />
@@ -125,6 +115,97 @@ const OnlineStatusIndicator = () => {
   );
 };
 
+// This component uses the socket hook, so it must be inside SocketProvider
+const UserProfileContent = ({
+  user,
+  isLoggingOut,
+  onLogout
+}: {
+  user: ExtendedUser;
+  isLoggingOut: boolean;
+  onLogout: () => void;
+}) => {
+  const initials = getUserInitials(user.name);
+  const userRole = getUserRole(user);
+
+  return (
+    <div className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent">
+      <div className="relative">
+        {user.image ? (
+          <div className="relative h-8 w-8 shrink-0">
+            <Image
+              src={user.image}
+              alt={user.name || "User avatar"}
+              fill
+              className="rounded-full object-cover"
+              sizes="32px"
+              priority
+            />
+          </div>
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+            {initials}
+          </div>
+        )}
+        {/* Online Status Badge */}
+        <div className="absolute -bottom-0.5 -right-0.5 rounded-full bg-background p-0.5">
+          <OnlineStatusIndicator />
+        </div>
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium">
+          {user.name || user.email?.split("@")[0] || "User"}
+        </span>
+        <span className="truncate text-xs text-muted-foreground">
+          {user.email || ""}
+        </span>
+        <span className="capitalize text-xs text-primary">
+          {userRole === "admin" ? "Administrator" : "Staff"}
+        </span>
+      </div>
+
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            disabled={isLoggingOut}
+            className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+            title="Logout"
+            aria-label="Logout"
+          >
+            {isLoggingOut ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <LogOut className="h-4 w-4" />
+            )}
+          </button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Logout?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to logout?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={onLogout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? "Logging out..." : "Yes, Logout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// The main sidebar component with SocketProvider
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession() as {
@@ -133,7 +214,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   const { state } = useSidebar();
-
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const user = session?.user;
@@ -172,82 +252,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     if (!user) return null;
 
-    const initials = getUserInitials(user.name);
-
+    // Wrap the profile content with SocketProvider
     return (
-      <div className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent">
-        <div className="relative">
-          {user.image ? (
-            <div className="relative h-8 w-8 shrink-0">
-              <Image
-                src={user.image}
-                alt={user.name || "User avatar"}
-                fill
-                className="rounded-full object-cover"
-                sizes="32px"
-                priority
-              />
-            </div>
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-              {initials}
-            </div>
-          )}
-          {/* Online Status Badge */}
-          <div className="absolute -bottom-0.5 -right-0.5 rounded-full bg-background p-0.5">
-            <OnlineStatusIndicator />
-          </div>
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-sm font-medium">
-            {user.name || user.email?.split("@")[0] || "User"}
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {user.email || ""}
-          </span>
-          <span className="capitalize text-xs text-primary">
-            {userRole === "admin" ? "Administrator" : "Staff"}
-          </span>
-        </div>
-
-        <Dialog>
-          <DialogTrigger asChild>
-            <button
-              disabled={isLoggingOut}
-              className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-              title="Logout"
-              aria-label="Logout"
-            >
-              {isLoggingOut ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <LogOut className="h-4 w-4" />
-              )}
-            </button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Logout?</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to logout?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { }}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-              >
-                {isLoggingOut ? "Logging out..." : "Yes, Logout"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <SocketProvider
+        userId={user.id}
+        userName={user.name!}
+        userAvatar={user.image!}
+      >
+        <UserProfileContent
+          user={user}
+          isLoggingOut={isLoggingOut}
+          onLogout={handleLogout}
+        />
+      </SocketProvider>
     );
   };
 

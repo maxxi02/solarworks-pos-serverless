@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: "File too large. Max 25 MB." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -56,7 +56,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       url: result.secure_url,
       publicId: result.public_id,
-      type: resourceType === "raw" ? "document" : resourceType === "video" && file.type.startsWith("audio/") ? "audio" : resourceType,
+      type:
+        resourceType === "raw"
+          ? "document"
+          : resourceType === "video" && file.type.startsWith("audio/")
+            ? "audio"
+            : resourceType,
       name: file.name,
       size: file.size,
       mimeType: file.type,
@@ -70,6 +75,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export const config = {
-  api: { bodyParser: false },
-};
+// export const config = {
+//   api: { bodyParser: false },
+// };

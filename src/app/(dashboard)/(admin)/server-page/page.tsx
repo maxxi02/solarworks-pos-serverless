@@ -1,143 +1,101 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useSession } from "@/lib/auth-client";
-import { useChatSocket } from "@/hooks/useChatSocket";
-import { useChatStore } from "@/store/chatStore";
-import { ConversationSidebar } from "./_components/ConversationSidebar";
+import { useState } from "react";
+import { useConversations } from "@/hooks/useConversations";
+import { ConversationList } from "./_components/ConversationList";
 import { ChatWindow } from "./_components/ChatWindow";
-import { CreateGroupModal } from "./_components/CreateGroupModal";
-import { NewDMModal } from "./_components/NewModal";
+import { MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { MessageSquare, WifiOff } from "lucide-react";
+import type { ConversationWithDetails } from "@/types/messaging.types";
 
-export default function MessagingPage() {
-  const { data: session } = useSession();
-  const user = session?.user as
-    | { id: string; name: string; image?: string; role?: string }
-    | undefined;
+interface MessagingPageProps {
+  currentUserId: string;
+  currentUserName: string;
+  currentUserImage?: string;
+}
 
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [showDMModal, setShowDMModal] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+export default function MessagesPage({
+  currentUserId,
+  currentUserName,
+  currentUserImage,
+}: MessagingPageProps) {
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
-  const { isConnected, setActiveConversation } =
-    useChatStore();
+  const { conversations, isLoading, startConversation } =
+    useConversations(currentUserId);
 
-  const { openConversation, loadMoreMessages, openDM } = useChatSocket({
-    userId: user?.id ?? "",
-    userName: user?.name ?? "",
-    userAvatar: user?.image,
-  });
+  const activeConversation = conversations.find(
+    (c) => c._id === activeConversationId
+  ) as ConversationWithDetails | undefined;
 
-  const handleGroupCreated = useCallback(
-    (conversationId: string) => {
-      openConversation(conversationId);
-      setMobileSidebarOpen(false);
-    },
-    [openConversation],
-  );
+  const handleSelectConversation = (id: string) => {
+    setActiveConversationId(id);
+    setMobileView("chat");
+  };
 
-  const handleSelectConversation = useCallback(
-    (id: string) => {
-      setActiveConversation(id);
-      openConversation(id);
-      setMobileSidebarOpen(false);
-    },
-    [openConversation, setActiveConversation],
-  );
-
-  const handleOpenDM = useCallback(
-    (userId: string, userName: string, userAvatar?: string) => {
-      openDM(userId, userName, userAvatar);
-      setMobileSidebarOpen(false);
-    },
-    [openDM],
-  );
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-full bg-slate-950 text-slate-500">
-        <div className="text-center space-y-3">
-          <MessageSquare size={40} className="mx-auto text-slate-700" />
-          <p>Please sign in to access messages</p>
-        </div>
-      </div>
-    );
-  }
+  const handleStartNewDM = async (targetUserId: string) => {
+    const convId = await startConversation(targetUserId);
+    if (convId) {
+      setActiveConversationId(convId);
+      setMobileView("chat");
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 overflow-hidden">
-      {/* Connection banner */}
-      {!isConnected && (
-        <div className="flex items-center justify-center gap-2 bg-amber-500/10 border-b border-amber-500/20 py-2 text-amber-400 text-xs font-medium shrink-0">
-          <WifiOff size={12} />
-          Connecting to chat server...
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* ── Mobile overlay ────────────────────────────────────── */}
-        {mobileSidebarOpen && (
-          <div
-            className="absolute inset-0 z-20 bg-black/60 lg:hidden"
-            onClick={() => setMobileSidebarOpen(false)}
-          />
+    <div className="flex h-full w-full overflow-hidden bg-background">
+      {/* Sidebar - conversation list */}
+      <aside
+        className={cn(
+          "w-full md:w-80 lg:w-72 xl:w-80 flex-shrink-0 h-full",
+          // Mobile: show only when on list view
+          mobileView === "chat" ? "hidden md:flex md:flex-col" : "flex flex-col"
         )}
+      >
+        <ConversationList
+          conversations={conversations}
+          isLoading={isLoading}
+          activeConversationId={activeConversationId}
+          onSelectConversation={handleSelectConversation}
+          onStartNewDM={handleStartNewDM}
+          currentUserId={currentUserId}
+        />
+      </aside>
 
-        {/* ── Sidebar ───────────────────────────────────────────── */}
-        <div
-          className={cn(
-            "w-72 shrink-0 flex flex-col transition-transform duration-200 z-30",
-            // Mobile: slide in from left
-            "absolute inset-y-0 left-0 lg:relative lg:translate-x-0",
-            mobileSidebarOpen
-              ? "translate-x-0"
-              : "-translate-x-full lg:translate-x-0",
-          )}
-        >
-          <ConversationSidebar
-            currentUserId={user.id}
-            currentUserRole={user.role ?? "user"}
-            onNewGroup={() => setShowGroupModal(true)}
-            onNewDM={() => setShowDMModal(true)}
-            onSelectConversation={handleSelectConversation}
-          />
-        </div>
-
-        {/* ── Chat window ───────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
-          {/* Mobile header button */}
-          <button
-            onClick={() => setMobileSidebarOpen(true)}
-            className="absolute top-3.5 left-4 z-10 lg:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
-          >
-            <MessageSquare size={16} />
-          </button>
-
+      {/* Main chat panel */}
+      <main
+        className={cn(
+          "flex-1 h-full flex flex-col",
+          // Mobile: show only when on chat view
+          mobileView === "list" ? "hidden md:flex" : "flex"
+        )}
+      >
+        {activeConversation ? (
           <ChatWindow
-            currentUserId={user.id}
-            currentUserName={user.name}
-            currentUserAvatar={user.image}
-            onLoadMore={loadMoreMessages}
+            conversation={activeConversation}
+            currentUserId={currentUserId}
+            currentUserName={currentUserName}
+            currentUserImage={currentUserImage}
+            onBack={() => setMobileView("list")}
           />
-        </div>
+        ) : (
+          <EmptyState />
+        )}
+      </main>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center px-8">
+      <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+        <MessageSquare className="h-8 w-8 text-muted-foreground" />
       </div>
-
-      {/* ── Modals ─────────────────────────────────────────────── */}
-      <CreateGroupModal
-        isOpen={showGroupModal}
-        onClose={() => setShowGroupModal(false)}
-        onCreated={handleGroupCreated}
-        currentUserId={user.id}
-      />
-
-      <NewDMModal
-        isOpen={showDMModal}
-        onClose={() => setShowDMModal(false)}
-        onSelectUser={handleOpenDM}
-        currentUserId={user.id}
-      />
+      <h3 className="font-semibold text-base mb-1">Your messages</h3>
+      <p className="text-sm text-muted-foreground max-w-xs">
+        Select a conversation from the sidebar or start a new one using the + button.
+      </p>
     </div>
   );
 }
