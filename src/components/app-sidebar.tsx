@@ -53,41 +53,7 @@ const getUserInitials = (name?: string | null): string => {
 
 // ─── Online Status Indicator ─────────────────────────────────────
 const OnlineStatusIndicator = () => {
-  const { isConnected } = useSocket(); // Use the hook here
-  const [isActive, setIsActive] = React.useState(true);
-  const activityTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  React.useEffect(() => {
-    const handleActivity = () => {
-      setIsActive(true);
-
-      if (activityTimeoutRef.current) {
-        clearTimeout(activityTimeoutRef.current);
-      }
-
-      // Set to inactive after 2 minutes of no activity
-      activityTimeoutRef.current = setTimeout(() => {
-        setIsActive(false);
-      }, 2 * 60 * 1000);
-    };
-
-    // Track user activity
-    window.addEventListener("mousemove", handleActivity, { passive: true });
-    window.addEventListener("keydown", handleActivity, { passive: true });
-    window.addEventListener("click", handleActivity, { passive: true });
-
-    // Initial activity
-    handleActivity();
-
-    return () => {
-      if (activityTimeoutRef.current) {
-        clearTimeout(activityTimeoutRef.current);
-      }
-      window.removeEventListener("mousemove", handleActivity);
-      window.removeEventListener("keydown", handleActivity);
-      window.removeEventListener("click", handleActivity);
-    };
-  }, []);
+  const { isConnected, isActive } = useSocket();
 
   if (!isConnected) {
     return (

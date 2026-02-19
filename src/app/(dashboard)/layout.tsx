@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const currentUser = session?.user as SessionUser | undefined;
 
   const userId = currentUser?.id;
-  
+
   console.log("CURRENT USER ID:", JSON.stringify(userId));
   // Don't render SocketProvider until we have a user
   if (isPending || !currentUser) {

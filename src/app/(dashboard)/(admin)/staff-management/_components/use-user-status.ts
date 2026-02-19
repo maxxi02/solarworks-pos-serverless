@@ -1,13 +1,14 @@
 // hooks/use-user-status.ts
+import { UserStatusUpdate, useSocket } from "@/hooks/useSocket";
 import { useEffect, useRef } from "react";
-import { socketClient, UserStatusUpdate } from "@/lib/socket-client";
 
 export function useUserStatus(
   onStatusChange: (data: UserStatusUpdate) => void,
 ) {
-  // Stabilize the callback reference
+  const { onStatusChanged, offStatusChanged } = useSocket();
+
   const callbackRef = useRef(onStatusChange);
-  
+
   useEffect(() => {
     callbackRef.current = onStatusChange;
   }, [onStatusChange]);
@@ -18,11 +19,11 @@ export function useUserStatus(
     };
 
     console.log("Attaching status listener...");
-    socketClient.onStatusChanged(stableCallback);
+    onStatusChanged(stableCallback);
 
     return () => {
       console.log("Removing status listener");
-      socketClient.offStatusChanged(stableCallback);
+      offStatusChanged(stableCallback);
     };
-  }, []); // Now dependency array is stable
+  }, [onStatusChanged, offStatusChanged]);
 }

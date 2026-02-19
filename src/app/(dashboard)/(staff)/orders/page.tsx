@@ -988,17 +988,6 @@ export default function OrdersPage() {
             </div>
           </div>
         </div>
-
-        {/* Shift Reminder */}
-        <div className="mt-8 bg-muted/40 border rounded-lg p-5 text-base">
-          <p className="font-medium mb-2 flex items-center gap-3">
-            <Clock className="h-5 w-5" />Quick reminder
-          </p>
-          <p className="text-muted-foreground">
-            Please clock out when your shift ends.{' '}
-            {attendance?.status === 'pending' && 'Your current shift is still pending approval.'}
-          </p>
-        </div>
       </div>
 
       {/* Saved Orders Panel */}

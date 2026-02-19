@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { socketClient } from "@/lib/socket-client"; // ← your existing singleton
 import type {
   Message,
   OptimisticMessage,
@@ -10,10 +9,10 @@ import type {
   DmTypingPayload,
   TypingUser,
 } from "@/types/messaging.types";
+import { useSocket } from "../../provider/socket-provider";
 
 type DisplayMessage = Message | OptimisticMessage;
 
-// Add this helper inside the hook, above the effects
 const dedup = (msgs: DisplayMessage[]): DisplayMessage[] => {
   const seen = new Set<string>();
   return msgs.filter((m) => {
@@ -28,6 +27,7 @@ export function useMessages(
   conversationId: string | null,
   currentUserId: string,
 ) {
+  const { socket } = useSocket();
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -38,7 +38,6 @@ export function useMessages(
   // ── Fetch initial messages ────────────────────────────────────
   const fetchMessages = useCallback(async (convId: string) => {
     setIsLoading(true);
-    // Don't clear messages immediately - we'll merge with existing optimistic ones
     try {
       const res = await fetch(`/api/conversations/${convId}/messages`);
       if (!res.ok) throw new Error("Failed to fetch messages");
@@ -48,22 +47,14 @@ export function useMessages(
         nextCursor?: string;
       };
 
-      // Merge fetched messages with pending optimistic messages
       setMessages((prev) => {
-        // Keep only messages that are still sending (not yet confirmed by server)
         const stillPending = prev.filter(
           (m) => "tempId" in m && m.status === "sending",
         );
-
-        // Create a set of real message IDs from the server response
         const realIds = new Set(data.messages.map((m) => m._id as string));
-
-        // Filter out pending messages that have now been confirmed (exist in realIds)
         const notYetSaved = stillPending.filter(
           (m) => !realIds.has(m._id as string),
         );
-
-        // Combine server messages with still-pending optimistic messages and dedup
         return dedup([...data.messages, ...notYetSaved]);
       });
 
@@ -89,11 +80,7 @@ export function useMessages(
         hasMore: boolean;
         nextCursor?: string;
       };
-      setMessages((prev) => {
-        // Combine older messages (first) with current messages, then dedup
-        const combined = [...data.messages, ...prev];
-        return dedup(combined);
-      });
+      setMessages((prev) => dedup([...data.messages, ...prev]));
       setHasMore(data.hasMore);
       setNextCursor(data.nextCursor);
     } catch (err) {
@@ -103,13 +90,7 @@ export function useMessages(
 
   // ── Join/leave conversation room + fetch on change ────────────
   useEffect(() => {
-    if (!conversationId) return;
-
-    const socket = socketClient.getSocket();
-    if (!socket) {
-      console.warn("⚠️ useMessages: socket not ready");
-      return;
-    }
+    if (!conversationId || !socket) return;
 
     console.log("✅ joining conversation:", conversationId);
     socket.emit("dm:conversation:join", { conversationId });
@@ -119,23 +100,17 @@ export function useMessages(
       socket.emit("dm:conversation:leave", { conversationId });
       socket.emit("dm:typing:stop", { conversationId });
     };
-  }, [conversationId, fetchMessages]);
+  }, [conversationId, socket, fetchMessages]);
 
   // ── Real-time socket events ───────────────────────────────────
   useEffect(() => {
-    if (!conversationId) return;
-
-    const socket = socketClient.getSocket();
-    if (!socket) return;
+    if (!conversationId || !socket) return;
 
     const handleReceive = (payload: DmReceivePayload) => {
       if (payload.conversationId !== conversationId) return;
 
       setMessages((prev) => {
-        // Skip own messages — already added optimistically
         if (payload.message.senderId === currentUserId) return prev;
-
-        // Add new message and dedup to be safe
         return dedup([...prev, payload.message]);
       });
 
@@ -146,19 +121,14 @@ export function useMessages(
 
     const handleSent = (data: { tempId: string; messageId: string }) => {
       setMessages((prev) => {
-        // Check if the confirmed message already exists in the list
         const alreadyExists = prev.some(
           (m) => !("tempId" in m) && m._id === data.messageId,
         );
-
         if (alreadyExists) {
-          // If it exists, just remove the optimistic version
           return prev.filter(
             (m) => !("tempId" in m && m.tempId === data.tempId),
           );
         }
-
-        // Otherwise, update the optimistic message with the real ID
         return prev.map((m) =>
           "tempId" in m && m.tempId === data.tempId
             ? ({
@@ -236,14 +206,12 @@ export function useMessages(
       socket.off("dm:typing:start", handleTypingStart);
       socket.off("dm:typing:stop", handleTypingStop);
     };
-  }, [conversationId, currentUserId]);
+  }, [conversationId, socket, currentUserId]);
 
   // ── Send a message (optimistic) ───────────────────────────────
   const sendMessage = useCallback(
     (content: string, senderName: string, senderImage?: string) => {
-      if (!conversationId || !content.trim()) return;
-      const socket = socketClient.getSocket();
-      if (!socket?.connected) return;
+      if (!conversationId || !content.trim() || !socket?.connected) return;
 
       const tempId = `temp-${Date.now()}-${Math.random()}`;
 
@@ -262,32 +230,27 @@ export function useMessages(
         status: "sending",
       };
 
-      setMessages((prev) => {
-        // Add optimistic message and dedup to be safe
-        const newMessages = [...prev, optimistic];
-        return dedup(newMessages);
-      });
+      setMessages((prev) => dedup([...prev, optimistic]));
 
-      // Emit the message
       socket.emit("dm:send", {
         conversationId,
         content: content.trim(),
         tempId,
       });
     },
-    [conversationId, currentUserId],
+    [conversationId, currentUserId, socket],
   );
 
   // ── Typing helpers ────────────────────────────────────────────
   const startTyping = useCallback(() => {
-    if (!conversationId) return;
-    socketClient.getSocket()?.emit("dm:typing:start", { conversationId });
-  }, [conversationId]);
+    if (!conversationId || !socket) return;
+    socket.emit("dm:typing:start", { conversationId });
+  }, [conversationId, socket]);
 
   const stopTyping = useCallback(() => {
-    if (!conversationId) return;
-    socketClient.getSocket()?.emit("dm:typing:stop", { conversationId });
-  }, [conversationId]);
+    if (!conversationId || !socket) return;
+    socket.emit("dm:typing:stop", { conversationId });
+  }, [conversationId, socket]);
 
   return {
     messages,
