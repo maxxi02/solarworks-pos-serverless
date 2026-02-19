@@ -7,11 +7,19 @@ import { useSession } from "@/lib/auth-client";
 import { SocketProvider } from "@/hooks/useSocket";
 
 const queryClient = new QueryClient();
+interface SessionUser {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession();
-  const currentUser = session?.user;
-  const userId = (currentUser as any)?.id ?? (currentUser as any)?._id?.toString();
+  const currentUser = session?.user as SessionUser | undefined;
+
+  const userId = currentUser?.id;
+  
   console.log("CURRENT USER ID:", JSON.stringify(userId));
   // Don't render SocketProvider until we have a user
   if (isPending || !currentUser) {
