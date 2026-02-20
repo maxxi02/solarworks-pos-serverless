@@ -54,7 +54,7 @@ export const PATHS = {
   STAFF_NAV: {
     ORDERS: "/orders",
     MY_SALES: "/my-sales",
-    MY_SALES_HISTORY: "/history",
+    MY_SALES_HISTORY: "/transactionhistory",
     MY_SALES_PERFORMANCE: "/performance",
 
     INVENTORY_VIEW_PRODUCTS: "/inventory/product",
