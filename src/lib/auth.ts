@@ -101,7 +101,7 @@ export const auth = betterAuth({
   socialProviders: {
     google: {
       prompt: "select_account",
-      redirectURI: "https://rendezvous-cafe.vercel.app",
+      redirectURI: "https://rendezvous-cafe.vercel.app/api/auth/callback/google",
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     },
