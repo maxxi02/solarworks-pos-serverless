@@ -13,7 +13,10 @@ export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
-  trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    "https://rendezvous-cafe.vercel.app",
+  ],
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
@@ -95,7 +98,13 @@ export const auth = betterAuth({
       }
     },
   },
-
+  socialProviders: {
+    google: {
+      prompt: "select_account",
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+  },
   plugins: [
     adminPlugin(), // No roles config - we handle roles via custom field
     twoFactor({
