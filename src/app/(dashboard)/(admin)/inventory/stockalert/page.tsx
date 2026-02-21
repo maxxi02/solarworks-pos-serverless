@@ -191,7 +191,7 @@ export default function InventoryPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState<Inventory | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [adjustmentType, setAdjustmentType] = useState<'restock' | 'usage' | 'waste' | 'correction' | 'deduction'>('restock');
+  const [adjustmentType, setAdjustmentType] = useState<'restock' | 'usage' | 'waste' | 'correction'>('restock');
   const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
   const [adjustmentUnit, setAdjustmentUnit] = useState<Unit>('g');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
@@ -338,6 +338,73 @@ export default function InventoryPage() {
     }
   };
 
+  const handleStockAdjustment = async () => {
+    if (!showAdjustModal || !adjustmentQuantity || isNaN(Number(adjustmentQuantity))) {
+      toast.error('Invalid quantity', {
+        description: 'Please enter a valid quantity'
+      });
+      return;
+    }
+
+    try {
+      const quantity = Number(adjustmentQuantity);
+      
+      if (quantity > 100000) {
+        toast.error('Validation Error', {
+          description: 'Quantity cannot exceed 100,000 units'
+        });
+        return;
+      }
+
+      // Convert the input quantity to the base unit
+      const convertedQuantity = smartConvert(
+        quantity,
+        adjustmentUnit,
+        showAdjustModal.unit as Unit,
+        showAdjustModal.name
+      );
+
+      const result = await adjustStock(showAdjustModal._id!.toString(), {
+        type: adjustmentType,
+        quantity: convertedQuantity,
+        notes: adjustmentNotes,
+        performedBy: 'Admin',
+        reference: {
+          type: 'manual',
+          id: `manual-${Date.now()}`
+        }
+      }) as AdjustStockResponse;
+
+      setInventory(prev => prev.map(item => {
+        if (item._id?.toString() === showAdjustModal._id?.toString()) {
+          return {
+            ...item,
+            currentStock: result.newStock,
+            status: result.status,
+            lastRestocked: adjustmentType === 'restock' ? new Date() : item.lastRestocked
+          };
+        }
+        return item;
+      }));
+
+      loadAlerts();
+
+      toast.success(`Stock ${adjustmentType === 'restock' ? 'Restocked' : 'Adjusted'}`, {
+        description: `${quantity} ${adjustmentUnit} → ${convertedQuantity.toFixed(2)} ${showAdjustModal.unit}`
+      });
+      
+      setShowAdjustModal(null);
+      setAdjustmentQuantity('');
+      setAdjustmentUnit('g');
+      setAdjustmentNotes('');
+    } catch (error) {
+      console.error('Error adjusting stock:', error);
+      toast.error('Failed to adjust stock', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    }
+  };
+
   const handleBulkImport = async (items: any[]) => {
     let successCount = 0;
     let errorCount = 0;
@@ -372,100 +439,6 @@ export default function InventoryPage() {
     }
     
     loadAlerts();
-  };
-
-  const handleStockAdjustment = async () => {
-    if (!showAdjustModal || !adjustmentQuantity || isNaN(Number(adjustmentQuantity))) {
-      toast.error('Invalid quantity', {
-        description: 'Please enter a valid quantity'
-      });
-      return;
-    }
-
-    try {
-      const quantity = Number(adjustmentQuantity);
-      
-      if (quantity > 100000) {
-        toast.error('Validation Error', {
-          description: 'Quantity cannot exceed 100,000 units'
-        });
-        return;
-      }
-
-      let convertedQuantity = quantity;
-      const inventoryUnit = showAdjustModal.unit as Unit;
-
-      if (adjustmentUnit !== inventoryUnit) {
-        if (!areUnitsCompatible(adjustmentUnit, inventoryUnit)) {
-          const fromCategory = getUnitCategory(adjustmentUnit);
-          const toCategory = getUnitCategory(inventoryUnit);
-          
-          if ((fromCategory === 'weight' && toCategory === 'volume') ||
-              (fromCategory === 'volume' && toCategory === 'weight')) {
-            
-            if (!showAdjustModal.density && !hasDensity(showAdjustModal.name)) {
-              toast.error('Cannot convert units', {
-                description: `No density data for ${showAdjustModal.name}. Please add density or use ${inventoryUnit}.`
-              });
-              return;
-            }
-          } else {
-            toast.error('Incompatible units', {
-              description: `Cannot convert ${adjustmentUnit} to ${inventoryUnit}`
-            });
-            return;
-          }
-        }
-
-        convertedQuantity = smartConvert(
-          quantity,
-          adjustmentUnit,
-          inventoryUnit,
-          showAdjustModal.name
-        );
-        
-        convertedQuantity = formatQuantity(convertedQuantity, inventoryUnit);
-      }
-
-      const result = await adjustStock(showAdjustModal._id!.toString(), {
-        type: adjustmentType,
-        quantity: convertedQuantity,
-        notes: adjustmentNotes,
-        performedBy: 'Admin',
-        reference: {
-          type: 'manual',
-          id: `manual-${Date.now()}`
-        }
-      }) as AdjustStockResponse;
-
-      setInventory(prev => prev.map(item => {
-        if (item._id?.toString() === showAdjustModal._id?.toString()) {
-          return {
-            ...item,
-            currentStock: result.newStock,
-            status: result.status,
-            lastRestocked: adjustmentType === 'restock' ? new Date() : item.lastRestocked
-          };
-        }
-        return item;
-      }));
-
-      loadAlerts();
-
-      toast.success(`Stock ${adjustmentType === 'restock' ? 'Restocked' : 'Adjusted'}`, {
-        description: `${adjustmentQuantity} ${adjustmentUnit} → ${convertedQuantity} ${inventoryUnit}`
-      });
-      
-      setShowAdjustModal(null);
-      setAdjustmentQuantity('');
-      setAdjustmentUnit('g');
-      setAdjustmentNotes('');
-    } catch (error) {
-      console.error('Error adjusting stock:', error);
-      toast.error('Failed to adjust stock', {
-        description: error instanceof Error ? error.message : 'Unknown error occurred'
-      });
-    }
   };
 
   const handleDeleteClick = (id: string, name: string) => {
@@ -835,6 +808,7 @@ export default function InventoryPage() {
                               onClick={() => {
                                 setShowAdjustModal(item);
                                 setAdjustmentUnit(item.displayUnit as Unit);
+                                setAdjustmentType('restock');
                               }}
                               className="rounded-lg bg-blue-100 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-500 hover:bg-blue-200 dark:hover:bg-blue-900/20"
                             >
@@ -1210,7 +1184,7 @@ export default function InventoryPage() {
                 onClick={() => {
                   setShowAdjustModal(null);
                   setAdjustmentQuantity('');
-                  setAdjustmentUnit('g');
+                  setAdjustmentUnit(showAdjustModal.displayUnit as Unit || 'g');
                   setAdjustmentNotes('');
                 }}
                 className="text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
@@ -1292,6 +1266,18 @@ export default function InventoryPage() {
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Will be converted to {showAdjustModal.unit} (base unit)
                 </p>
+                {adjustmentUnit && adjustmentUnit !== showAdjustModal.unit && (
+                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-500">
+                    Conversion: {adjustmentQuantity} {adjustmentUnit} = {
+                      smartConvert(
+                        Number(adjustmentQuantity) || 0,
+                        adjustmentUnit,
+                        showAdjustModal.unit as Unit,
+                        showAdjustModal.name
+                      ).toFixed(2)
+                    } {showAdjustModal.unit}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -1335,12 +1321,25 @@ export default function InventoryPage() {
                     <div className="flex justify-between font-medium text-gray-900 dark:text-white">
                       <span>New Stock:</span>
                       <span>
-                        {adjustmentType === 'restock' 
-                          ? showAdjustModal.currentStock + Number(adjustmentQuantity)
-                          : adjustmentType === 'correction'
-                          ? Number(adjustmentQuantity)
-                          : Math.max(0, showAdjustModal.currentStock - Number(adjustmentQuantity))
-                        } {showAdjustModal.unit}
+                        {(() => {
+                          const convertedQty = smartConvert(
+                            Number(adjustmentQuantity),
+                            adjustmentUnit,
+                            showAdjustModal.unit as Unit,
+                            showAdjustModal.name
+                          );
+                          
+                          let newStockValue: number;
+                          if (adjustmentType === 'restock') {
+                            newStockValue = showAdjustModal.currentStock + convertedQty;
+                          } else if (adjustmentType === 'correction') {
+                            newStockValue = convertedQty;
+                          } else {
+                            newStockValue = Math.max(0, showAdjustModal.currentStock - convertedQty);
+                          }
+                          
+                          return newStockValue.toFixed(2);
+                        })()} {showAdjustModal.unit}
                       </span>
                     </div>
                   </div>
@@ -1353,7 +1352,7 @@ export default function InventoryPage() {
                 onClick={() => {
                   setShowAdjustModal(null);
                   setAdjustmentQuantity('');
-                  setAdjustmentUnit('g');
+                  setAdjustmentUnit(showAdjustModal.displayUnit as Unit || 'g');
                   setAdjustmentNotes('');
                 }}
                 className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"

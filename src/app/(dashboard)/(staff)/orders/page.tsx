@@ -447,7 +447,7 @@ export default function OrdersPage() {
     const preview = document.createElement('div');
     preview.className = 'fixed z-50 w-[160px] bg-card border-2 border-primary shadow-lg rounded-lg p-3';
     preview.style.cssText = `left:${e.touches[0].clientX - 80}px;top:${e.touches[0].clientY - 60}px;pointer-events:none;position:fixed`;
-    preview.innerHTML = `<div class="font-bold text-sm">${product.name}</div><div class="text-xs text-primary">${formatCurrency(product.price)}</div>`;
+    preview.innerHTML = `<div class="font-bold text-sm">${product.name}</div><div class="text-xs text-p  rimary">${formatCurrency(product.price)}</div>`;
     document.body.appendChild(preview);
     setTouchPreview(preview);
     window.navigator.vibrate?.(20);
@@ -569,7 +569,7 @@ export default function OrdersPage() {
                 Attendance <ChevronRightIcon className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:w-[450px] sm:max-w-[450px]">
+            <SheetContent side="right" className="w-full sm:w-450px sm:max-w-450px">
               <SheetHeader className="mb-8">
                 <SheetTitle className="flex items-center gap-2 text-xl">
                   <Clock className="h-6 w-6 text-primary" />Shift Controls
@@ -757,7 +757,7 @@ export default function OrdersPage() {
                         <div className="space-y-2">
                           <div className="flex items-start justify-between">
                             <h3 className="font-bold text-sm line-clamp-2 flex-1">{product.name}</h3>
-                            <GripVertical className="w-4 h-4 text-muted-foreground ml-2 flex-shrink-0" />
+                            <GripVertical className="w-4 h-4 text-muted-foreground ml-2 shrink-0" />
                           </div>
                           <Badge variant="outline" className="text-xs px-2 py-1 h-5">{product.category}</Badge>
                           <p className="text-xs text-muted-foreground line-clamp-2">

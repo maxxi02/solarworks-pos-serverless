@@ -15,7 +15,7 @@ import {
   Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Unit, isValidUnit } from '@/lib/unit-conversion';
+import { Unit, isValidUnit, getUnitCategory } from '@/lib/unit-conversion';
 
 interface ImportedRow {
   rowNumber: number;
@@ -86,6 +86,18 @@ const COLUMN_LABELS: Record<string, string> = {
   density: 'Density (g/mL)'
 };
 
+// List of valid units based on unit-conversion.ts
+const VALID_UNITS = [
+  // Weight units
+  'kg', 'g', 'mg', 'lb', 'oz',
+  // Volume units
+  'L', 'l', 'mL', 'ml', 'tsp', 'tbsp', 'cup', 'fl_oz', 'gal', 'qt', 'pt',
+  // Count units
+  'pieces', 'pcs', 'box', 'boxes', 'bottle', 'bottles', 'bag', 'bags', 'pack', 'packs', 'can', 'cans',
+  // Length units
+  'm', 'cm', 'mm', 'inch', 'in', 'ft'
+];
+
 const UNIT_EXAMPLES: Record<string, string> = {
   'kg': 'Kilograms',
   'g': 'Grams',
@@ -94,7 +106,29 @@ const UNIT_EXAMPLES: Record<string, string> = {
   'pieces': 'Pieces',
   'boxes': 'Boxes',
   'bottles': 'Bottles',
-  'bags': 'Bags'
+  'bags': 'Bags',
+  'packs': 'Packs',
+  'cans': 'Cans'
+};
+
+// Normalize unit string (trim, lowercase)
+const normalizeUnit = (unit: string): string => {
+  if (!unit) return '';
+  return unit.toString().trim().toLowerCase();
+};
+
+// Enhanced unit validation
+const isValidUnitStrict = (unit: string): boolean => {
+  if (!unit) return false;
+  const normalized = normalizeUnit(unit);
+  
+  // Special case for 'ml' vs 'mL' - both should be valid
+  if (normalized === 'ml') {
+    return true;
+  }
+  
+  // Check against VALID_UNITS
+  return VALID_UNITS.includes(normalized);
 };
 
 export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImportProps) {
@@ -150,7 +184,7 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
 
         if (jsonData.length < 2) {
           toast.error('File is empty', {
@@ -161,7 +195,7 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
         }
 
         // Extract headers (first row)
-        const headers = (jsonData[0] as any[]).map(h => String(h).trim());
+        const headers = (jsonData[0] as any[]).map(h => String(h || '').trim());
         setHeaders(headers);
 
         // Auto-map columns
@@ -169,9 +203,12 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
         headers.forEach(header => {
           const normalized = header.toLowerCase().replace(/[^a-z]/g, '');
           
-          // Try to find matching column
-          for (const col of ALL_COLUMNS) {
-            if (normalized.includes(col.toLowerCase())) {
+          // Sort columns longest-first so specific names match before their substrings
+          // e.g. "minStockUnit" must match before "minStock", "unit"
+          const sortedColumns = [...ALL_COLUMNS].sort((a, b) => b.length - a.length);
+          
+          for (const col of sortedColumns) {
+            if (normalized === col.toLowerCase() || normalized.includes(col.toLowerCase())) {
               mapping[header] = col;
               break;
             }
@@ -183,11 +220,11 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
         const rows: ImportedRow[] = [];
         for (let i = 1; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
-          if (row.length === 0 || row.every(cell => !cell)) continue;
+          if (row.length === 0 || row.every(cell => !cell || cell === '')) continue;
 
           const rowData: any = {};
           headers.forEach((header, index) => {
-            rowData[header] = row[index];
+            rowData[header] = row[index] !== undefined ? String(row[index]).trim() : '';
           });
 
           const parsedRow = validateRow(rowData, i, mapping);
@@ -236,9 +273,13 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
       errors.push('Current stock must be a valid positive number');
     }
 
-    const currentStockUnit = getValue('currentStockUnit');
-    if (!currentStockUnit || !isValidUnit(currentStockUnit)) {
-      errors.push('Current stock unit is invalid');
+    const currentStockUnitRaw = getValue('currentStockUnit');
+    const currentStockUnit = currentStockUnitRaw ? String(currentStockUnitRaw).trim() : '';
+    
+    if (!currentStockUnit) {
+      errors.push('Current stock unit is required');
+    } else if (!isValidUnitStrict(currentStockUnit) && !isValidUnit(currentStockUnit)) {
+      errors.push(`Current stock unit "${currentStockUnit}" is invalid`);
     }
 
     const minStock = parseFloat(getValue('minStock'));
@@ -246,14 +287,22 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
       errors.push('Minimum stock must be a valid positive number');
     }
 
-    const minStockUnit = getValue('minStockUnit');
-    if (!minStockUnit || !isValidUnit(minStockUnit)) {
-      errors.push('Minimum stock unit is invalid');
+    const minStockUnitRaw = getValue('minStockUnit');
+    const minStockUnit = minStockUnitRaw ? String(minStockUnitRaw).trim() : '';
+    
+    if (!minStockUnit) {
+      errors.push('Minimum stock unit is required');
+    } else if (!isValidUnitStrict(minStockUnit) && !isValidUnit(minStockUnit)) {
+      errors.push(`Minimum stock unit "${minStockUnit}" is invalid`);
     }
 
-    const unit = getValue('unit');
-    if (!unit || !isValidUnit(unit)) {
-      errors.push('Display unit is invalid');
+    const unitRaw = getValue('unit');
+    const unit = unitRaw ? String(unitRaw).trim() : '';
+    
+    if (!unit) {
+      errors.push('Display unit is required');
+    } else if (!isValidUnitStrict(unit) && !isValidUnit(unit)) {
+      errors.push(`Display unit "${unit}" is invalid`);
     }
 
     // Optional fields
@@ -262,9 +311,10 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
       errors.push('Maximum stock must be a valid positive number');
     }
 
-    const maxStockUnit = getValue('maxStockUnit');
-    if (maxStockUnit && !isValidUnit(maxStockUnit)) {
-      errors.push('Maximum stock unit is invalid');
+    const maxStockUnitRaw = getValue('maxStockUnit');
+    const maxStockUnit = maxStockUnitRaw ? String(maxStockUnitRaw).trim() : undefined;
+    if (maxStockUnit && !isValidUnitStrict(maxStockUnit) && !isValidUnit(maxStockUnit)) {
+      errors.push(`Maximum stock unit "${maxStockUnit}" is invalid`);
     }
 
     const pricePerUnit = getValue('pricePerUnit') ? parseFloat(getValue('pricePerUnit')) : 0;
@@ -277,9 +327,10 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
       errors.push('Reorder point must be a valid positive number');
     }
 
-    const reorderPointUnit = getValue('reorderPointUnit');
-    if (reorderPointUnit && !isValidUnit(reorderPointUnit)) {
-      errors.push('Reorder point unit is invalid');
+    const reorderPointUnitRaw = getValue('reorderPointUnit');
+    const reorderPointUnit = reorderPointUnitRaw ? String(reorderPointUnitRaw).trim() : undefined;
+    if (reorderPointUnit && !isValidUnitStrict(reorderPointUnit) && !isValidUnit(reorderPointUnit)) {
+      errors.push(`Reorder point unit "${reorderPointUnit}" is invalid`);
     }
 
     const density = getValue('density') ? parseFloat(getValue('density')) : undefined;
@@ -289,7 +340,14 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
 
     // Check unit compatibility
     if (unit && currentStockUnit && unit !== currentStockUnit) {
-      warnings.push(`Display unit (${unit}) differs from current stock unit (${currentStockUnit})`);
+      const unitCategory = getUnitCategory(unit);
+      const currentStockCategory = getUnitCategory(currentStockUnit);
+      
+      if (unitCategory && currentStockCategory && unitCategory !== currentStockCategory) {
+        warnings.push(`Display unit (${unit}) is ${unitCategory} but current stock unit (${currentStockUnit}) is ${currentStockCategory}. Make sure they are compatible.`);
+      } else {
+        warnings.push(`Display unit (${unit}) differs from current stock unit (${currentStockUnit})`);
+      }
     }
 
     return {
@@ -374,9 +432,11 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
 
   const downloadTemplate = () => {
     const template = [
-      REQUIRED_COLUMNS,
-      ['Coffee Beans', 'Coffee', '5', 'kg', '2', 'kg', 'kg', '500', 'Local Supplier', 'Aisle 1', '3', 'kg', '0.43'],
-      ['Sugar', 'Baking', '10', 'kg', '5', 'kg', 'kg', '50', 'Sweet Co.', 'Aisle 2', '7', 'kg', '0.85']
+      ALL_COLUMNS,
+      ['Coffee Beans', 'Coffee', '10', 'kg', '2', 'kg', 'kg', '20', 'kg', '500', 'Local Supplier', 'Aisle 1', '5', 'kg', '0.43'],
+      ['Sugar', 'Baking', '5', 'kg', '1', 'kg', 'kg', '10', 'kg', '50', 'Sweet Co.', 'Aisle 2', '2', 'kg', '0.85'],
+      ['Milk', 'Dairy', '8', 'L', '2', 'L', 'L', '20', 'L', '120', 'Dairy Farm', 'Fridge 1', '4', 'L', '1.03'],
+      ['Cups', 'Supplies', '500', 'pieces', '100', 'pieces', 'boxes', '1000', 'pieces', '250', 'Packaging Co.', 'Storage A', '200', 'pieces', '']
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(template);
@@ -387,7 +447,8 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
     const colDescriptions = ALL_COLUMNS.map(col => ({
       column: col,
       description: COLUMN_LABELS[col],
-      required: REQUIRED_COLUMNS.includes(col) ? 'Yes' : 'No'
+      required: REQUIRED_COLUMNS.includes(col) ? 'Yes' : 'No',
+      valid_units: col.includes('Unit') ? VALID_UNITS.join(', ') : 'N/A'
     }));
 
     const descWs = XLSX.utils.json_to_sheet(colDescriptions);
@@ -499,9 +560,14 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
                           {COLUMN_LABELS[col]}
                         </p>
                         {col.includes('Unit') && (
-                          <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
-                            Allowed: {Object.keys(UNIT_EXAMPLES).join(', ')}
-                          </p>
+                          <div>
+                            <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
+                              Valid units: {VALID_UNITS.slice(0, 8).join(', ')}...
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              Examples: kg, g, L, mL, pieces, boxes, bottles, bags, packs
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -648,6 +714,23 @@ export function SpreadsheetImport({ onImport, onClose, isOpen }: SpreadsheetImpo
                     {data.filter(r => !r.isValid).map(row => (
                       <div key={row.rowNumber} className="text-xs text-red-700 dark:text-red-400">
                         <span className="font-medium">Row {row.rowNumber}:</span> {row.errors.join(', ')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {data.some(r => r.warnings.length > 0) && (
+                <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950/10 border border-yellow-200 dark:border-yellow-900/30 p-4">
+                  <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-400 mb-2 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Warnings
+                  </h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {data.filter(r => r.warnings.length > 0).map(row => (
+                      <div key={row.rowNumber} className="text-xs text-yellow-700 dark:text-yellow-400">
+                        <span className="font-medium">Row {row.rowNumber}:</span> {row.warnings.join(', ')}
                       </div>
                     ))}
                   </div>
