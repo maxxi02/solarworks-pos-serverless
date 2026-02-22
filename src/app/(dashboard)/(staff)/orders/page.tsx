@@ -9,10 +9,10 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useNotificationSound, preloadNotificationSounds } from '@/lib/use-notification-sound';
 import {
   ShoppingCart, Plus, Minus, Trash2, DollarSign, Smartphone, Receipt,
-  Loader2, Utensils, Coffee, ChevronLeft, ChevronRight, GripVertical,
+  Loader2, Utensils, Coffee, ChevronLeft, GripVertical,
   Save, History, RefreshCw, Printer, Percent,
-  Menu, Clock, Eye, AlertTriangle, CheckCircle2,
-  ChevronRight as ChevronRightIcon,
+  Menu, Clock, Eye, AlertTriangle,
+  ChevronRight,
 } from 'lucide-react';
 
 // UI
@@ -22,10 +22,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 // Local _components
@@ -35,7 +31,6 @@ import { SplitPaymentInput } from './_components/SplitpaymentInput';
 import { ReceiptModal } from './_components/Receiptmodal';
 import { DiscountModal } from './_components/DiscountModal';
 import { OrderHistoryModal } from './_components/OrderHistoryModal';
-import { StockAlertsBadge } from './_components/StockAlertsBadge';
 import { PrinterStatus } from './_components/Printerstatus';
 import { InsufficientStockModal } from './_components/Insufficientstockmodal';
 import { SavedOrdersPanel } from './_components/Savedorderspanel';
@@ -45,6 +40,8 @@ import {
   InsufficientStockItem, ReceiptOrder, StockCheckResult,
 } from './_components/pos.types';
 import { formatCurrency, generateOrderNumber, DISCOUNT_RATE } from './_components/pos.utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // ============ Main Component ============
 export default function OrdersPage() {
@@ -61,6 +58,8 @@ export default function OrdersPage() {
     },
     autoRollback: true,
   });
+
+  const [showStockAlertsModal, setShowStockAlertsModal] = useState(false);
 
   // Cart
   const {
@@ -94,7 +93,7 @@ export default function OrdersPage() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [showSavedOrders, setShowSavedOrders] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
-  const [showStockAlerts, setShowStockAlerts] = useState(false);
+  // const [showStockAlerts, setShowStockAlerts] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptOrder | null>(null);
   const [insufficientStockItems, setInsufficientStockItems] = useState<InsufficientStockItem[]>([]);
@@ -276,8 +275,9 @@ export default function OrdersPage() {
     saveOrderToLocal(order);
     toast.success('Order saved', { description: `#${order.orderNumber}` });
     playSuccess();
+    clearCart();
   }, [cart, customerName, subtotal, discountTotal, total, paymentMethod, splitPayment, orderType,
-      selectedTable, seniorPwdCount, orderNote, seniorPwdIds, playSuccess, playError, saveOrderToLocal]);
+    selectedTable, seniorPwdCount, orderNote, seniorPwdIds, playSuccess, playError, saveOrderToLocal]);
 
   const loadSavedOrder = useCallback((order: SavedOrder) => {
     setCart(order.items);
@@ -538,6 +538,8 @@ export default function OrdersPage() {
       {/* Attendance Status Bar */}
       <div className="border-b bg-card sticky top-0 z-20 backdrop-blur-sm mb-5">
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
+
+          {/* Left — shift status */}
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-3">
               <div className="h-4 w-4 rounded-full bg-green-500 animate-pulse" />
@@ -551,120 +553,160 @@ export default function OrdersPage() {
                 </span>
               </div>
             )}
-            {attendance?.status === 'pending' && (
-              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1">
-                Pending Approval
-              </Badge>
-            )}
-            {attendance?.status === 'confirmed' && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-sm px-3 py-1">
-                <CheckCircle2 className="mr-2 h-4 w-4" />Confirmed
-              </Badge>
-            )}
           </div>
 
+          {/* Right — single sheet trigger */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" size="default" className="gap-2 h-10 text-sm">
-                Attendance <ChevronRightIcon className="h-5 w-5" />
+              <Button variant="outline" size="sm" className="gap-2 h-9">
+                <Menu className="h-4 w-4" /> Actions
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-full sm:w-450px sm:max-w-450px">
-              <SheetHeader className="mb-8">
-                <SheetTitle className="flex items-center gap-2 text-xl">
-                  <Clock className="h-6 w-6 text-primary" />Shift Controls
+            <SheetContent side="right" className="w-full sm:max-w-sm">
+              <SheetHeader className="mb-6">
+                <SheetTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" /> Controls
                 </SheetTitle>
               </SheetHeader>
-              <div className="space-y-8">
-                <ClockInCard />
-                <Separator />
-                <div className="space-y-5">
-                  {!attendance?.clockOutTime ? (
+
+              <div className="space-y-6 overflow-y-auto h-[calc(100vh-80px)] p-2">
+                {/* Shift Status */}
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Shift</p>
+                  <ClockInCard />
+                  {!attendance?.clockOutTime && (
                     <Button
                       onClick={() => { clockOut(); playSuccess(); }}
                       disabled={attendanceLoading}
                       variant="destructive"
-                      size="lg"
-                      className="w-full h-12 text-base"
+                      className="w-full"
                     >
                       {attendanceLoading
-                        ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Ending shift…</>
+                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Ending shift…</>
                         : 'Clock Out – End Shift'}
                     </Button>
-                  ) : (
-                    <div className="text-center text-muted-foreground py-5 text-base">Shift completed</div>
                   )}
-                  <p className="text-sm text-center text-muted-foreground">
-                    Remember to clock out at the end of your shift.
-                    {attendance?.status === 'pending' && (
-                      <span className="block mt-2 text-yellow-700">Your attendance is awaiting manager approval.</span>
+                </div>
+
+                <Separator />
+
+                {/* Printer */}
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Printer</p>
+                  {settings && <PrinterStatus settings={settings} />}
+                </div>
+
+                <Separator />
+
+                {/* Orders */}
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Orders</p>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setShowOrderHistory(true)}>
+                    <History className="w-4 h-4" /> Order History
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setShowSavedOrders(v => !v)}>
+                    <Save className="w-4 h-4" /> Saved Orders ({savedOrders.length})
+                  </Button>
+                </div>
+
+                <Separator />
+
+                {/* Stock */}
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock</p>
+                  <Button variant="outline" className="w-full justify-start gap-2"
+                    onClick={() => setShowStockAlertsModal(true)}>
+                    <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                    Stock Alerts
+                    {stockAlerts.length > 0 && (
+                      <Badge variant="destructive" className="ml-auto">{stockAlerts.length}</Badge>
                     )}
-                  </p>
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={fetchStockAlerts}>
+                    <RefreshCw className="w-4 h-4" /> Refresh Stock
+                  </Button>
+                </div>
+
+                <Separator />
+                {/* Stock Alerts Modal */}
+                <Dialog open={showStockAlertsModal} onOpenChange={setShowStockAlertsModal}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                        Stock Alerts ({stockAlerts.length})
+                      </DialogTitle>
+                      <DialogDescription>
+                        Items that are low or critically out of stock.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <ScrollArea className="max-h-[60vh] pr-3">
+                      {stockAlerts.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                          No stock alerts at the moment.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {stockAlerts.map((alert) => (
+                            <div key={alert.itemId} className="flex items-start justify-between p-3 border rounded-lg">
+                              <div className="space-y-1">
+                                <p className="font-medium text-sm">{alert.itemName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Current: {alert.currentStock} {alert.unit} · Min: {alert.minStock} {alert.unit}
+                                </p>
+                                {alert.location && (
+                                  <p className="text-xs text-muted-foreground">📍 {alert.location}</p>
+                                )}
+                              </div>
+                              <Badge
+                                variant={alert.status === 'critical' ? 'destructive' : 'secondary'}
+                                className="shrink-0 ml-2"
+                              >
+                                {alert.outOfStock ? 'Out of Stock' : alert.status}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+
+                    <DialogFooter>
+                      <Button variant="outline" className="w-full gap-2" onClick={() => { fetchStockAlerts(); }}>
+                        <RefreshCw className="w-4 h-4" /> Refresh
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                {/* Receipt */}
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Receipt</p>
+                  <Button variant="outline" className="w-full justify-start gap-2"
+                    onClick={() => savedOrders.length ? handleReprintReceipt(savedOrders[0]) : toast.info('No saved orders')}>
+                    <Printer className="w-4 h-4" /> Test Print
+                  </Button>
+                  {currentReceipt && (
+                    <>
+                      <Button variant="outline" className="w-full justify-start gap-2"
+                        onClick={() => previewReceipt(currentReceipt as any, settings, 'customer')}>
+                        <Eye className="w-4 h-4" /> Preview Customer Receipt
+                      </Button>
+                      <Button variant="outline" className="w-full justify-start gap-2"
+                        onClick={() => previewReceipt(currentReceipt as any, settings, 'kitchen')}>
+                        <Utensils className="w-4 h-4" /> Preview Kitchen Order
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
+
             </SheetContent>
           </Sheet>
+
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <header className="bg-card rounded-xl shadow-sm p-6 mb-5 border">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3">
-                <ShoppingCart className="h-8 w-8" />POS System / Orders
-              </h1>
-              <p className="text-sm text-muted-foreground mt-2">Swipe categories • Drag items to cart</p>
-            </div>
-            <div className="flex items-center gap-4">
-              {settings && <PrinterStatus settings={settings} />}
-              <StockAlertsBadge
-                alerts={stockAlerts}
-                show={showStockAlerts}
-                onToggle={() => setShowStockAlerts(v => !v)}
-                onRefresh={fetchStockAlerts}
-              />
-              <Button variant="outline" size="default" onClick={() => setShowOrderHistory(true)} className="h-10 text-sm gap-2">
-                <History className="w-4 h-4" /><span className="hidden sm:inline">History</span>
-              </Button>
-              <Button variant="outline" size="default" onClick={() => setShowSavedOrders(v => !v)} className="h-10 text-sm gap-2">
-                <Save className="w-4 h-4" /><span className="hidden sm:inline">Saved ({savedOrders.length})</span>
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-10 w-10"><Menu className="h-5 w-5" /></Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="text-base py-2">Quick Actions</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setShowOrderHistory(true)} className="text-base py-2">
-                    <History className="w-5 h-5 mr-3" />View History
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={fetchStockAlerts} className="text-base py-2">
-                    <RefreshCw className="w-5 h-5 mr-3" />Refresh Stock
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => savedOrders.length ? handleReprintReceipt(savedOrders[0]) : toast.info('No saved orders')}
-                    className="text-base py-2"
-                  >
-                    <Printer className="w-5 h-5 mr-3" />Test Print Receipt
-                  </DropdownMenuItem>
-                  {currentReceipt && (
-                    <>
-                      <DropdownMenuItem onClick={() => previewReceipt(currentReceipt as any, settings, 'customer')} className="text-base py-2">
-                        <Eye className="w-5 h-5 mr-3" />Preview Customer Receipt
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => previewReceipt(currentReceipt as any, settings, 'kitchen')} className="text-base py-2">
-                        <Utensils className="w-5 h-5 mr-3" />Preview Kitchen Order
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </header>
 
         {/* Main Layout */}
         <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-220px)]">
@@ -743,9 +785,8 @@ export default function OrdersPage() {
                   {filteredProducts.map(product => (
                     <Card
                       key={product._id}
-                      className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none ${
-                        draggedItem?._id === product._id ? 'opacity-50 scale-95' : ''
-                      }`}
+                      className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none ${draggedItem?._id === product._id ? 'opacity-50 scale-95' : ''
+                        }`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, product)}
                       onDragEnd={() => setDraggedItem(null)}
@@ -753,8 +794,22 @@ export default function OrdersPage() {
                       onTouchMove={handleTouchMove}
                       onTouchEnd={handleTouchEnd}
                     >
-                      <CardContent className="p-3">
-                        <div className="space-y-2">
+                      <CardContent className="p-0">
+                        {product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="w-full h-36 object-cover rounded-t-lg"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div className="w-full h-36 bg-muted rounded-t-lg flex items-center justify-center">
+                            {product.menuType === 'drink'
+                              ? <Coffee className="h-8 w-8 text-muted-foreground" />
+                              : <Utensils className="h-8 w-8 text-muted-foreground" />}
+                          </div>
+                        )}
+                        <div className="p-3 space-y-2">
                           <div className="flex items-start justify-between">
                             <h3 className="font-bold text-sm line-clamp-2 flex-1">{product.name}</h3>
                             <GripVertical className="w-4 h-4 text-muted-foreground ml-2 shrink-0" />
@@ -792,6 +847,10 @@ export default function OrdersPage() {
                       <Button variant="outline" size="default" onClick={() => setShowDiscountModal(true)}
                         disabled={!cart.length || isDisabled} className="h-9 text-sm px-3">
                         <Percent className="w-4 h-4 mr-2" />Discount
+                      </Button>
+                      <Button variant="outline" size="default" onClick={saveCurrentOrder}
+                        disabled={!cart.length || isDisabled} className="h-9 w-9 p-0" title="Save Order">
+                        <Save className="w-4 h-4" />
                       </Button>
                       <Button variant="outline" size="default" onClick={clearCart}
                         disabled={!cart.length || isDisabled} className="h-9 w-9 p-0">
@@ -837,43 +896,59 @@ export default function OrdersPage() {
                       {cart.map(item => (
                         <div key={item._id} className="flex flex-col p-2 border rounded">
                           <div className="flex justify-between items-center">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-sm truncate">{item.name}</p>
-                                {item.hasDiscount && (
-                                  <Badge variant="default" className="text-[10px] h-5 px-2 bg-green-600">20% OFF</Badge>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3">
-                                {item.hasDiscount ? (
-                                  <>
-                                    <p className="text-xs text-muted-foreground line-through">{formatCurrency(item.price)}</p>
-                                    <p className="text-xs text-green-600 font-bold">{formatCurrency(item.price * (1 - DISCOUNT_RATE))}</p>
-                                  </>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}</p>
-                                )}
-                                <p className="text-xs text-muted-foreground">× {item.quantity}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 ml-3">
-                              <Button size="default" variant="outline" onClick={() => updateQuantity(item._id, -1)} className="h-8 w-8 p-0" disabled={isDisabled}>
-                                <Minus className="w-3.5 h-3.5" />
-                              </Button>
-                              <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                              <Button size="default" variant="outline" onClick={() => updateQuantity(item._id, 1)} className="h-8 w-8 p-0" disabled={isDisabled}>
-                                <Plus className="w-3.5 h-3.5" />
-                              </Button>
-                              {item.hasDiscount && (
-                                <Button size="default" variant="outline" onClick={() => removeDiscount(item._id)} className="h-8 w-8 p-0 text-yellow-600" disabled={isDisabled}>
-                                  <Percent className="w-3.5 h-3.5" />
-                                </Button>
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              {/* Thumbnail */}
+                              {item.imageUrl ? (
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.name}
+                                  className="h-10 w-10 rounded object-cover border flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded bg-muted flex items-center justify-center flex-shrink-0 border">
+                                  {item.menuType === 'drink'
+                                    ? <Coffee className="h-4 w-4 text-muted-foreground" />
+                                    : <Utensils className="h-4 w-4 text-muted-foreground" />}
+                                </div>
                               )}
-                              <Button size="default" variant="destructive" onClick={() => removeFromCart(item._id)} className="h-8 w-8 p-0" disabled={isDisabled}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm truncate">{item.name}</p>
+                                  {item.hasDiscount && (
+                                    <Badge variant="default" className="text-[10px] h-5 px-2 bg-green-600">20% OFF</Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {item.hasDiscount ? (
+                                    <>
+                                      <p className="text-xs text-muted-foreground line-through">{formatCurrency(item.price)}</p>
+                                      <p className="text-xs text-green-600 font-bold">{formatCurrency(item.price * (1 - DISCOUNT_RATE))}</p>
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground">{formatCurrency(item.price)}</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground">× {item.quantity}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 ml-3">
+                                <Button size="default" variant="outline" onClick={() => updateQuantity(item._id, -1)} className="h-8 w-8 p-0" disabled={isDisabled}>
+                                  <Minus className="w-3.5 h-3.5" />
+                                </Button>
+                                <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                                <Button size="default" variant="outline" onClick={() => updateQuantity(item._id, 1)} className="h-8 w-8 p-0" disabled={isDisabled}>
+                                  <Plus className="w-3.5 h-3.5" />
+                                </Button>
+                                {item.hasDiscount && (
+                                  <Button size="default" variant="outline" onClick={() => removeDiscount(item._id)} className="h-8 w-8 p-0 text-yellow-600" disabled={isDisabled}>
+                                    <Percent className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                <Button size="default" variant="destructive" onClick={() => removeFromCart(item._id)} className="h-8 w-8 p-0" disabled={isDisabled}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
+                          </div>   {/* ← ADD: closes min-w-0 wrapper */}
                         </div>
                       ))}
                     </div>
@@ -954,8 +1029,8 @@ export default function OrdersPage() {
                         {paymentMethod === 'cash' && amountPaid >= total
                           ? `Pay & Change: ₱${(amountPaid - total).toFixed(2)}`
                           : paymentMethod === 'split' && (splitPayment.cash + splitPayment.gcash) >= total
-                          ? 'Pay (Split)'
-                          : `Pay ${formatCurrency(total)}`}
+                            ? 'Pay (Split)'
+                            : `Pay ${formatCurrency(total)}`}
                       </>
                     )}
                   </Button>
@@ -970,39 +1045,32 @@ export default function OrdersPage() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Side Quick Actions */}
-            <div className="flex flex-col gap-3 w-12">
-              <Button onClick={saveCurrentOrder} disabled={!cart.length || isDisabled} variant="default" size="icon"
-                className="h-12 w-12 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-lg" title="Save Order">
-                <Save className="h-5 w-5" />
-              </Button>
-              <Button onClick={() => setShowSavedOrders(v => !v)} variant="outline" size="icon"
-                className="h-12 w-12 rounded-full" title="Saved Orders">
-                <History className="h-5 w-5" />
-              </Button>
-              <Button onClick={fetchStockAlerts} variant="outline" size="icon"
-                className="h-12 w-12 rounded-full" title="Refresh Stock Alerts">
-                <RefreshCw className="h-5 w-5" />
-              </Button>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Saved Orders Panel */}
-      {showSavedOrders && (
-        <SavedOrdersPanel
-          orders={savedOrders}
-          isProcessing={isProcessing}
-          isPrinting={isPrinting}
-          onClose={() => setShowSavedOrders(false)}
-          onLoad={loadSavedOrder}
-          onReprint={handleReprintReceipt}
-          onDelete={deleteOrder}
-          onClearAll={clearAllSavedOrders}
-        />
-      )}
+      <Dialog open={showSavedOrders} onOpenChange={setShowSavedOrders}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Save className="h-5 w-5" />
+              Saved Orders ({savedOrders.length})
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[70vh] pr-3">
+            <SavedOrdersPanel
+              orders={savedOrders}
+              isProcessing={isProcessing}
+              isPrinting={isPrinting}
+              onClose={() => setShowSavedOrders(false)}
+              onLoad={loadSavedOrder}
+              onReprint={handleReprintReceipt}
+              onDelete={deleteOrder}
+              onClearAll={clearAllSavedOrders}
+            />
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* Modals */}
       <DiscountModal

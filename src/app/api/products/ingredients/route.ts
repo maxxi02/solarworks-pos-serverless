@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MONGODB } from '@/config/db';
-import { ObjectId } from 'mongodb';
 
 // Types
 interface Ingredient {

@@ -1,136 +1,122 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { MONGODB } from '@/config/db';
-import { ObjectId } from 'mongodb';
+// src/app/api/categories/route.ts
 
-interface ProductIngredient {
-  inventoryItemId: string;     // Reference to stocks collection _id
-  name: string;               // Name of the inventory item (for display)
-  quantity: number;           // Amount needed per serving (as number, not string)
-  unit: string;               // Unit of measurement
-}
+import { NextRequest, NextResponse } from "next/server";
+import { MONGODB } from "@/config/db";
+import { WithId, Document } from "mongodb";
+import {
+  MongoDBProduct,
+  MongoDBCategory,
+  FormattedProduct,
+  CategoryInput,
+} from "@/types/products";
 
-interface MongoDBProduct {
-  _id: ObjectId;
-  name: string;
-  price: number;
-  description: string;
-  ingredients: ProductIngredient[];
-  available: boolean;
-  categoryId: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-interface MongoDBCategory {
-  _id: ObjectId;
-  name: string;
-  description: string;
-  menuType: 'food' | 'drink';  
-  createdAt?: Date;
-  updatedAt?: Date;
+function formatProduct(p: WithId<Document>): FormattedProduct {
+  return {
+    _id: p._id.toString(),
+    name: p.name as string,
+    price: p.price as number,
+    description: (p.description as string) || "",
+    ingredients: Array.isArray(p.ingredients)
+      ? (p.ingredients as MongoDBProduct["ingredients"]).map((ing) => ({
+          inventoryItemId: ing.inventoryItemId || "",
+          name: ing.name,
+          quantity:
+            typeof ing.quantity === "string"
+              ? Number(ing.quantity)
+              : ing.quantity,
+          unit: ing.unit,
+        }))
+      : [],
+    available: p.available !== undefined ? (p.available as boolean) : true,
+    categoryId: p.categoryId as string,
+    imageUrl: (p.imageUrl as string) || "",
+    createdAt: p.createdAt as Date | undefined,
+    updatedAt: p.updatedAt as Date | undefined,
+  };
 }
 
 export async function GET() {
   try {
-    console.log('🔍 Fetching categories...');
-    
-    const categories = await MONGODB.collection('categories')
+    console.log("🔍 Fetching categories...");
+
+    const categories = await MONGODB.collection("categories")
       .find({})
       .sort({ createdAt: -1 })
-      .toArray() as MongoDBCategory[];
+      .toArray();
     console.log(`📊 Found ${categories.length} categories`);
-    
-    const products = await MONGODB.collection('products').find({}).toArray() as MongoDBProduct[];
+
+    const products = await MONGODB.collection("products").find({}).toArray();
     console.log(`📊 Found ${products.length} products`);
-    
-    const categoriesWithProducts = categories.map((category: MongoDBCategory) => ({
+
+    const categoriesWithProducts = categories.map((category) => ({
       _id: category._id.toString(),
-      name: category.name,
-      description: category.description || '',
-      menuType: category.menuType || 'food', // Default to 'food' if not set
+      name: category.name as string,
+      description: (category.description as string) || "",
+      menuType: (category.menuType as MongoDBCategory["menuType"]) || "food",
       products: products
-        .filter((p: MongoDBProduct) => p.categoryId === category._id.toString())
-        .map((p: MongoDBProduct) => ({
-          _id: p._id.toString(),
-          name: p.name,
-          price: p.price,
-          description: p.description || '',
-          ingredients: p.ingredients || [],
-          available: p.available !== undefined ? p.available : true,
-          categoryId: p.categoryId
-        })),
-      createdAt: category.createdAt,
-      updatedAt: category.updatedAt
+        .filter((p) => p.categoryId === category._id.toString())
+        .map(formatProduct),
+      createdAt: category.createdAt as Date | undefined,
+      updatedAt: category.updatedAt as Date | undefined,
     }));
-    
-    console.log('✅ Categories fetched successfully');
+
+    console.log("✅ Categories fetched successfully");
     return NextResponse.json(categoriesWithProducts);
-    
   } catch (error: unknown) {
-    console.error('❌ GET Error:', error);
+    console.error("❌ GET Error:", error);
     return NextResponse.json(
       {
-        error: 'Failed to fetch categories',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: "Failed to fetch categories",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    console.log('📝 Adding category:', body);
-    
+    const body: CategoryInput = await request.json();
+    console.log("📝 Adding category:", body);
+
     if (!body.name?.trim()) {
       return NextResponse.json(
-        { error: 'Category name is required' },
-        { status: 400 }
+        { error: "Category name is required" },
+        { status: 400 },
       );
     }
-    
-    // Validate menuType
-    const validMenuTypes = ['food', 'drink'];
-    const menuType = body.menuType && validMenuTypes.includes(body.menuType) 
-      ? body.menuType 
-      : 'food'; // Default to 'food' if not specified or invalid
-    
+
+    const validMenuTypes: MongoDBCategory["menuType"][] = ["food", "drink"];
+    const menuType: MongoDBCategory["menuType"] =
+      body.menuType &&
+      validMenuTypes.includes(body.menuType as MongoDBCategory["menuType"])
+        ? (body.menuType as MongoDBCategory["menuType"])
+        : "food";
+
     const newCategory = {
       name: body.name.trim(),
-      description: body.description?.trim() || '',
-      menuType: menuType, // Include menuType
+      description: body.description?.trim() || "",
+      menuType,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
-    
-    const result = await MONGODB.collection('categories').insertOne(newCategory);
-    console.log('✅ Category created:', result.insertedId);
-    
-    return NextResponse.json({
-      _id: result.insertedId.toString(),
-      ...newCategory,
-      products: []
-    }, {
-      status: 201,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-    
+
+    const result =
+      await MONGODB.collection("categories").insertOne(newCategory);
+    console.log("✅ Category created:", result.insertedId);
+
+    return NextResponse.json(
+      { _id: result.insertedId.toString(), ...newCategory, products: [] },
+      { status: 201, headers: { "Content-Type": "application/json" } },
+    );
   } catch (error: unknown) {
-    console.error('❌ POST Error:', error);
+    console.error("❌ POST Error:", error);
     return NextResponse.json(
       {
-        error: 'Failed to create category',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        error: "Failed to create category",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 }

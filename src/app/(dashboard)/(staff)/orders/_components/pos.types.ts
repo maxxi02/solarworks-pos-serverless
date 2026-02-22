@@ -8,7 +8,8 @@ export interface Product {
   ingredients: Array<{ name: string; quantity: string; unit: string }>;
   available: boolean;
   category?: string;
-  menuType?: 'food' | 'drink';
+  menuType?: "food" | "drink";
+  imageUrl?: string; // ← ADD THIS
 }
 
 export interface CartItem extends Product {
@@ -20,7 +21,7 @@ export interface CartItem extends Product {
 export interface CategoryData {
   products?: Product[];
   name: string;
-  menuType: 'food' | 'drink';
+  menuType: "food" | "drink";
 }
 
 export interface SavedOrder {
@@ -31,12 +32,12 @@ export interface SavedOrder {
   subtotal: number;
   discountTotal: number;
   total: number;
-  paymentMethod: 'cash' | 'gcash' | 'split';
+  paymentMethod: "cash" | "gcash" | "split";
   splitPayment?: { cash: number; gcash: number };
-  orderType: 'dine-in' | 'takeaway';
+  orderType: "dine-in" | "takeaway";
   tableNumber?: string;
   timestamp: Date;
-  status: 'pending' | 'completed' | 'cancelled';
+  status: "pending" | "completed" | "cancelled";
   seniorPwdCount?: number;
   orderNote?: string;
   cashier?: string;
@@ -53,7 +54,7 @@ export interface StockAlert {
   minStock: number;
   reorderPoint: number;
   unit: string;
-  status: 'critical' | 'low' | 'warning';
+  status: "critical" | "low" | "warning";
   location: string;
   outOfStock?: boolean;
 }
