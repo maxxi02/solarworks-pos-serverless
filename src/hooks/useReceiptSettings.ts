@@ -248,5 +248,7 @@ export function useReceiptSettings() {
     testPrint,
     DEFAULT_SETTINGS,
     refreshSettings: loadSettings
-  };
+    // lohlogogog
+  }; 
 }
+// logo shit
