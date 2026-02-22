@@ -9,7 +9,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useNotificationSound, preloadNotificationSounds } from '@/lib/use-notification-sound';
 import {
   ShoppingCart, Plus, Minus, Trash2, DollarSign, Smartphone, Receipt,
-  Loader2, Utensils, Coffee, ChevronLeft, GripVertical,
+  Loader2, Utensils, Coffee, ChevronLeft,
   Save, History, RefreshCw, Printer, Percent,
   Menu, Clock, Eye, AlertTriangle,
   ChevronRight,
@@ -32,7 +32,7 @@ import { ReceiptModal } from './_components/Receiptmodal';
 import { DiscountModal } from './_components/DiscountModal';
 import { OrderHistoryModal } from './_components/OrderHistoryModal';
 import { PrinterStatus } from './_components/Printerstatus';
-import { InsufficientStockModal } from './_components/InsufficientStockModal';
+import { InsufficientStockModal } from './_components/Insufficientstockmodal';
 import { SavedOrdersPanel } from './_components/Savedorderspanel';
 import { useCart, useSavedOrders, buildOrder } from './_components/usePOS';
 import {
