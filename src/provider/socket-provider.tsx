@@ -52,6 +52,31 @@ export interface AttendanceStatusChangedData {
     status: string;
 }
 
+export interface CustomerOrderItem {
+    _id: string;
+    name: string;
+    price: number;
+    quantity: number;
+    description?: string;
+    category?: string;
+    menuType?: 'food' | 'drink';
+    imageUrl?: string;
+    ingredients: Array<{ name: string; quantity: string; unit: string }>;
+}
+
+export interface CustomerOrder {
+    orderId: string;
+    customerName: string;
+    items: CustomerOrderItem[];
+    orderNote?: string;
+    orderType: 'dine-in' | 'takeaway';
+    tableNumber?: string;
+    subtotal: number;
+    total: number;
+    timestamp: Date;
+}
+
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface SocketContextValue {
@@ -84,6 +109,14 @@ interface SocketContextValue {
     offAttendanceRejected: (cb?: (data: AttendanceRejectedData) => void) => void;
     onAttendanceStatusChanged: (cb: (data: AttendanceStatusChangedData) => void) => void;
     offAttendanceStatusChanged: (cb?: (data: AttendanceStatusChangedData) => void) => void;
+
+    // ─── Order emitters ───────────────────────────────────────────
+    emitPosJoin: () => void;
+    emitCustomerOrder: (order: CustomerOrder) => void;
+
+    // ─── Order listeners ──────────────────────────────────────────
+    onNewCustomerOrder: (cb: (order: CustomerOrder) => void) => void;
+    offNewCustomerOrder: (cb?: (order: CustomerOrder) => void) => void;
 }
 
 const SocketContext = createContext<SocketContextValue>({
@@ -108,6 +141,10 @@ const SocketContext = createContext<SocketContextValue>({
     offAttendanceRejected: () => { },
     onAttendanceStatusChanged: () => { },
     offAttendanceStatusChanged: () => { },
+    emitPosJoin: () => { },
+    emitCustomerOrder: () => { },
+    onNewCustomerOrder: () => { },
+    offNewCustomerOrder: () => { },
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -291,6 +328,19 @@ export function SocketProvider({
     const offAttendanceStatusChanged = (cb?: (data: AttendanceStatusChangedData) => void) =>
         socketRef.current?.off("attendance:status:changed", cb);
 
+
+    const emitPosJoin = () =>
+        socketRef.current?.emit('pos:join');
+
+    const emitCustomerOrder = (order: CustomerOrder) =>
+        socketRef.current?.emit('order:new:trigger', order);
+
+    const onNewCustomerOrder = (cb: (order: CustomerOrder) => void) =>
+        socketRef.current?.on('order:new', cb);
+
+    const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) =>
+        socketRef.current?.off('order:new', cb);
+
     return (
         <SocketContext.Provider
             value={{
@@ -315,6 +365,10 @@ export function SocketProvider({
                 offAttendanceRejected,
                 onAttendanceStatusChanged,
                 offAttendanceStatusChanged,
+                emitPosJoin,
+                emitCustomerOrder,
+                onNewCustomerOrder,
+                offNewCustomerOrder,
             }}
         >
             {children}

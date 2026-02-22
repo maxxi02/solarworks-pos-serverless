@@ -42,9 +42,14 @@ import {
 import { formatCurrency, generateOrderNumber, DISCOUNT_RATE } from './_components/pos.utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CustomerOrder } from '@/types/order.type';
+import { useSocket } from '@/provider/socket-provider';
 
 // ============ Main Component ============
 export default function OrdersPage() {
+  const { emitPosJoin, onNewCustomerOrder, offNewCustomerOrder } = useSocket();
+
+
   const { isClockedIn, isLoading: attendanceLoading, attendance, clockIn, clockOut } = useAttendance();
   const { playSuccess, playError, playOrder } = useNotificationSound();
   const { settings, isLoading: settingsLoading } = useReceiptSettings();
@@ -107,6 +112,9 @@ export default function OrdersPage() {
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
 
+  //ORDER STATES
+  const [incomingOrder, setIncomingOrder] = useState<CustomerOrder | null>(null);
+
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const cartDropZoneRef = useRef<HTMLDivElement>(null);
 
@@ -140,6 +148,23 @@ export default function OrdersPage() {
 
   // ——— Effects ———
   useEffect(() => { preloadNotificationSounds(); }, []);
+
+  // Join POS room + listen for customer orders
+  useEffect(() => {
+    emitPosJoin();
+
+    const handleNewOrder = (order: CustomerOrder) => {
+      setIncomingOrder(order);
+      playOrder();
+      toast.info(`New order from ${order.customerName}!`, {
+        description: `${order.items.length} item(s) · ${formatCurrency(order.total)}`,
+        duration: 10000,
+      });
+    };
+
+    onNewCustomerOrder(handleNewOrder);
+    return () => offNewCustomerOrder(handleNewOrder);
+  }, []);
 
   useEffect(() => {
     fetchProducts();
@@ -403,7 +428,8 @@ export default function OrdersPage() {
       playSuccess();
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'insufficientItems' in error) {
-        setInsufficientStockItems((error as any).insufficientItems);
+        const err = error as { insufficientItems: InsufficientStockItem[] };
+        setInsufficientStockItems(err.insufficientItems);
         setShowInsufficientStockModal(true);
       } else {
         toast.error('Payment failed', { description: error instanceof Error ? error.message : 'Unknown error' });
@@ -678,6 +704,90 @@ export default function OrdersPage() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+                {/* Incoming Customer Order Modal */}
+                <Dialog open={!!incomingOrder} onOpenChange={() => setIncomingOrder(null)}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <ShoppingCart className="h-5 w-5 text-primary" />
+                        New Customer Order
+                      </DialogTitle>
+                      <DialogDescription>
+                        From <span className="font-semibold">{incomingOrder?.customerName}</span>
+                        {incomingOrder?.orderType === 'dine-in' && incomingOrder.tableNumber && (
+                          <span> · Table {incomingOrder.tableNumber}</span>
+                        )}
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <ScrollArea className="max-h-[50vh] pr-3">
+                      <div className="space-y-2">
+                        {incomingOrder?.items.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 border rounded-lg">
+                            <div className="flex items-center gap-2">
+                              {item.imageUrl ? (
+                                <img src={item.imageUrl} alt={item.name}
+                                  className="h-10 w-10 rounded object-cover border flex-shrink-0" />
+                              ) : (
+                                <div className="h-10 w-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                                  {item.menuType === 'drink'
+                                    ? <Coffee className="h-4 w-4 text-muted-foreground" />
+                                    : <Utensils className="h-4 w-4 text-muted-foreground" />}
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-medium text-sm">{item.name}</p>
+                                <p className="text-xs text-muted-foreground">× {item.quantity}</p>
+                              </div>
+                            </div>
+                            <span className="text-sm font-medium">
+                              {formatCurrency(item.price * item.quantity)}
+                            </span>
+                          </div>
+                        ))}
+                        {incomingOrder?.orderNote && (
+                          <div className="p-2 bg-muted rounded-lg text-sm text-muted-foreground">
+                            📝 {incomingOrder.orderNote}
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+
+                    <div className="flex justify-between font-bold text-base pt-2 border-t">
+                      <span>Total</span>
+                      <span className="text-primary">{formatCurrency(incomingOrder?.total ?? 0)}</span>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                      <Button variant="outline" onClick={() => setIncomingOrder(null)}>
+                        Decline
+                      </Button>
+                      <Button onClick={() => {
+                        if (!incomingOrder) return;
+                        // Load items into cart
+                        incomingOrder.items.forEach(item => {
+                          for (let i = 0; i < item.quantity; i++) {
+                            addToCart({
+                              ...item,
+                              available: true,
+                              ingredients: item.ingredients ?? [],
+                            });
+                          }
+                        });
+                        if (incomingOrder.customerName) setCustomerName(incomingOrder.customerName);
+                        if (incomingOrder.orderNote) setOrderNote(incomingOrder.orderNote);
+                        if (incomingOrder.orderType) setOrderType(incomingOrder.orderType);
+                        if (incomingOrder.tableNumber) setSelectedTable(incomingOrder.tableNumber);
+                        setIncomingOrder(null);
+                        toast.success('Order loaded into cart');
+                        playSuccess();
+                      }}>
+                        Accept Order
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Receipt */}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Receipt</p>
@@ -688,11 +798,12 @@ export default function OrdersPage() {
                   {currentReceipt && (
                     <>
                       <Button variant="outline" className="w-full justify-start gap-2"
-                        onClick={() => previewReceipt(currentReceipt as any, settings, 'customer')}>
+                        onClick={() => previewReceipt(currentReceipt as unknown as PrinterReceiptData, settings, 'customer')}
+                      >
                         <Eye className="w-4 h-4" /> Preview Customer Receipt
                       </Button>
                       <Button variant="outline" className="w-full justify-start gap-2"
-                        onClick={() => previewReceipt(currentReceipt as any, settings, 'kitchen')}>
+                        onClick={() => previewReceipt(currentReceipt as unknown as PrinterReceiptData, settings, 'kitchen')}>
                         <Utensils className="w-4 h-4" /> Preview Kitchen Order
                       </Button>
                     </>
@@ -902,7 +1013,7 @@ export default function OrdersPage() {
                                 <img
                                   src={item.imageUrl}
                                   alt={item.name}
-                                  className="h-10 w-10 rounded object-cover border flex-shrink-0"
+                                  className="h-10 w-10 rounded object-cover border shrink-0"
                                 />
                               ) : (
                                 <div className="h-10 w-10 rounded bg-muted flex items-center justify-center flex-shrink-0 border">

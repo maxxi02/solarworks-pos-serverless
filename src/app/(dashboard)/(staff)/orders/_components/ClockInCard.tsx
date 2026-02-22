@@ -85,7 +85,7 @@ export function ClockInCard() {
                     <div className="space-y-4">
                         {/* Live Timer */}
                         {!attendance.clockOutTime && (
-                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-5 text-center border border-blue-100">
+                            <div className="bg-linear-to-r from-blue-50 to-indigo-50 rounded-lg p-5 text-center border border-blue-100">
                                 <div className="flex items-center justify-center gap-2 mb-1.5">
                                     <Timer className="h-4 w-4 text-blue-600 animate-pulse" />
                                     <span className="text-xs font-medium uppercase tracking-wide text-blue-700">

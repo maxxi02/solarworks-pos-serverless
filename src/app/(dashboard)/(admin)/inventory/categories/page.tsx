@@ -1018,10 +1018,10 @@ export default function CategoriesPage() {
                           <img
                             src={product.imageUrl}
                             alt={product.name}
-                            className="h-10 w-10 rounded-md object-cover border flex-shrink-0"
+                            className="h-10 w-10 rounded-md object-cover border shrink-0"
                           />
                         ) : (
-                          <div className="h-10 w-10 rounded-md border bg-muted flex items-center justify-center flex-shrink-0">
+                          <div className="h-10 w-10 rounded-md border bg-muted flex items-center justify-center shrink-0">
                             <Package className="h-4 w-4 text-muted-foreground" />
                           </div>
                         )}

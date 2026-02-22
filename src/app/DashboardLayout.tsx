@@ -7,7 +7,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { SocketProvider } from "../../provider/socket-provider";
+import { SocketProvider } from "../provider/socket-provider";
 import { authClient } from "@/lib/auth-client";
 
 export default function DashboardLayout({

@@ -590,7 +590,7 @@ export function ProductIngredientsForm({
                 placeholder="0.00"
                 disabled={!selectedItem}
               />
-              <div className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 min-w-[100px]">
+              <div className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 min-w-25">
                 <span className="text-sm text-gray-700 dark:text-gray-300">
                   {unit || selectedItem?.displayUnit || selectedItem?.unit || 'unit'}
                 </span>

@@ -9,7 +9,7 @@ import type {
   DmTypingPayload,
   TypingUser,
 } from "@/types/messaging.types";
-import { useSocket } from "../../provider/socket-provider";
+import { useSocket } from "../provider/socket-provider";
 
 type DisplayMessage = Message | OptimisticMessage;
 

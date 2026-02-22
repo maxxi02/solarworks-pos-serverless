@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSocket } from "../../provider/socket-provider"; 
+import { useSocket } from "../provider/socket-provider"; 
 import type {
   ConversationWithDetails,
   DmReceivePayload,
