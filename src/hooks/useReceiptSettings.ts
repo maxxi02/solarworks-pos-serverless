@@ -32,8 +32,10 @@ export const DEFAULT_SETTINGS: ReceiptSettings = {
   receiptMessage: 'Thank You for visiting Rendezvous Cafe!',
   disclaimer: 'Prices include 12% VAT. No refunds or exchanges on food items.',
   businessHours: 'Monday - Sunday: 7:00 AM - 10:00 PM',
-  logo: null,
-  logoPreview: '',
+ logo: null,
+logoPreview: '',
+logoSize: 'medium', // or whatever the default should be (e.g., 'small' | 'medium' | 'large')
+
   customerPrinter: {
     connectionType: 'usb',
     paperWidth: '58mm'
