@@ -9,7 +9,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useNotificationSound, preloadNotificationSounds } from '@/lib/use-notification-sound';
 import {
   ShoppingCart, Plus, Minus, Trash2, DollarSign, Smartphone, Receipt,
-  Loader2, Utensils, Coffee, ChevronLeft, GripVertical,
+  Loader2, Utensils, Coffee, ChevronLeft,
   Save, History, RefreshCw, Printer, Percent,
   Menu, Clock, Eye, AlertTriangle,
   ChevronRight,
