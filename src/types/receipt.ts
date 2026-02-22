@@ -1,5 +1,6 @@
 // types/receipt.ts (create this file)
 export interface ReceiptSettings {
+  logoSize: string;
   businessName: string;
   locationAddress: string;
   phoneNumber: string;

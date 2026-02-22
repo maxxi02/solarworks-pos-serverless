@@ -15,19 +15,36 @@ interface ReceiptSettings {
   receiptFooter: string;
   printerType: 'thermal' | 'a4' | 'receipt';
   paperSize: '58mm' | '80mm' | 'A4';
+  receiptWidth?: '58mm' | '80mm';   // ← add
   autoPrint: boolean;
   printCopy: number;
   headerTemplate: string;
   footerTemplate: string;
   showLogo: boolean;
+  logoSize?: string;
   logoUrl?: string;
+  logoPreview?: string;             // ← add
+  businessName?: string;            // ← add
+  locationAddress?: string;         // ← add
+  phoneNumber?: string;             // ← add
   businessPermit?: string;
   tinNumber: string;
   cashierName: string;
   managerName: string;
+  receiptMessage?: string;          // ← add
+  showBusinessHours?: boolean;      // ← add
+  businessHours?: string;           // ← add
+  showTaxPIN?: boolean;             // ← add
+  taxPin?: string;                  // ← add
+  sections?: {                      // ← add
+    storeName?: { header?: boolean; disabled?: boolean };
+    locationAddress?: { header?: boolean; disabled?: boolean };
+    phoneNumber?: { header?: boolean; disabled?: boolean };
+    barcode?: { header?: boolean; disabled?: boolean };
+    message?: { footer?: boolean; disabled?: boolean };
+  };
   updatedAt?: Date;
 }
-
 export const useReceiptSettings = () => {
   const [settings, setSettings] = useState<ReceiptSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
