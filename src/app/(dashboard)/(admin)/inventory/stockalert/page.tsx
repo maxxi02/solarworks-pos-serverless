@@ -430,6 +430,7 @@ export default function InventoryPage() {
       toast.success(`Stock ${adjustmentType === 'restock' ? 'Restocked' : 'Adjusted'}`, {
         description: `${quantity} ${adjustmentUnit} → ${convertedQuantity.toFixed(2)} ${showAdjustModal.unit}`
       });
+      
        console.log('📤 Socket: Emitting adjustment:', {
         item: showAdjustModal,
         type: adjustmentType,

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react'; // Add Fragment import
+import { useSearchParams } from 'next/navigation';
 import { 
   ArrowLeft,
   Calendar,
@@ -17,51 +18,14 @@ import {
   Box,
   ChevronLeft,
   ChevronRight,
-  Info
+  Info,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-
-// Types
-interface AuditEntry {
-  _id: string;
-  itemId: string;
-  itemName: string;
-  type: 'restock' | 'usage' | 'waste' | 'correction' | 'deduction' | 'adjustment';
-  quantity: number;
-  unit: string;
-  originalQuantity?: number;
-  originalUnit?: string;
-  previousStock: number;
-  newStock: number;
-  notes?: string;
-  conversionNote?: string;
-  reference?: {
-    type: 'order' | 'manual' | 'return' | 'adjustment' | 'rollback';
-    id?: string;
-    number?: string;
-  };
-  transactionId?: string;
-  performedBy: string;
-  createdAt: string;
-  
-  // Display fields
-  displayQuantity?: string;
-  displayPreviousStock?: string;
-  displayNewStock?: string;
-  displayChange?: string;
-  displayTime?: string;
-}
-
-interface AuditFilters {
-  dateFrom: string;
-  dateTo: string;
-  itemName: string;
-  type: string;
-  referenceType: string;
-  performedBy: string;
-}
+import { useInventorySocket, AuditEntry } from '@/hooks/useInventorySocket';
 
 interface Pagination {
   page: number;
@@ -70,7 +34,23 @@ interface Pagination {
   pages: number;
 }
 
+// ─── BUG 7 (FIXED): Removed unused AuditFilters interface ───────────────────
+
+// ─── Explicit filter params passed into loadAuditLogs ─────────────────────────
+interface LoadParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  itemId?: string;
+  type?: string;
+  reference?: string;
+  from?: string;
+  to?: string;
+}
+
 export default function AuditPage() {
+  const searchParams = useSearchParams();
+
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,7 +61,9 @@ export default function AuditPage() {
     from: '',
     to: ''
   });
-  
+  const [liveCount, setLiveCount] = useState(0);
+  const [isLive, setIsLive] = useState(false);
+
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
     limit: 20,
@@ -101,49 +83,83 @@ export default function AuditPage() {
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Load audit logs
-  const loadAuditLogs = async () => {
+  // ─── Read ?id= from URL ───────────────────────────────────────────────────
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      setSelectedItem(id);
+      setShowFilters(true);
+    }
+  }, [searchParams]);
+
+  // ─── Data fetching ─────────────────────────────────────────────────────────
+  const loadAuditLogs = useCallback(async (overrides?: LoadParams) => {
     setLoading(true);
     try {
+      const page      = overrides?.page      ?? pagination.page;
+      const limit     = overrides?.limit     ?? pagination.limit;
+      const search    = overrides?.search    ?? searchQuery;
+      const itemId    = overrides?.itemId    ?? selectedItem;
+      const type      = overrides?.type      ?? selectedType;
+      const reference = overrides?.reference ?? selectedReference;
+      const from      = overrides?.from      ?? dateRange.from;
+      const to        = overrides?.to        ?? dateRange.to;
+
       const params = new URLSearchParams({
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString()
+        page:  page.toString(),
+        limit: limit.toString(),
       });
 
-      if (searchQuery) params.append('search', searchQuery);
-      if (selectedItem && selectedItem !== 'all') params.append('itemId', selectedItem);
-      if (selectedType && selectedType !== 'all') params.append('type', selectedType);
-      if (selectedReference && selectedReference !== 'all') params.append('referenceType', selectedReference);
-      if (dateRange.from) params.append('from', dateRange.from);
-      if (dateRange.to) params.append('to', dateRange.to);
+      if (search)                    params.append('search', search);
+      if (itemId && itemId !== 'all') params.append('itemId', itemId);
+      if (type && type !== 'all')    params.append('type', type);
+      if (reference && reference !== 'all') params.append('referenceType', reference);
+      if (from) params.append('from', from);
+      if (to)   params.append('to', to);
 
       const response = await fetch(`/api/products/stocks/audit?${params.toString()}`);
-      
       if (!response.ok) throw new Error('Failed to fetch audit logs');
-      
+
       const data = await response.json();
       setAuditLogs(data.adjustments || []);
       setPagination(data.pagination || { page: 1, limit: 20, total: 0, pages: 0 });
       setStats(data.stats || {});
+      setLiveCount(0);
     } catch (error) {
       console.error('Error loading audit logs:', error);
       toast.error('Failed to load audit logs');
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    pagination.page, 
+    pagination.limit, 
+    searchQuery, 
+    selectedItem, 
+    selectedType, 
+    selectedReference, 
+    dateRange.from, 
+    dateRange.to
+  ]);
 
+  // Initial load + re-load when page/limit changes
   useEffect(() => {
     loadAuditLogs();
-  }, [pagination.page, pagination.limit]);
+  }, [pagination.page, pagination.limit, loadAuditLogs]);
 
-  // Apply filters
   const applyFilters = () => {
     setPagination(prev => ({ ...prev, page: 1 }));
-    loadAuditLogs();
+    loadAuditLogs({
+      page: 1,
+      search: searchQuery,
+      itemId: selectedItem,
+      type: selectedType,
+      reference: selectedReference,
+      from: dateRange.from,
+      to: dateRange.to,
+    });
   };
 
-  // Clear filters
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedItem('');
@@ -151,10 +167,66 @@ export default function AuditPage() {
     setSelectedReference('all');
     setDateRange({ from: '', to: '' });
     setPagination(prev => ({ ...prev, page: 1 }));
-    setTimeout(() => loadAuditLogs(), 100);
+    loadAuditLogs({
+      page: 1,
+      search: '',
+      itemId: '',
+      type: 'all',
+      reference: 'all',
+      from: '',
+      to: '',
+    });
   };
 
-  // Get adjustment type color
+  // ─── Socket ────────────────────────────────────────────────────────────────
+
+  useInventorySocket({
+    userId: 'admin',
+    userName: 'Admin',
+    subscribeToAudit: true,
+
+    onConnect:    () => setIsLive(true),
+    onDisconnect: () => setIsLive(false),
+
+    onAuditEntry: (entry) => {
+      const hasActiveFilters =
+        searchQuery ||
+        selectedType !== 'all' ||
+        selectedReference !== 'all' ||
+        dateRange.from ||
+        dateRange.to ||
+        selectedItem;
+
+      if (pagination.page === 1 && !hasActiveFilters) {
+        setAuditLogs((prev) => {
+          if (prev.some((l) => l._id === entry._id)) return prev;
+          return [entry, ...prev.slice(0, pagination.limit - 1)];
+        });
+        setPagination((prev) => ({ ...prev, total: prev.total + 1 }));
+        setStats((prev) => ({
+          ...prev,
+          totalAdjustments: prev.totalAdjustments + 1,
+          totalRestocks:
+            entry.type === 'restock' ? prev.totalRestocks + 1 : prev.totalRestocks,
+          totalDeductions:
+            entry.type === 'deduction' || entry.type === 'usage'
+              ? prev.totalDeductions + 1
+              : prev.totalDeductions,
+          totalCorrections:
+            entry.type === 'correction'
+              ? prev.totalCorrections + 1
+              : prev.totalCorrections,
+          totalWaste:
+            entry.type === 'waste' ? prev.totalWaste + 1 : prev.totalWaste,
+        }));
+      } else {
+        setLiveCount((n) => n + 1);
+      }
+    },
+  });
+
+  // ─── UI helpers (unchanged) ────────────────────────────────────────────────
+
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'restock':
@@ -166,89 +238,54 @@ export default function AuditPage() {
         return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400 border-orange-200 dark:border-orange-900/30';
       case 'correction':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 border-purple-200 dark:border-purple-900/30';
-      case 'adjustment':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400 border-gray-200 dark:border-gray-800';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400 border-gray-200 dark:border-gray-800';
     }
   };
 
-  // Get reference type color
   const getReferenceColor = (type?: string) => {
     switch (type) {
-      case 'order':
-        return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400';
-      case 'manual':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
-      case 'return':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
-      case 'rollback':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
+      case 'order':    return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400';
+      case 'manual':   return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
+      case 'return':   return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400';
+      case 'rollback': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400';
+      default:         return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400';
     }
   };
 
-  // Get unit category icon
   const getUnitCategoryIcon = (unit: string) => {
     const weightUnits = ['kg', 'g', 'mg', 'lb', 'oz'];
     const volumeUnits = ['L', 'mL', 'tsp', 'tbsp', 'cup', 'fl_oz', 'gal', 'qt', 'pt'];
     const lengthUnits = ['m', 'cm', 'mm', 'inch', 'in', 'ft'];
-    const countUnits = ['pieces', 'pcs', 'box', 'boxes', 'bottle', 'bottles', 'bag', 'bags', 'pack', 'packs', 'can', 'cans'];
+    const countUnits  = ['pieces', 'pcs', 'box', 'boxes', 'bottle', 'bottles', 'bag', 'bags', 'pack', 'packs', 'can', 'cans'];
 
-    if (weightUnits.includes(unit)) {
-      return <Scale className="h-4 w-4 text-blue-500" />;
-    } else if (volumeUnits.includes(unit)) {
-      return <Beaker className="h-4 w-4 text-green-500" />;
-    } else if (lengthUnits.includes(unit)) {
-      return <Ruler className="h-4 w-4 text-purple-500" />;
-    } else if (countUnits.includes(unit)) {
-      return <Box className="h-4 w-4 text-orange-500" />;
-    }
+    if (weightUnits.includes(unit)) return <Scale className="h-4 w-4 text-blue-500" />;
+    if (volumeUnits.includes(unit)) return <Beaker className="h-4 w-4 text-green-500" />;
+    if (lengthUnits.includes(unit)) return <Ruler className="h-4 w-4 text-purple-500" />;
+    if (countUnits.includes(unit))  return <Box className="h-4 w-4 text-orange-500" />;
     return <Package className="h-4 w-4 text-gray-500" />;
   };
 
-  // Format date for display
   const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'MMM dd, yyyy');
-    } catch {
-      return dateString;
-    }
+    try { return format(new Date(dateString), 'MMM dd, yyyy'); }
+    catch { return dateString; }
   };
 
-  // Format time for display
   const formatTime = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'hh:mm a');
-    } catch {
-      return '';
-    }
+    try { return format(new Date(dateString), 'hh:mm a'); }
+    catch { return ''; }
   };
 
-  // Export as CSV
   const exportToCSV = () => {
     const headers = ['Date', 'Time', 'Item', 'Type', 'Quantity', 'Unit', 'Previous', 'New', 'Change', 'Reference', 'Performed By', 'Notes'];
-    
     const rows = auditLogs.map(log => [
-      formatDate(log.createdAt),
-      formatTime(log.createdAt),
-      log.itemName,
-      log.type,
-      log.quantity,
-      log.unit,
-      log.previousStock,
-      log.newStock,
+      formatDate(log.createdAt), formatTime(log.createdAt),
+      log.itemName, log.type, log.quantity, log.unit,
+      log.previousStock, log.newStock,
       (log.newStock - log.previousStock).toFixed(2),
-      log.reference?.type || '-',
-      log.performedBy,
-      log.notes || '-'
+      log.reference?.type || '-', log.performedBy, log.notes || '-'
     ]);
-
-    const csv = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -258,17 +295,11 @@ export default function AuditPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  // Print audit log
   const printAuditLog = () => {
     const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Please allow pop-ups to print');
-      return;
-    }
-
+    if (!printWindow) { toast.error('Please allow pop-ups to print'); return; }
     const content = `
-      <!DOCTYPE html>
-      <html>
+      <!DOCTYPE html><html>
         <head>
           <title>Audit Log - ${format(new Date(), 'MMM dd, yyyy')}</title>
           <style>
@@ -277,13 +308,7 @@ export default function AuditPage() {
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
             th { background: #f5f5f5; text-align: left; padding: 10px; }
             td { padding: 8px 10px; border-bottom: 1px solid #ddd; }
-            .badge { 
-              display: inline-block; 
-              padding: 2px 8px; 
-              border-radius: 12px; 
-              font-size: 12px;
-              background: #e5e7eb;
-            }
+            .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; background: #e5e7eb; }
             .restock { background: #d1fae5; color: #065f46; }
             .deduction { background: #dbeafe; color: #1e40af; }
             .correction { background: #ede9fe; color: #5b21b6; }
@@ -295,17 +320,10 @@ export default function AuditPage() {
           <p>Generated on: ${format(new Date(), 'MMMM dd, yyyy HH:mm:ss')}</p>
           <p>Total Records: ${pagination.total}</p>
           <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Item</th>
-                <th>Type</th>
-                <th>Quantity</th>
-                <th>Stock Change</th>
-                <th>Reference</th>
-                <th>Performed By</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>Date</th><th>Item</th><th>Type</th>
+              <th>Quantity</th><th>Stock Change</th><th>Reference</th><th>Performed By</th>
+            </tr></thead>
             <tbody>
               ${auditLogs.map(log => `
                 <tr>
@@ -316,21 +334,21 @@ export default function AuditPage() {
                   <td>${log.previousStock} → ${log.newStock} (${log.newStock - log.previousStock > 0 ? '+' : ''}${log.newStock - log.previousStock})</td>
                   <td>${log.reference?.type || '-'} ${log.reference?.number ? `#${log.reference.number}` : ''}</td>
                   <td>${log.performedBy}</td>
-                </tr>
-              `).join('')}
+                </tr>`).join('')}
             </tbody>
           </table>
         </body>
-      </html>
-    `;
-
+      </html>`;
     printWindow.document.write(content);
     printWindow.document.close();
     printWindow.print();
   };
 
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-6">
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between">
@@ -343,34 +361,40 @@ export default function AuditPage() {
               <span>Back to Stock Alerts</span>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Audit Trail</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Audit Trail</h1>
+                <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border ${
+                  isLive
+                    ? 'bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/30'
+                    : 'bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-800'
+                }`}>
+                  {isLive
+                    ? <><Wifi className="h-3 w-3" /> Live</>
+                    : <><WifiOff className="h-3 w-3" /> Connecting…</>
+                  }
+                </div>
+              </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Complete history of all inventory adjustments
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <button
-              onClick={exportToCSV}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
+            <button onClick={exportToCSV} className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900">
+              <Download className="h-4 w-4" />Export CSV
             </button>
-            <button
-              onClick={printAuditLog}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
-            >
-              <Printer className="h-4 w-4" />
-              Print
+            <button onClick={printAuditLog} className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900">
+              <Printer className="h-4 w-4" />Print
             </button>
-            <button
-              onClick={loadAuditLogs}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
-            >
+            <button onClick={() => loadAuditLogs()} className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900">
               <RefreshCw className="h-4 w-4" />
               Refresh
+              {liveCount > 0 && (
+                <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs text-white">
+                  {liveCount > 9 ? '9+' : liveCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -409,8 +433,13 @@ export default function AuditPage() {
           >
             <Filter className="h-4 w-4" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
+            {selectedItem && (
+              <span className="ml-1 rounded-full bg-blue-100 dark:bg-blue-900/20 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-400">
+                Filtered by item
+              </span>
+            )}
           </button>
-          
+
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -422,16 +451,10 @@ export default function AuditPage() {
                 className="w-64 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black pl-10 pr-4 py-2 text-sm text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
               />
             </div>
-            <button
-              onClick={applyFilters}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
+            <button onClick={applyFilters} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
               Apply
             </button>
-            <button
-              onClick={clearFilters}
-              className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
-            >
+            <button onClick={clearFilters} className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900">
               Clear
             </button>
           </div>
@@ -439,40 +462,20 @@ export default function AuditPage() {
 
         {showFilters && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200 dark:border-gray-800">
-            {/* Date Range */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Date From
-              </label>
-              <input
-                type="date"
-                value={dateRange.from}
-                onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white"
-              />
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date From</label>
+              <input type="date" value={dateRange.from} onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Date To
-              </label>
-              <input
-                type="date"
-                value={dateRange.to}
-                onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white"
-              />
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date To</label>
+              <input type="date" value={dateRange.to} onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white" />
             </div>
-
-            {/* Adjustment Type */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Adjustment Type
-              </label>
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white"
-              >
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Adjustment Type</label>
+              <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white">
                 <option value="all">All Types</option>
                 <option value="restock">Restock</option>
                 <option value="deduction">Deduction</option>
@@ -482,17 +485,10 @@ export default function AuditPage() {
                 <option value="adjustment">Adjustment</option>
               </select>
             </div>
-
-            {/* Reference Type */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Reference Type
-              </label>
-              <select
-                value={selectedReference}
-                onChange={(e) => setSelectedReference(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white"
-              >
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Reference Type</label>
+              <select value={selectedReference} onChange={(e) => setSelectedReference(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white">
                 <option value="all">All References</option>
                 <option value="order">Order</option>
                 <option value="manual">Manual</option>
@@ -511,30 +507,11 @@ export default function AuditPage() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Date & Time
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Item
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Quantity
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Stock Change
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Reference
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Performed By
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                  Actions
-                </th>
+                {['Date & Time', 'Item', 'Type', 'Quantity', 'Stock Change', 'Reference', 'Performed By', 'Actions'].map(h => (
+                  <th key={h} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
@@ -550,16 +527,14 @@ export default function AuditPage() {
                   <td colSpan={8} className="px-6 py-12 text-center">
                     <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No audit logs found</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      No inventory adjustments have been recorded yet.
-                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No inventory adjustments have been recorded yet.</p>
                   </td>
                 </tr>
               ) : (
+                // ─── BUG 6 (FIXED): Added Fragment with key ─────────────────────────
                 auditLogs.map((log) => (
-                  <>
-                    <tr 
-                      key={log._id}
+                  <Fragment key={log._id}>
+                    <tr
                       className="hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer"
                       onClick={() => setExpandedEntry(expandedEntry === log._id ? null : log._id)}
                     >
@@ -567,12 +542,9 @@ export default function AuditPage() {
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
                           <div>
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {formatDate(log.createdAt)}
-                            </div>
+                            <div className="text-sm text-gray-900 dark:text-white">{formatDate(log.createdAt)}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatTime(log.createdAt)}
+                              <Clock className="h-3 w-3" />{formatTime(log.createdAt)}
                             </div>
                           </div>
                         </div>
@@ -581,13 +553,9 @@ export default function AuditPage() {
                         <div className="flex items-center gap-2">
                           {getUnitCategoryIcon(log.unit)}
                           <div>
-                            <div className="font-medium text-gray-900 dark:text-white">
-                              {log.itemName}
-                            </div>
+                            <div className="font-medium text-gray-900 dark:text-white">{log.itemName}</div>
                             {log.reference?.number && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                #{log.reference.number}
-                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">#{log.reference.number}</div>
                             )}
                           </div>
                         </div>
@@ -598,34 +566,22 @@ export default function AuditPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {log.quantity} {log.unit}
-                        </div>
+                        <div className="text-sm text-gray-900 dark:text-white">{log.quantity} {log.unit}</div>
                         {log.originalQuantity && log.originalUnit && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            ({log.originalQuantity} {log.originalUnit})
-                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">({log.originalQuantity} {log.originalUnit})</div>
                         )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-900 dark:text-white">
-                            {log.previousStock}
-                          </span>
+                          <span className="text-sm text-gray-900 dark:text-white">{log.previousStock}</span>
                           <span className="text-gray-400">→</span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                            {log.newStock}
-                          </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {log.unit}
-                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">{log.newStock}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{log.unit}</span>
                         </div>
                         <div className={`text-xs ${
-                          log.newStock - log.previousStock > 0 
-                            ? 'text-green-600 dark:text-green-500' 
-                            : log.newStock - log.previousStock < 0 
-                              ? 'text-red-600 dark:text-red-500' 
-                              : 'text-gray-500'
+                          log.newStock - log.previousStock > 0 ? 'text-green-600 dark:text-green-500'
+                          : log.newStock - log.previousStock < 0 ? 'text-red-600 dark:text-red-500'
+                          : 'text-gray-500'
                         }`}>
                           {log.newStock - log.previousStock > 0 ? '+' : ''}
                           {log.newStock - log.previousStock} {log.unit}
@@ -638,9 +594,7 @@ export default function AuditPage() {
                               {log.reference.type}
                             </span>
                             {log.reference.number && (
-                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                #{log.reference.number}
-                              </div>
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">#{log.reference.number}</div>
                             )}
                           </div>
                         ) : (
@@ -648,21 +602,14 @@ export default function AuditPage() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {log.performedBy}
-                        </div>
+                        <div className="text-sm text-gray-900 dark:text-white">{log.performedBy}</div>
                         {log.transactionId && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                            {log.transactionId.substring(0, 8)}...
-                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{log.transactionId.substring(0, 8)}...</div>
                         )}
                       </td>
                       <td className="px-6 py-4">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedEntry(expandedEntry === log._id ? null : log._id);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); setExpandedEntry(expandedEntry === log._id ? null : log._id); }}
                           className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                         >
                           <Info className="h-4 w-4" />
@@ -670,8 +617,8 @@ export default function AuditPage() {
                       </td>
                     </tr>
                     {expandedEntry === log._id && (
-                      <tr className="bg-gray-50 dark:bg-gray-900/50">
-                        <td colSpan={8} className="px-6 py-4">
+                      <tr>
+                        <td colSpan={8} className="bg-gray-50 dark:bg-gray-900/50 px-6 py-4">
                           <div className="space-y-3">
                             {log.conversionNote && (
                               <div className="text-sm text-blue-600 dark:text-blue-500 bg-blue-50 dark:bg-blue-900/10 p-3 rounded-lg border border-blue-200 dark:border-blue-900/30">
@@ -692,7 +639,7 @@ export default function AuditPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </tbody>
@@ -704,9 +651,7 @@ export default function AuditPage() {
           <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between">
             <p className="text-sm text-gray-700 dark:text-gray-300">
               Showing <span className="font-medium">{(pagination.page - 1) * pagination.limit + 1}</span> to{' '}
-              <span className="font-medium">
-                {Math.min(pagination.page * pagination.limit, pagination.total)}
-              </span>{' '}
+              <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span>{' '}
               of <span className="font-medium">{pagination.total}</span> results
             </p>
             <div className="flex items-center gap-2">
