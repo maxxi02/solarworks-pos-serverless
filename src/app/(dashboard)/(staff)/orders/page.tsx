@@ -896,7 +896,7 @@ export default function OrdersPage() {
                   {filteredProducts.map(product => (
                     <Card
                       key={product._id}
-                      className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none ${draggedItem?._id === product._id ? 'opacity-50 scale-95' : ''
+                      className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none overflow-hidden p-0 ${draggedItem?._id === product._id ? 'opacity-50 scale-95' : ''
                         }`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, product)}
@@ -906,30 +906,43 @@ export default function OrdersPage() {
                       onTouchEnd={handleTouchEnd}
                     >
                       <CardContent className="p-0">
+                        {/* Image */}
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
                             alt={product.name}
-                            className="w-full h-36 object-cover rounded-t-lg"
+                            className="w-full h-36 object-cover"
                             draggable={false}
                           />
                         ) : (
-                          <div className="w-full h-36 bg-muted rounded-t-lg flex items-center justify-center">
-                            {product.menuType === 'drink'
-                              ? <Coffee className="h-8 w-8 text-muted-foreground" />
-                              : <Utensils className="h-8 w-8 text-muted-foreground" />}
+                          <div className="w-full h-36 bg-muted flex items-center justify-center text-4xl">
+                            {product.menuType === 'drink' ? '☕' : '🍽️'}
                           </div>
                         )}
-                        <div className="p-3 space-y-2">
-                          <div className="flex items-start justify-between">
-                            <h3 className="font-bold text-sm line-clamp-2 flex-1">{product.name}</h3>
-                            <GripVertical className="w-4 h-4 text-muted-foreground ml-2 shrink-0" />
+
+                        {/* Content */}
+                        <div className="p-3">
+                          <h3 className="font-bold text-sm line-clamp-2">{product.name}</h3>
+                          {product.description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {product.description}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="font-bold text-sm text-primary">
+                              {formatCurrency(product.price)}
+                            </span>
+                            <Button
+                              size="sm"
+                              className="h-8 w-8 p-0 rounded-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToCart(product);
+                              }}
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
                           </div>
-                          <Badge variant="outline" className="text-xs px-2 py-1 h-5">{product.category}</Badge>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {product.description || product.ingredients?.map(i => i.name).join(', ')}
-                          </p>
-                          <span className="font-bold text-sm text-primary">{formatCurrency(product.price)}</span>
                         </div>
                       </CardContent>
                     </Card>
