@@ -1,38 +1,43 @@
 "use client"
-import React, { useState, useEffect } from 'react'
-import { 
-  Clock, 
-  Search, 
-  Download, 
-  Printer, 
-  Eye, 
+import React, { useState, useEffect, useCallback } from 'react'
+import { useReceiptSettings } from '@/hooks/useReceiptSettings'
+import {
+  Clock,
+  Search,
+  Download,
+  Printer,
+  Eye,
   RefreshCw,
   ArrowUpDown,
   CheckCircle2,
   XCircle,
   AlertCircle,
   DollarSign,
-  CreditCard,
   Smartphone,
   Receipt,
   TrendingUp,
   FileText,
   ArrowLeft,
   ArrowRight,
-  X
+  X,
+  CreditCard,
 } from 'lucide-react'
+
+interface TransactionItem {
+  name: string
+  quantity: number
+  price: number
+  hasDiscount?: boolean
+}
 
 interface Transaction {
   id: string
   orderNumber: string
   customerName: string
-  items: Array<{
-    name: string
-    quantity: number
-    price: number
-  }>
+  items: TransactionItem[]
   subtotal: number
   discount: number
+  discountTotal?: number
   total: number
   paymentMethod: 'cash' | 'gcash' | 'split'
   splitPayment?: { cash: number; gcash: number }
@@ -43,9 +48,14 @@ interface Transaction {
   timestamp: Date
   orderType: 'dine-in' | 'takeaway'
   tableNumber?: string
+  seniorPwdIds?: string[]
 }
 
+const DISCOUNT_RATE = 0.2
+
 const History = () => {
+  const { settings } = useReceiptSettings()
+
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -58,6 +68,7 @@ const History = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [stats, setStats] = useState({
@@ -66,36 +77,23 @@ const History = () => {
     averageTransaction: 0,
     cashSales: 0,
     gcashSales: 0,
-    splitSales: 0
+    splitSales: 0,
   })
 
-  // Fetch transactions on mount
-  useEffect(() => {
-    fetchTransactions()
-  }, [])
-
-  // Update stats when transactions change
-  useEffect(() => {
-    calculateStats()
-  }, [transactions])
+  useEffect(() => { fetchTransactions() }, [])
+  useEffect(() => { calculateStats() }, [transactions])
 
   const fetchTransactions = async () => {
     setLoading(true)
     try {
-      // Try to fetch from API first
       const response = await fetch('/api/payments')
       if (response.ok) {
         const data = await response.json()
-        setTransactions(data.map((t: any) => ({
-          ...t,
-          timestamp: new Date(t.timestamp)
-        })))
+        setTransactions(data.map((t: any) => ({ ...t, timestamp: new Date(t.timestamp) })))
       } else {
-        // Fallback to localStorage
         loadFromLocalStorage()
       }
-    } catch (error) {
-      console.error('Failed to fetch transactions:', error)
+    } catch {
       loadFromLocalStorage()
     } finally {
       setLoading(false)
@@ -109,203 +107,203 @@ const History = () => {
       setTransactions(parsed.map((o: any) => ({
         ...o,
         timestamp: new Date(o.timestamp),
-        status: o.status || 'completed'
+        status: o.status || 'completed',
       })))
     }
   }
 
   const calculateStats = () => {
     const completed = transactions.filter(t => t.status === 'completed')
-    
     const totalSales = completed.reduce((sum, t) => sum + t.total, 0)
-    const cashSales = completed
-      .filter(t => t.paymentMethod === 'cash')
-      .reduce((sum, t) => sum + t.total, 0)
-    const gcashSales = completed
-      .filter(t => t.paymentMethod === 'gcash')
-      .reduce((sum, t) => sum + t.total, 0)
-    const splitSales = completed
-      .filter(t => t.paymentMethod === 'split')
-      .reduce((sum, t) => sum + t.total, 0)
-
     setStats({
       totalSales,
       totalTransactions: completed.length,
       averageTransaction: completed.length ? totalSales / completed.length : 0,
-      cashSales,
-      gcashSales,
-      splitSales
+      cashSales: completed.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + t.total, 0),
+      gcashSales: completed.filter(t => t.paymentMethod === 'gcash').reduce((sum, t) => sum + t.total, 0),
+      splitSales: completed.filter(t => t.paymentMethod === 'split').reduce((sum, t) => sum + t.total, 0),
     })
   }
 
   const getDateFilter = () => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    
     switch (dateRange) {
-      case 'today':
-        return { start: today, end: now }
-      case 'week':
-        return { 
-          start: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000),
-          end: now 
-        }
-      case 'month':
-        return { 
-          start: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000),
-          end: now 
-        }
-      case 'custom':
-        return {
-          start: customStartDate ? new Date(customStartDate) : null,
-          end: customEndDate ? new Date(customEndDate) : null
-        }
-      default:
-        return null
+      case 'today': return { start: today, end: now }
+      case 'week': return { start: new Date(today.getTime() - 7 * 86400000), end: now }
+      case 'month': return { start: new Date(today.getTime() - 30 * 86400000), end: now }
+      case 'custom': return {
+        start: customStartDate ? new Date(customStartDate) : null,
+        end: customEndDate ? new Date(customEndDate) : null,
+      }
+      default: return null
     }
   }
 
-  const filteredTransactions = transactions.filter(transaction => {
-    // Search filter
-    const matchesSearch = 
-      transaction.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.cashier.toLowerCase().includes(searchTerm.toLowerCase())
-
-    // Status filter
-    const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus
-
-    // Payment filter
-    const matchesPayment = filterPayment === 'all' || transaction.paymentMethod === filterPayment
-
-    // Date filter
+  const filteredTransactions = transactions.filter(t => {
+    const matchesSearch =
+      t.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.cashier.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = filterStatus === 'all' || t.status === filterStatus
+    const matchesPayment = filterPayment === 'all' || t.paymentMethod === filterPayment
     const dateFilter = getDateFilter()
-    let matchesDate = true
-    if (dateFilter && dateFilter.start && dateFilter.end) {
-      matchesDate = 
-        transaction.timestamp >= dateFilter.start && 
-        transaction.timestamp <= dateFilter.end
-    }
-
+    const matchesDate = !dateFilter?.start || !dateFilter?.end
+      ? true
+      : t.timestamp >= dateFilter.start && t.timestamp <= dateFilter.end
     return matchesSearch && matchesStatus && matchesPayment && matchesDate
   })
 
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-    switch (sortBy) {
-      case 'date':
-        return sortOrder === 'asc' 
-          ? a.timestamp.getTime() - b.timestamp.getTime()
-          : b.timestamp.getTime() - a.timestamp.getTime()
-      case 'amount':
-        return sortOrder === 'asc' ? a.total - b.total : b.total - a.total
-      case 'name':
-        return sortOrder === 'asc'
-          ? a.customerName.localeCompare(b.customerName)
-          : b.customerName.localeCompare(a.customerName)
-      default:
-        return 0
-    }
+    if (sortBy === 'date') return sortOrder === 'asc' ? a.timestamp.getTime() - b.timestamp.getTime() : b.timestamp.getTime() - a.timestamp.getTime()
+    if (sortBy === 'amount') return sortOrder === 'asc' ? a.total - b.total : b.total - a.total
+    if (sortBy === 'name') return sortOrder === 'asc' ? a.customerName.localeCompare(b.customerName) : b.customerName.localeCompare(a.customerName)
+    return 0
   })
 
-  // Pagination
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
   const currentItems = sortedTransactions.slice(indexOfFirstItem, indexOfLastItem)
   const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage)
 
-  const formatCurrency = (amount: number) => `₱${amount.toFixed(2)}`
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date)
-  }
+  const fmt = (n: number) => `₱${n.toFixed(2)}`
 
-  const formatShortDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }).format(date)
-  }
+  const formatDate = (date: Date) =>
+    new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <CheckCircle2 className="w-3 h-3 mr-1" />
-            Completed
-          </span>
-        )
-      case 'cancelled':
-        return (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            <XCircle className="w-3 h-3 mr-1" />
-            Cancelled
-          </span>
-        )
-      case 'refunded':
-        return (
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Refunded
-          </span>
-        )
-      default:
-        return null
+  const formatShortDate = (date: Date) =>
+    new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+
+  // ——— REPRINT ———
+  const handlePrint = useCallback((transaction: Transaction) => {
+    if (!settings) return
+    setIsPrinting(true)
+
+    const is58mm = settings.receiptWidth === '58mm'
+
+    // Build a temporary receipt-content div matching ReceiptModal's DOM structure
+    const dash = '-'.repeat(is58mm ? 24 : 32)
+    const discountTotal = transaction.discountTotal ?? transaction.discount ?? 0
+
+    const tempDiv = document.createElement('div')
+    tempDiv.id = 'receipt-content-temp'
+    tempDiv.style.cssText = 'position:absolute;top:-9999px;left:-9999px;'
+    tempDiv.innerHTML = `
+      <div>
+        ${settings.showLogo && settings.logoPreview ? `<div class="text-center mb-1"><img src="${settings.logoPreview}" style="height:${settings.logoSize || '48px'};object-fit:contain;margin:0 auto;" /></div>` : ''}
+        ${settings.sections?.storeName?.header && !settings.sections?.storeName?.disabled ? `<div class="text-center font-bold mb-1">${settings.businessName || ''}</div>` : ''}
+        ${settings.sections?.locationAddress?.header && !settings.sections?.locationAddress?.disabled && settings.locationAddress ? `<div class="text-center mb-1 text-center">${settings.locationAddress}</div>` : ''}
+        ${settings.sections?.phoneNumber?.header && !settings.sections?.phoneNumber?.disabled && settings.phoneNumber ? `<div class="text-center mb-1">${settings.phoneNumber}</div>` : ''}
+        <div class="text-center mb-1">${dash}</div>
+        <div class="mb-1">
+          <div class="flex justify-between"><span>Order #:</span><span>${transaction.orderNumber}</span></div>
+          <div class="flex justify-between"><span>Date:</span><span>${formatDate(transaction.timestamp)}</span></div>
+          <div class="flex justify-between"><span>Cashier:</span><span>${transaction.cashier}</span></div>
+          <div class="flex justify-between"><span>Customer:</span><span>${transaction.customerName}</span></div>
+          <div class="flex justify-between"><span>Type:</span><span>${transaction.orderType.toUpperCase()}</span></div>
+          ${transaction.tableNumber ? `<div class="flex justify-between"><span>Table:</span><span>${transaction.tableNumber}</span></div>` : ''}
+          ${transaction.seniorPwdIds?.length ? `<div>Senior/PWD IDs: ${transaction.seniorPwdIds.join(', ')}</div>` : ''}
+        </div>
+        <div class="text-center mb-1">${dash}</div>
+        <div class="mb-1">
+          <div class="flex justify-between font-bold mb-1"><span>Item</span><span>Qty Amount</span></div>
+          ${transaction.items.map(item => {
+            const dp = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price
+            return `
+              <div class="flex justify-between"><span>${item.name}</span><span>${item.quantity} ${fmt(dp * item.quantity)}</span></div>
+              ${item.hasDiscount ? `<div class="flex justify-between" style="font-size:0.85em;padding-left:8px;"><span>(20% Senior/PWD)</span><span>-${fmt(item.price * item.quantity * DISCOUNT_RATE)}</span></div>` : ''}`
+          }).join('')}
+        </div>
+        <div class="text-center mb-1">${dash}</div>
+        <div class="mb-1">
+          <div class="flex justify-between"><span>Subtotal:</span><span>${fmt(transaction.subtotal)}</span></div>
+          ${discountTotal > 0 ? `<div class="flex justify-between"><span>Discount:</span><span>-${fmt(discountTotal)}</span></div>` : ''}
+          <div class="flex justify-between font-bold mt-1"><span>TOTAL:</span><span>${fmt(transaction.total)}</span></div>
+        </div>
+        <div class="text-center mb-1">${dash}</div>
+        <div class="mb-1">
+          <div class="flex justify-between mb-1"><span>Payment:</span><span>${transaction.paymentMethod.toUpperCase()}</span></div>
+          ${transaction.paymentMethod === 'cash' && transaction.amountPaid ? `
+            <div class="text-right font-bold">${fmt(transaction.amountPaid)}</div>
+            <div class="text-right">${fmt(transaction.total)}</div>
+            <div style="border-top:1px dashed currentColor;margin:2px 0;opacity:0.3;"></div>
+            <div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt(transaction.change || 0)}</span></div>` : ''}
+          ${transaction.paymentMethod === 'split' && transaction.splitPayment ? `
+            <div class="flex justify-between"><span>Cash:</span><span>${fmt(transaction.splitPayment.cash)}</span></div>
+            <div class="flex justify-between"><span>GCash:</span><span>${fmt(transaction.splitPayment.gcash)}</span></div>
+            <div style="border-top:1px dashed currentColor;margin:2px 0;opacity:0.3;"></div>
+            <div class="text-right font-bold">${fmt(transaction.splitPayment.cash + transaction.splitPayment.gcash)}</div>
+            ${(transaction.splitPayment.cash + transaction.splitPayment.gcash) > transaction.total ? `
+              <div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt((transaction.splitPayment.cash + transaction.splitPayment.gcash) - transaction.total)}</span></div>` : ''}` : ''}
+          ${transaction.paymentMethod === 'gcash' ? `<div class="flex justify-between"><span>GCash Received:</span><span>${fmt(transaction.total)}</span></div>` : ''}
+        </div>
+        ${settings.sections?.barcode?.header && !settings.sections?.barcode?.disabled ? `<div class="text-center" style="font-size:0.8em;">[BARCODE: ${transaction.orderNumber}]</div>` : ''}
+        ${settings.showBusinessHours && settings.businessHours ? `<div class="text-center" style="font-size:0.8em;">${settings.businessHours}</div>` : ''}
+        ${settings.showTaxPIN && settings.taxPin ? `<div class="text-center" style="font-size:0.8em;">Tax PIN: ${settings.taxPin}</div>` : ''}
+        ${settings.sections?.message?.footer && !settings.sections?.message?.disabled && settings.receiptMessage ? `<div class="text-center" style="font-size:0.8em;">${settings.receiptMessage}</div>` : ''}
+        <div class="text-center" style="font-size:0.8em;margin-top:2px;">** REPRINT **</div>
+      </div>
+    `
+    document.body.appendChild(tempDiv)
+
+    const iframe = document.createElement('iframe')
+    Object.assign(iframe.style, { position: 'absolute', width: '0', height: '0', border: 'none', opacity: '0' })
+    document.body.appendChild(iframe)
+    const doc = iframe.contentWindow?.document
+    if (doc) {
+      doc.write(`<!DOCTYPE html><html><head>
+        <title>Receipt - ${transaction.orderNumber}</title>
+        <meta charset="utf-8">
+        <style>
+          @page { size: ${is58mm ? '58mm' : '80mm'} auto; margin: 0; }
+          * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { font-family: 'Courier New', monospace; font-size: ${is58mm ? '14px' : '16px'};
+            font-weight: bold; width: ${is58mm ? '58mm' : '80mm'}; max-width: ${is58mm ? '58mm' : '80mm'};
+            margin: 0 auto; padding: 2mm; line-height: 1.5; }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .flex { display: flex; text-align: left; }
+          .justify-between { justify-content: space-between; }
+          .font-bold, strong { font-weight: 900; }
+          .mb-1 { margin-bottom: 4px; }
+          .mt-1 { margin-top: 4px; }
+        </style></head><body>${tempDiv.innerHTML}</body></html>`)
+      doc.close()
+      iframe.onload = () => setTimeout(() => {
+        iframe.contentWindow?.print()
+        setTimeout(() => {
+          document.body.removeChild(iframe)
+          document.body.removeChild(tempDiv)
+          setIsPrinting(false)
+        }, 500)
+      }, 200)
+    } else {
+      document.body.removeChild(tempDiv)
+      setIsPrinting(false)
     }
-  }
-
-  const getPaymentIcon = (method: string) => {
-    switch (method) {
-      case 'cash':
-        return <DollarSign className="w-4 h-4" />
-      case 'gcash':
-        return <Smartphone className="w-4 h-4" />
-      case 'split':
-        return <CreditCard className="w-4 h-4" />
-      default:
-        return null
-    }
-  }
-
-  const handleRefresh = () => {
-    fetchTransactions()
-  }
-
-  const handlePrint = (transaction: Transaction) => {
-    // Implement print functionality
-    console.log('Printing:', transaction)
-  }
+  }, [settings])
 
   const handleExport = () => {
+    if (!sortedTransactions.length) return
     const data = sortedTransactions.map(t => ({
       'Order #': t.orderNumber,
       'Date': formatDate(t.timestamp),
       'Customer': t.customerName,
       'Items': t.items.length,
+      'Subtotal': t.subtotal,
+      'Discount': t.discountTotal ?? t.discount ?? 0,
       'Total': t.total,
-        'Amount Paid': t.paymentMethod === 'cash' ? t.amountPaid :
-        t.paymentMethod === 'split' && t.splitPayment
-            ? t.splitPayment.cash + (t.splitPayment.gcash || 0)
-            : t.total,
-      'Change': t.paymentMethod === 'cash' ? t.change : 
-                t.paymentMethod === 'split' && t.splitPayment ? 
-                (t.splitPayment.cash + t.splitPayment.gcash) - t.total : 0,
+      'Amount Paid': t.paymentMethod === 'cash' ? (t.amountPaid ?? t.total)
+        : t.paymentMethod === 'split' && t.splitPayment ? t.splitPayment.cash + t.splitPayment.gcash
+        : t.total,
+      'Change': t.paymentMethod === 'cash' ? (t.change ?? 0)
+        : t.paymentMethod === 'split' && t.splitPayment ? Math.max(0, (t.splitPayment.cash + t.splitPayment.gcash) - t.total)
+        : 0,
       'Payment': t.paymentMethod,
       'Status': t.status,
-      'Cashier': t.cashier
+      'Cashier': t.cashier,
     }))
-
-    const csv = [
-      Object.keys(data[0]).join(','),
-      ...data.map(row => Object.values(row).join(','))
-    ].join('\n')
-
+    const csv = [Object.keys(data[0]).join(','), ...data.map(row => Object.values(row).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -314,18 +312,40 @@ const History = () => {
     a.click()
   }
 
+  const getStatusBadge = (status: string) => {
+    if (status === 'completed') return (
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        <CheckCircle2 className="w-3 h-3 mr-1" />Completed
+      </span>
+    )
+    if (status === 'cancelled') return (
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+        <XCircle className="w-3 h-3 mr-1" />Cancelled
+      </span>
+    )
+    return (
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <AlertCircle className="w-3 h-3 mr-1" />Refunded
+      </span>
+    )
+  }
+
+  const getPaymentIcon = (method: string) => {
+    if (method === 'cash') return <DollarSign className="w-4 h-4" />
+    if (method === 'gcash') return <Smartphone className="w-4 h-4" />
+    return <CreditCard className="w-4 h-4" />
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100">
         <div className="max-w-7xl mx-auto p-6">
           <div className="animate-pulse space-y-6">
-            <div className="h-8 w-64 bg-gray-200 rounded"></div>
+            <div className="h-8 w-64 bg-gray-200 rounded" />
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {[1,2,3,4].map(i => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
-              ))}
+              {[1,2,3,4].map(i => <div key={i} className="h-24 bg-gray-200 rounded" />)}
             </div>
-            <div className="h-96 bg-gray-200 rounded"></div>
+            <div className="h-96 bg-gray-200 rounded" />
           </div>
         </div>
       </div>
@@ -335,31 +355,23 @@ const History = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="max-w-7xl mx-auto p-6">
+
         {/* Header */}
         <div className="mb-6 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Clock className="w-6 h-6" />
-              Transaction History
+              <Clock className="w-6 h-6" />Transaction History
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              View and manage all your sales transactions
-            </p>
+            <p className="text-sm text-gray-500 mt-1">View and manage all your sales transactions</p>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={handleRefresh}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
+            <button onClick={fetchTransactions}
+              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />Refresh
             </button>
-            <button
-              onClick={handleExport}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export
+            <button onClick={handleExport}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+              <Download className="w-4 h-4" />Export
             </button>
           </div>
         </div>
@@ -371,7 +383,7 @@ const History = () => {
               <span className="text-sm text-gray-500">Total Sales</span>
               <TrendingUp className="w-4 h-4 text-blue-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalSales)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(stats.totalSales)}</p>
             <p className="text-xs text-gray-400 mt-1">{stats.totalTransactions} transactions</p>
           </div>
 
@@ -380,7 +392,7 @@ const History = () => {
               <span className="text-sm text-gray-500">Cash Sales</span>
               <DollarSign className="w-4 h-4 text-green-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.cashSales)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(stats.cashSales)}</p>
             <p className="text-xs text-gray-400 mt-1">
               {((stats.cashSales / stats.totalSales) * 100 || 0).toFixed(1)}% of total
             </p>
@@ -391,7 +403,7 @@ const History = () => {
               <span className="text-sm text-gray-500">GCash Sales</span>
               <Smartphone className="w-4 h-4 text-blue-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.gcashSales)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(stats.gcashSales)}</p>
             <p className="text-xs text-gray-400 mt-1">
               {((stats.gcashSales / stats.totalSales) * 100 || 0).toFixed(1)}% of total
             </p>
@@ -402,7 +414,7 @@ const History = () => {
               <span className="text-sm text-gray-500">Average Transaction</span>
               <Receipt className="w-4 h-4 text-purple-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.averageTransaction)}</p>
+            <p className="text-2xl font-bold text-gray-900">{fmt(stats.averageTransaction)}</p>
             <p className="text-xs text-gray-400 mt-1">Per transaction</p>
           </div>
         </div>
@@ -411,49 +423,31 @@ const History = () => {
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
           <div className="flex flex-wrap gap-4">
             {/* Search */}
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by order #, customer, or cashier..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+            <div className="flex-1 min-w-[200px] relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input type="text" placeholder="Search by order #, customer, or cashier..."
+                value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
 
-            {/* Status Filter */}
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
               <option value="refunded">Refunded</option>
             </select>
 
-            {/* Payment Filter */}
-            <select
-              value={filterPayment}
-              onChange={(e) => setFilterPayment(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
+            <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="all">All Payments</option>
               <option value="cash">Cash</option>
               <option value="gcash">GCash</option>
               <option value="split">Split</option>
             </select>
 
-            {/* Date Range */}
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
+            <select value={dateRange} onChange={e => setDateRange(e.target.value as any)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="today">Today</option>
               <option value="week">Last 7 Days</option>
               <option value="month">Last 30 Days</option>
@@ -461,153 +455,79 @@ const History = () => {
               <option value="all">All Time</option>
             </select>
 
-            {/* Custom Date Range */}
             {dateRange === 'custom' && (
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+              <div className="flex gap-2 items-center">
+                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                 <span className="text-gray-500">to</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
             )}
 
-            {/* Sort */}
             <div className="flex gap-2">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+              <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <option value="date">Sort by Date</option>
                 <option value="amount">Sort by Amount</option>
                 <option value="name">Sort by Customer</option>
               </select>
-              <button
-                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
+              <button onClick={() => setSortOrder(p => p === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                 <ArrowUpDown className={`w-4 h-4 ${sortOrder === 'asc' ? 'text-blue-600' : ''}`} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Transactions Table */}
+        {/* Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date & Time
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Items
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount Paid
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Change
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cashier
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  {['Order #', 'Date & Time', 'Customer', 'Items', 'Total', 'Amount Paid', 'Change', 'Payment', 'Status', 'Cashier', 'Actions'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {currentItems.map((transaction) => {
-                  // Calculate amount paid and change for display
-                  let amountPaid = transaction.total
+                {currentItems.map(t => {
+                  let amountPaid = t.total
                   let change = 0
-                  
-                  if (transaction.paymentMethod === 'cash' && transaction.amountPaid) {
-                    amountPaid = transaction.amountPaid
-                    change = transaction.change || 0
-                  } else if (transaction.paymentMethod === 'split' && transaction.splitPayment) {
-                    amountPaid = transaction.splitPayment.cash + transaction.splitPayment.gcash
-                    change = amountPaid - transaction.total
+                  if (t.paymentMethod === 'cash' && t.amountPaid) {
+                    amountPaid = t.amountPaid
+                    change = t.change || 0
+                  } else if (t.paymentMethod === 'split' && t.splitPayment) {
+                    amountPaid = t.splitPayment.cash + t.splitPayment.gcash
+                    change = Math.max(0, amountPaid - t.total)
                   }
 
                   return (
-                    <tr key={transaction.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {transaction.orderNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {formatDate(transaction.timestamp)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {transaction.customerName}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {transaction.items.length} items
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {formatCurrency(transaction.total)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600">
-                        {formatCurrency(amountPaid)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-blue-600">
-                        {change > 0 ? formatCurrency(change) : '₱0.00'}
-                      </td>
+                    <tr key={t.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{t.orderNumber}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{formatDate(t.timestamp)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{t.customerName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{t.items.length} items</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{fmt(t.total)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{fmt(amountPaid)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{change > 0 ? fmt(change) : '₱0.00'}</td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          {getPaymentIcon(transaction.paymentMethod)}
-                          <span className="capitalize">{transaction.paymentMethod}</span>
+                          {getPaymentIcon(t.paymentMethod)}
+                          <span className="capitalize">{t.paymentMethod}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        {getStatusBadge(transaction.status)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {transaction.cashier}
-                      </td>
+                      <td className="px-4 py-3">{getStatusBadge(t.status)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{t.cashier}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedTransaction(transaction)
-                              setShowDetailsModal(true)
-                            }}
-                            className="p-1 text-gray-400 hover:text-blue-600"
-                            title="View Details"
-                          >
+                          <button onClick={() => { setSelectedTransaction(t); setShowDetailsModal(true) }}
+                            className="p-1 text-gray-400 hover:text-blue-600" title="View Details">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => handlePrint(transaction)}
-                            className="p-1 text-gray-400 hover:text-gray-600"
-                            title="Print Receipt"
-                          >
+                          <button onClick={() => handlePrint(t)} disabled={isPrinting}
+                            className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-50" title="Reprint Receipt">
                             <Printer className="w-4 h-4" />
                           </button>
                         </div>
@@ -619,39 +539,27 @@ const History = () => {
             </table>
           </div>
 
-          {/* Empty State */}
           {currentItems.length === 0 && (
             <div className="text-center py-12">
               <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">No transactions found</p>
-              <p className="text-sm text-gray-400 mt-1">
-                Try adjusting your filters or search term
-              </p>
+              <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or search term</p>
             </div>
           )}
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
               <p className="text-sm text-gray-500">
                 Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, sortedTransactions.length)} of {sortedTransactions.length} transactions
               </p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 hover:bg-gray-50">
                   <ArrowLeft className="w-4 h-4" />
                 </button>
-                <span className="px-3 py-1 text-sm">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
+                <span className="px-3 py-1 text-sm">Page {currentPage} of {totalPages}</span>
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 hover:bg-gray-50">
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -659,7 +567,7 @@ const History = () => {
           )}
         </div>
 
-        {/* Transaction Details Modal */}
+        {/* Details Modal */}
         {showDetailsModal && selectedTransaction && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -669,10 +577,7 @@ const History = () => {
                     <h2 className="text-lg font-semibold text-gray-900">Transaction Details</h2>
                     <p className="text-sm text-gray-500">{selectedTransaction.orderNumber}</p>
                   </div>
-                  <button
-                    onClick={() => setShowDetailsModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
+                  <button onClick={() => setShowDetailsModal(false)} className="text-gray-400 hover:text-gray-600">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -688,7 +593,7 @@ const History = () => {
                       <p className="text-xs text-gray-500">Order Type</p>
                       <p className="text-sm font-medium capitalize">
                         {selectedTransaction.orderType}
-                        {selectedTransaction.tableNumber && ` - Table ${selectedTransaction.tableNumber}`}
+                        {selectedTransaction.tableNumber && ` — Table ${selectedTransaction.tableNumber}`}
                       </p>
                     </div>
                     <div>
@@ -705,34 +610,40 @@ const History = () => {
                   <div>
                     <h3 className="text-sm font-medium text-gray-900 mb-2">Items</h3>
                     <div className="border border-gray-200 rounded-lg divide-y">
-                      {selectedTransaction.items.map((item, index) => (
-                        <div key={index} className="p-3 flex justify-between">
-                          <div>
-                            <p className="text-sm font-medium">{item.name}</p>
-                            <p className="text-xs text-gray-500">Qty: {item.quantity} x {formatCurrency(item.price)}</p>
+                      {selectedTransaction.items.map((item, i) => {
+                        const displayPrice = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price
+                        return (
+                          <div key={i} className="p-3 flex justify-between">
+                            <div>
+                              <p className="text-sm font-medium">{item.name}</p>
+                              <p className="text-xs text-gray-500">
+                                Qty: {item.quantity} × {fmt(displayPrice)}
+                                {item.hasDiscount && <span className="ml-2 text-gray-400">(20% disc)</span>}
+                              </p>
+                            </div>
+                            <p className="text-sm font-medium">{fmt(displayPrice * item.quantity)}</p>
                           </div>
-                          <p className="text-sm font-medium">{formatCurrency(item.price * item.quantity)}</p>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
 
-                  {/* Payment Summary */}
+                  {/* Totals */}
                   <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Subtotal:</span>
-                      <span className="font-medium">{formatCurrency(selectedTransaction.subtotal)}</span>
+                      <span className="font-medium">{fmt(selectedTransaction.subtotal)}</span>
                     </div>
-                    {selectedTransaction.discount > 0 && (
-                      <div className="flex justify-between text-sm text-green-600">
-                        <span>Discount:</span>
-                        <span>-{formatCurrency(selectedTransaction.discount)}</span>
+                    {(selectedTransaction.discountTotal ?? selectedTransaction.discount ?? 0) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Discount:</span>
+                        <span>-{fmt(selectedTransaction.discountTotal ?? selectedTransaction.discount ?? 0)}</span>
                       </div>
                     )}
-                    <div className="border-t border-gray-200 my-2"></div>
+                    <div className="border-t border-gray-200 my-2" />
                     <div className="flex justify-between font-bold">
                       <span>TOTAL:</span>
-                      <span className="text-lg">{formatCurrency(selectedTransaction.total)}</span>
+                      <span className="text-lg">{fmt(selectedTransaction.total)}</span>
                     </div>
                   </div>
 
@@ -747,19 +658,19 @@ const History = () => {
                           {selectedTransaction.paymentMethod}
                         </span>
                       </div>
-                      
+
                       {selectedTransaction.paymentMethod === 'cash' && selectedTransaction.amountPaid && (
                         <>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Amount Received:</span>
-                            <span className="font-medium">{formatCurrency(selectedTransaction.amountPaid)}</span>
+                            <span className="font-medium">{fmt(selectedTransaction.amountPaid)}</span>
                           </div>
-                          <div className="flex justify-between text-sm font-bold text-green-600">
+                          <div className="flex justify-between text-sm font-bold">
                             <span>Change:</span>
-                            <span>{formatCurrency(selectedTransaction.change || 0)}</span>
+                            <span>{fmt(selectedTransaction.change || 0)}</span>
                           </div>
-                          <div className="text-xs text-gray-400 text-right mt-1">
-                            {formatCurrency(selectedTransaction.amountPaid)} - {formatCurrency(selectedTransaction.total)} = {formatCurrency(selectedTransaction.change || 0)}
+                          <div className="text-xs text-gray-400 text-right">
+                            {fmt(selectedTransaction.amountPaid)} - {fmt(selectedTransaction.total)} = {fmt(selectedTransaction.change || 0)}
                           </div>
                         </>
                       )}
@@ -768,34 +679,28 @@ const History = () => {
                         <>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Cash:</span>
-                            <span>{formatCurrency(selectedTransaction.splitPayment.cash)}</span>
+                            <span>{fmt(selectedTransaction.splitPayment.cash)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-600">GCash:</span>
-                            <span>{formatCurrency(selectedTransaction.splitPayment.gcash)}</span>
+                            <span>{fmt(selectedTransaction.splitPayment.gcash)}</span>
                           </div>
-                          <div className="border-t border-gray-200 my-2"></div>
+                          <div className="border-t border-gray-200 my-2" />
                           <div className="flex justify-between text-sm font-bold">
                             <span>Total Paid:</span>
-                            <span>{formatCurrency(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash)}</span>
+                            <span>{fmt(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash)}</span>
                           </div>
                           {(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash) > selectedTransaction.total && (
-                            <>
-                              <div className="flex justify-between text-sm font-bold text-green-600">
-                                <span>Change:</span>
-                                <span>{formatCurrency((selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash) - selectedTransaction.total)}</span>
-                              </div>
-                              <div className="text-xs text-gray-400 text-right mt-1">
-                                {formatCurrency(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash)} - {formatCurrency(selectedTransaction.total)} = {formatCurrency((selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash) - selectedTransaction.total)}
-                              </div>
-                            </>
+                            <div className="flex justify-between text-sm font-bold">
+                              <span>Change:</span>
+                              <span>{fmt((selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash) - selectedTransaction.total)}</span>
+                            </div>
                           )}
                         </>
                       )}
                     </div>
                   </div>
 
-                  {/* Status */}
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Status:</span>
                     {getStatusBadge(selectedTransaction.status)}
@@ -805,15 +710,14 @@ const History = () => {
                 <div className="mt-6 flex justify-end gap-2">
                   <button
                     onClick={() => handlePrint(selectedTransaction)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                    disabled={isPrinting}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
                   >
                     <Printer className="w-4 h-4" />
-                    Print Receipt
+                    {isPrinting ? 'Printing...' : 'Reprint Receipt'}
                   </button>
-                  <button
-                    onClick={() => setShowDetailsModal(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
+                  <button onClick={() => setShowDetailsModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                     Close
                   </button>
                 </div>
@@ -821,6 +725,7 @@ const History = () => {
             </div>
           </div>
         )}
+
       </div>
     </div>
   )
