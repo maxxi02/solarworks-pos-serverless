@@ -48,6 +48,7 @@ import {
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { SpreadsheetImport } from '@/app/(dashboard)/(admin)/inventory/stockalert/SpreadsheetImport';
+import { useInventorySocket } from '@/hooks/useInventorySocket';
 
 interface NewItemForm {
   name: string;
@@ -230,6 +231,39 @@ export default function InventoryPage() {
     warning: 0
   });
 
+  // Socket hook with real user values (replace 'admin'/'Admin' with actual auth values)
+  const { emitAdjusted, emitItemCreated, emitItemDeleted, emitBulkImported } = useInventorySocket({
+    userId: 'admin',
+    userName: 'Admin',
+    onInventoryAdjusted: (data) => {
+      console.log('🔔 Socket: Received adjustment from another session:', data);
+      setInventory((prev) =>
+        prev.map((item) =>
+          item._id?.toString() === data.itemId
+            ? { ...item, currentStock: data.newStock, status: data.status }
+            : item
+        )
+      );
+      loadAlerts();
+    },
+    onItemCreated: () => {
+      console.log('🔔 Socket: Item created in another session');
+      loadInventory();
+    },
+    onItemDeleted: (data) => {
+      console.log('🔔 Socket: Item deleted from another session:', data);
+      setInventory((prev) =>
+        prev.filter((item) => item._id?.toString() !== data.itemId)
+      );
+      loadAlerts();
+    },
+    onBulkImported: () => {
+      console.log('🔔 Socket: Bulk import in another session');
+      loadInventory();
+      loadAlerts();
+    },
+  });
+
   useEffect(() => {
     loadInventory();
     loadAlerts();
@@ -251,6 +285,7 @@ export default function InventoryPage() {
       console.error('Error loading alerts:', error);
     }
   };
+
 
   const loadInventory = async () => {
     setLoading(true);
@@ -330,6 +365,9 @@ export default function InventoryPage() {
       toast.success('Item Added', {
         description: `${newItem.name} has been added to inventory`
       });
+      console.log('📤 Socket: Emitting new item:', result);
+      // Emit socket event after successful creation
+      emitItemCreated(result, 'Admin'); // Replace 'Admin' with actual user name
     } catch (error) {
       console.error('Error adding item:', error);
       toast.error('Failed to add item', {
@@ -392,6 +430,21 @@ export default function InventoryPage() {
       toast.success(`Stock ${adjustmentType === 'restock' ? 'Restocked' : 'Adjusted'}`, {
         description: `${quantity} ${adjustmentUnit} → ${convertedQuantity.toFixed(2)} ${showAdjustModal.unit}`
       });
+       console.log('📤 Socket: Emitting adjustment:', {
+        item: showAdjustModal,
+        type: adjustmentType,
+        quantity: convertedQuantity
+      });
+
+      // Emit socket event after successful adjustment
+      emitAdjusted(
+        showAdjustModal,
+        adjustmentType,
+        convertedQuantity,
+        result.newStock,
+        result.status,
+        'Admin' // Replace with actual user name
+      );
       
       setShowAdjustModal(null);
       setAdjustmentQuantity('');
@@ -439,6 +492,9 @@ export default function InventoryPage() {
     }
     
     loadAlerts();
+    console.log('📤 Socket: Emitting bulk import:', { successCount, errorCount });
+    // Emit socket event after bulk import
+    emitBulkImported(successCount, errorCount, 'Admin'); // Replace 'Admin' with actual user name
   };
 
   const handleDeleteClick = (id: string, name: string) => {
@@ -460,6 +516,9 @@ export default function InventoryPage() {
       toast.success('Item Deleted', {
         description: `${deleteModal.itemName} has been removed from inventory`
       });
+      console.log('📤 Socket: Emitting deletion:', deleteModal);
+      // Emit socket event after successful deletion
+      emitItemDeleted(deleteModal.itemId, deleteModal.itemName, 'Admin'); // Replace 'Admin' with actual user name
     } catch (error) {
       console.error('Error deleting item:', error);
       toast.error('Failed to delete item', {
