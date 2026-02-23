@@ -47,7 +47,17 @@ import { useSocket } from '@/provider/socket-provider';
 
 // ============ Main Component ============
 export default function OrdersPage() {
-  const { emitPosJoin, onNewCustomerOrder, offNewCustomerOrder } = useSocket();
+  const {
+    emitPosJoin,
+    onNewCustomerOrder,
+    offNewCustomerOrder,
+    printerStatus,          // ← ADD
+    printReceipt: printReceiptHardware,   // ← ADD (rename to avoid clash)
+    printKitchenOrder,      // ← ADD
+    connectUSBPrinter,      // ← ADD (optional, used in PrinterStatus)
+    connectBluetoothPrinter, // ← ADD (optional, used in PrinterStatus)
+    printBoth
+  } = useSocket();
 
 
   const { isClockedIn, isLoading: attendanceLoading, attendance, clockIn, clockOut } = useAttendance();
@@ -403,19 +413,47 @@ export default function OrdersPage() {
       await saveOrderToDatabase(completedOrder);
       saveOrderToLocal(completedOrder);
 
-      if (settings?.printReceipt) {
-        const receiptData: PrinterReceiptData = {
-          ...completedOrder, cashier: 'Cashier',
+      if (settings?.printReceipt || settings?.kitchenPrinter?.enabled) {
+        const receiptInput = {
+          orderNumber,
+          customerName: customerName || 'Walk-in Customer',
+          cashier: 'Cashier',
+          timestamp: new Date(),
+          orderType,
+          tableNumber: selectedTable || undefined,
+          orderNote: orderNote || undefined,
+          items: cart.map(item => ({
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            hasDiscount: item.hasDiscount,
+          })),
+          subtotal,
+          discountTotal,
+          total,
+          paymentMethod,
+          splitPayment: paymentMethod === 'split' ? splitPayment : undefined,
+          amountPaid: paymentMethod === 'cash' ? amountPaid : undefined,
+          change: paymentMethod === 'cash' ? amountPaid - total : undefined,
+          seniorPwdCount,
           seniorPwdIds: seniorPwdIds.length ? seniorPwdIds : undefined,
-          id: orderId, timestamp: new Date(),
-          customerReceiptPrinted: false, kitchenReceiptPrinted: false,
+          businessName: settings.businessName || 'Rendezvous Cafe',
+          businessAddress: settings.locationAddress,
+          businessPhone: settings.phoneNumber,
+          receiptMessage: settings.receiptMessage,
         };
+
         setIsPrinting(true);
         try {
-          const results = await printReceipt(receiptData, settings);
-          if (results.customer) toast.success('Customer receipt printed');
+          const results = await printBoth(receiptInput); // from useSocket
+          if (results.receipt) toast.success('Receipt printed');
           if (results.kitchen) toast.success('Kitchen order printed');
-        } catch { /* silent */ } finally { setIsPrinting(false); }
+          if (!results.receipt && !results.kitchen) {
+            toast.warning('Printers not connected — use browser fallback in printer settings');
+          }
+        } catch { /* silent */ } finally {
+          setIsPrinting(false);
+        }
       }
 
       setCurrentReceipt({
