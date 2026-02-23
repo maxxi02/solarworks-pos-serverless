@@ -29,7 +29,6 @@ export const PATHS = {
 
     INVENTORY_CATEGORIES: "/inventory/categories",
     INVENTORY_STOCK_ALERT: "/inventory/stockalert",
-    INVENTORY_REPORTS: "/inventory/reports",
 
     CUSTOMERS: "/customers",
     CUSTOMER_LIST: "/customer/customer-list",
@@ -98,7 +97,6 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "Categories", url: PATHS.ADMIN.INVENTORY_CATEGORIES },
       { title: "Stock Alerts", url: PATHS.ADMIN.INVENTORY_STOCK_ALERT },
-      { title: "Reports", url: PATHS.ADMIN.INVENTORY_REPORTS },
     ],
   },
   {

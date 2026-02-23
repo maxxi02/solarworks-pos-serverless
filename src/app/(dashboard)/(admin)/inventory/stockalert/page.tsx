@@ -22,7 +22,8 @@ import {
   Beaker,
   Ruler,
   Box,
-  FileSpreadsheet
+  FileSpreadsheet,
+  PhilippinePeso
 } from 'lucide-react';
 import {
   fetchInventory,
@@ -196,6 +197,9 @@ export default function InventoryPage() {
   const [adjustmentQuantity, setAdjustmentQuantity] = useState('');
   const [adjustmentUnit, setAdjustmentUnit] = useState<Unit>('g');
   const [adjustmentNotes, setAdjustmentNotes] = useState('');
+  // New state for price update in adjust modal
+  const [adjustmentPrice, setAdjustmentPrice] = useState<string>('');
+  const [showPriceField, setShowPriceField] = useState(false);
   
   const [newItem, setNewItem] = useState<NewItemForm>({
     name: '',
@@ -322,14 +326,6 @@ export default function InventoryPage() {
         return;
       }
 
-      const price = Number(newItem.pricePerUnit);
-      if (price > 1000000) {
-        toast.error('Validation Error', {
-          description: 'Price per unit cannot exceed ₱1,000,000'
-        });
-        return;
-      }
-
       const unitCategory = getUnitCategory(newItem.unit);
       if (!unitCategory) {
         toast.error('Invalid unit', {
@@ -337,6 +333,9 @@ export default function InventoryPage() {
         });
         return;
       }
+
+      // Price is optional - if empty or invalid, default to 0
+      const price = newItem.pricePerUnit ? Number(newItem.pricePerUnit) : 0;
 
       const inventoryItem = {
         name: newItem.name,
@@ -363,7 +362,7 @@ export default function InventoryPage() {
       resetNewItemForm();
       
       toast.success('Item Added', {
-        description: `${newItem.name} has been added to inventory`
+        description: `${newItem.name} has been added to inventory${price > 0 ? ` with price ₱${price.toFixed(2)}/${newItem.unit}` : ''}`
       });
       console.log('📤 Socket: Emitting new item:', result);
       // Emit socket event after successful creation
@@ -413,28 +412,43 @@ export default function InventoryPage() {
         }
       }) as AdjustStockResponse;
 
+      // Update inventory state with stock adjustment and price update if provided
       setInventory(prev => prev.map(item => {
         if (item._id?.toString() === showAdjustModal._id?.toString()) {
-          return {
+          const updatedItem = {
             ...item,
             currentStock: result.newStock,
             status: result.status,
             lastRestocked: adjustmentType === 'restock' ? new Date() : item.lastRestocked
           };
+          
+          // Update price if provided in the adjust modal
+          if (showPriceField && adjustmentPrice && !isNaN(Number(adjustmentPrice)) && Number(adjustmentPrice) > 0) {
+            updatedItem.pricePerUnit = Number(adjustmentPrice);
+          }
+          
+          return updatedItem;
         }
         return item;
       }));
 
       loadAlerts();
 
+      // Create success message with price update info if applicable
+      let successMessage = `${quantity} ${adjustmentUnit} → ${convertedQuantity.toFixed(2)} ${showAdjustModal.unit}`;
+      if (showPriceField && adjustmentPrice && !isNaN(Number(adjustmentPrice)) && Number(adjustmentPrice) > 0) {
+        successMessage += `, Price updated to ₱${Number(adjustmentPrice).toFixed(2)}/${showAdjustModal.displayUnit || showAdjustModal.unit}`;
+      }
+
       toast.success(`Stock ${adjustmentType === 'restock' ? 'Restocked' : 'Adjusted'}`, {
-        description: `${quantity} ${adjustmentUnit} → ${convertedQuantity.toFixed(2)} ${showAdjustModal.unit}`
+        description: successMessage
       });
       
-       console.log('📤 Socket: Emitting adjustment:', {
+      console.log('📤 Socket: Emitting adjustment:', {
         item: showAdjustModal,
         type: adjustmentType,
-        quantity: convertedQuantity
+        quantity: convertedQuantity,
+        newPrice: showPriceField && adjustmentPrice ? Number(adjustmentPrice) : undefined
       });
 
       // Emit socket event after successful adjustment
@@ -447,10 +461,13 @@ export default function InventoryPage() {
         'Admin' // Replace with actual user name
       );
       
+      // Reset all adjustment states
       setShowAdjustModal(null);
       setAdjustmentQuantity('');
       setAdjustmentUnit('g');
       setAdjustmentNotes('');
+      setAdjustmentPrice('');
+      setShowPriceField(false);
     } catch (error) {
       console.error('Error adjusting stock:', error);
       toast.error('Failed to adjust stock', {
@@ -592,13 +609,13 @@ export default function InventoryPage() {
   const totalValue = inventory.reduce((sum, item) => {
     try {
       if (!item.displayUnit || !item.unit) {
-        return sum + (item.currentStock * item.pricePerUnit);
+        return sum + (item.currentStock * (item.pricePerUnit || 0));
       }
       const displayToBaseRatio = convertUnit(1, item.displayUnit, item.unit);
-      const pricePerBaseUnit = item.pricePerUnit / displayToBaseRatio;
+      const pricePerBaseUnit = (item.pricePerUnit || 0) / displayToBaseRatio;
       return sum + (item.currentStock * pricePerBaseUnit);
     } catch {
-      return sum + (item.currentStock * item.pricePerUnit);
+      return sum + (item.currentStock * (item.pricePerUnit || 0));
     }
   }, 0);
 
@@ -770,8 +787,8 @@ export default function InventoryPage() {
                   {inventory.map((item) => {
                     const itemId = item._id?.toString() || '';
                     const basePrice = item.displayUnit && item.unit 
-                      ? (item.pricePerUnit / convertUnit(1, item.displayUnit, item.unit)).toFixed(2)
-                      : item.pricePerUnit.toFixed(2);
+                      ? ((item.pricePerUnit || 0) / convertUnit(1, item.displayUnit, item.unit)).toFixed(2)
+                      : (item.pricePerUnit || 0).toFixed(2);
                     const stockPercentage = (item.currentStock / item.maxStock) * 100;
                     const needsRestock = item.currentStock <= item.reorderPoint;
                     const displayStock = `${item.currentStock} ${item.unit}`;
@@ -848,7 +865,7 @@ export default function InventoryPage() {
                           <div className="text-sm text-gray-900 dark:text-white">{item.location}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             {getUnitCategoryIcon(item.unitCategory)}
-                            <span>₱{item.pricePerUnit.toFixed(2)}/{item.displayUnit}</span>
+                            <span>₱{(item.pricePerUnit || 0).toFixed(2)}/{item.displayUnit}</span>
                           </div>
                           <div className="text-xs text-gray-400 dark:text-gray-500">
                             Base: ₱{basePrice}/{item.unit}
@@ -856,10 +873,10 @@ export default function InventoryPage() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm text-gray-900 dark:text-white">
-                            {new Date(item.lastRestocked).toLocaleDateString()}
+                            {item.lastRestocked ? new Date(item.lastRestocked).toLocaleDateString() : 'Never'}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {Math.floor((new Date().getTime() - new Date(item.lastRestocked).getTime()) / (1000 * 3600 * 24))} days ago
+                            {item.lastRestocked ? Math.floor((new Date().getTime() - new Date(item.lastRestocked).getTime()) / (1000 * 3600 * 24)) + ' days ago' : '—'}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -869,6 +886,8 @@ export default function InventoryPage() {
                                 setShowAdjustModal(item);
                                 setAdjustmentUnit(item.displayUnit as Unit);
                                 setAdjustmentType('restock');
+                                setAdjustmentPrice('');
+                                setShowPriceField(false);
                               }}
                               className="rounded-lg bg-blue-100 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-500 hover:bg-blue-200 dark:hover:bg-blue-900/20"
                             >
@@ -953,6 +972,8 @@ export default function InventoryPage() {
                               setShowAdjustModal(item);
                               setAdjustmentUnit(item.displayUnit as Unit);
                               setAdjustmentType('restock');
+                              setAdjustmentPrice('');
+                              setShowPriceField(false);
                             }}
                             className="rounded-lg bg-red-600 dark:bg-red-700 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 dark:hover:bg-red-600"
                           >
@@ -1146,20 +1167,32 @@ export default function InventoryPage() {
               </div>
 
               <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Pricing</h4>
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <PhilippinePeso className="h-4 w-4 text-green-600" />
+                  Pricing Information (Optional)
+                </h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Price per {newItem.unit} (₱)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="1000000"
-                      step="0.01"
-                      value={newItem.pricePerUnit}
-                      onChange={(e) => setNewItem({...newItem, pricePerUnit: formatNumber(e.target.value, 1000000)})}
-                      className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                      placeholder="0.00"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Price per {newItem.unit} (₱)
+                    </label>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">
+                        ₱
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={newItem.pricePerUnit}
+                        onChange={(e) => setNewItem({...newItem, pricePerUnit: e.target.value})}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black pl-8 pr-4 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      You can set this later when you know the price
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1235,7 +1268,7 @@ export default function InventoryPage() {
 
       {showAdjustModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 dark:bg-black/90">
-          <div className="w-full max-w-md rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+          <div className="w-full max-w-md rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6 max-h-[90vh] overflow-y-auto">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Adjust Stock: {showAdjustModal.name}
@@ -1246,6 +1279,8 @@ export default function InventoryPage() {
                   setAdjustmentQuantity('');
                   setAdjustmentUnit(showAdjustModal.displayUnit as Unit || 'g');
                   setAdjustmentNotes('');
+                  setAdjustmentPrice('');
+                  setShowPriceField(false);
                 }}
                 className="text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200"
               >
@@ -1259,6 +1294,12 @@ export default function InventoryPage() {
                   <span className="text-sm text-gray-600 dark:text-gray-400">Current Stock:</span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {showAdjustModal.currentStock} {showAdjustModal.unit}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Current Price:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    ₱{(showAdjustModal.pricePerUnit || 0).toFixed(2)}/{showAdjustModal.displayUnit || showAdjustModal.unit}
                   </span>
                 </div>
                 <div className="flex justify-between items-center mt-1">
@@ -1276,6 +1317,50 @@ export default function InventoryPage() {
                   </div>
                 )}
               </div>
+              
+              {/* Price Update Toggle */}
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Update Price?
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPriceField(!showPriceField)}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    showPriceField
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-500 border border-green-200 dark:border-green-900/30'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300 border border-gray-200 dark:border-gray-800'
+                  }`}
+                >
+                  {showPriceField ? 'Yes' : 'No'}
+                </button>
+              </div>
+
+              {/* Price Update Field */}
+              {showPriceField && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    New Price (₱ per {showAdjustModal.displayUnit || showAdjustModal.unit})
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-medium">
+                      ₱
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={adjustmentPrice}
+                      onChange={(e) => setAdjustmentPrice(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black pl-8 pr-4 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                      placeholder="Enter new price"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Leave empty to keep current price
+                  </p>
+                </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Adjustment Type</label>
@@ -1358,6 +1443,12 @@ export default function InventoryPage() {
                       <span>Current Stock:</span>
                       <span>{showAdjustModal.currentStock} {showAdjustModal.unit}</span>
                     </div>
+                    {showPriceField && adjustmentPrice && Number(adjustmentPrice) > 0 && (
+                      <div className="flex justify-between text-green-600 dark:text-green-500">
+                        <span>New Price:</span>
+                        <span>₱{Number(adjustmentPrice).toFixed(2)}/{showAdjustModal.displayUnit || showAdjustModal.unit}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Adjustment:</span>
                       <span className={adjustmentType === 'restock' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}>
@@ -1414,6 +1505,8 @@ export default function InventoryPage() {
                   setAdjustmentQuantity('');
                   setAdjustmentUnit(showAdjustModal.displayUnit as Unit || 'g');
                   setAdjustmentNotes('');
+                  setAdjustmentPrice('');
+                  setShowPriceField(false);
                 }}
                 className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
               >
