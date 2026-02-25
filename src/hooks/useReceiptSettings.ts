@@ -1,7 +1,90 @@
 // hooks/useReceiptSettings.ts
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { ReceiptSettings } from '@/types/receipt';
+
+// Define the ReceiptSettings type para complete
+export interface ReceiptSettings {
+  businessName: string;
+  locationAddress: string;
+  phoneNumber: string;
+  taxPin: string;
+  showLogo: boolean;
+  showTaxPIN: boolean;
+  showSKU: boolean;
+  showReferenceNumber: boolean;
+  showBusinessHours: boolean;
+  emailReceipt: boolean;
+  printReceipt: boolean;
+  receiptWidth: '58mm' | '80mm';
+  logo: string | null;
+  logoPreview: string;
+  logoSize: 'small' | 'medium' | 'large';
+  receiptMessage: string;
+  disclaimer: string;
+  businessHours: string;
+  sections: Record<string, { header: boolean; footer: boolean; disabled: boolean }>;
+  customerPrinter: {
+    connectionType: 'usb' | 'bluetooth' | 'network';
+    paperWidth: '58mm' | '80mm';
+  };
+  kitchenPrinter: {
+    enabled: boolean;
+    printerName: string;
+    connectionType: 'usb' | 'bluetooth' | 'network';
+    paperWidth: '58mm' | '80mm';
+    copies: number;
+    printOrderNumber: boolean;
+    printTableNumber: boolean;
+    printSpecialInstructions: boolean;
+    separateByCategory: boolean;
+  };
+  // Z-READING SETTINGS - ito ang importante para sa starting fund
+  zreading: {
+    // Starting Fund Settings
+    defaultOpeningFund: number;      // ← Dito nakalagay ang starting fund amount
+    requireOpeningFund: boolean;      // ← Required ba maglagay ng starting fund
+    openingFundEditable: boolean;     // ← Pwedeng baguhin ng cashier ang starting fund
+    
+    // VAT Settings
+    showVAT: boolean;
+    vatPercentage: number;
+    
+    // Discount Settings
+    showDiscounts: boolean;
+    discountTypes: {
+      sc: boolean;        // Senior Citizen
+      pwd: boolean;       // PWD
+      naac: boolean;      // NAAC
+      soloParent: boolean; // Solo Parent
+      other: boolean;     // Other Discounts
+    };
+    soloParentPercentage: number;
+    
+    // Payment Methods to show in Z-Report
+    showPayments: {
+      cash: boolean;
+      gcash: boolean;
+      split: boolean;
+      creditCard: boolean;
+      payLater: boolean;
+      online: boolean;
+      invoice: boolean;
+    };
+    
+    // Additional Sections
+    showBeginningEndingSI: boolean;
+    showVoidSummary: boolean;
+    showReturnSummary: boolean;
+    showCashierSignature: boolean;
+    showManagerSignature: boolean;
+    showGrandTotal: boolean;
+    showBreakdown: boolean;
+    
+    // Footer
+    zreportFooter: string;
+    includeDisclaimer: boolean;
+  };
+}
 
 export const DEFAULT_SETTINGS: ReceiptSettings = {
   businessName: 'Rendezvous Cafe',
@@ -16,6 +99,12 @@ export const DEFAULT_SETTINGS: ReceiptSettings = {
   emailReceipt: true,
   printReceipt: true,
   receiptWidth: '58mm',
+  logo: null,
+  logoPreview: '',
+  logoSize: 'medium',
+  receiptMessage: 'Thank You for visiting Rendezvous Cafe!',
+  disclaimer: 'Prices include 12% VAT. No refunds or exchanges on food items.',
+  businessHours: 'Monday - Sunday: 7:00 AM - 10:00 PM',
   sections: {
     locationAddress: { header: true, footer: false, disabled: false },
     storeName: { header: true, footer: false, disabled: false },
@@ -29,13 +118,6 @@ export const DEFAULT_SETTINGS: ReceiptSettings = {
     orderNote: { header: false, footer: true, disabled: false },
     customerInfo: { header: false, footer: true, disabled: false },
   },
-  receiptMessage: 'Thank You for visiting Rendezvous Cafe!',
-  disclaimer: 'Prices include 12% VAT. No refunds or exchanges on food items.',
-  businessHours: 'Monday - Sunday: 7:00 AM - 10:00 PM',
- logo: null,
-logoPreview: '',
-logoSize: 'medium', // or whatever the default should be (e.g., 'small' | 'medium' | 'large')
-
   customerPrinter: {
     connectionType: 'usb',
     paperWidth: '58mm'
@@ -50,6 +132,52 @@ logoSize: 'medium', // or whatever the default should be (e.g., 'small' | 'mediu
     printTableNumber: true,
     printSpecialInstructions: true,
     separateByCategory: true
+  },
+  // Z-READING DEFAULTS - may starting fund na 2000
+  zreading: {
+    // Starting Fund
+    defaultOpeningFund: 2000,
+    requireOpeningFund: true,
+    openingFundEditable: true,
+    
+    // VAT
+    showVAT: true,
+    vatPercentage: 12,
+    
+    // Discounts
+    showDiscounts: true,
+    discountTypes: {
+      sc: true,
+      pwd: true,
+      naac: true,
+      soloParent: true,
+      other: true
+    },
+    soloParentPercentage: 10,
+    
+    // Payment Methods
+    showPayments: {
+      cash: true,
+      gcash: true,
+      split: true,
+      creditCard: true,
+      payLater: true,
+      online: true,
+      invoice: true
+    },
+    
+    // Additional Sections
+    showBeginningEndingSI: true,
+    showVoidSummary: true,
+    showReturnSummary: true,
+    showCashierSignature: true,
+    showManagerSignature: false,
+    showGrandTotal: true,
+    showBreakdown: true,
+    
+    // Footer
+    zreportFooter: 'This is a computer generated report.',
+    includeDisclaimer: true
   }
 };
 
@@ -68,23 +196,49 @@ export function useReceiptSettings() {
       
       if (response.ok) {
         const data = await response.json();
-        setSettings({
+        // Deep merge para hindi mawala ang nested objects
+        setSettings(prev => ({
           ...DEFAULT_SETTINGS,
           ...data.settings,
           customerPrinter: { ...DEFAULT_SETTINGS.customerPrinter, ...data.settings?.customerPrinter },
-          kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...data.settings?.kitchenPrinter }
-        });
+          kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...data.settings?.kitchenPrinter },
+          zreading: {  // ← I-merge din ang zreading settings
+            ...DEFAULT_SETTINGS.zreading,
+            ...data.settings?.zreading,
+            discountTypes: { 
+              ...DEFAULT_SETTINGS.zreading.discountTypes, 
+              ...data.settings?.zreading?.discountTypes 
+            },
+            showPayments: { 
+              ...DEFAULT_SETTINGS.zreading.showPayments, 
+              ...data.settings?.zreading?.showPayments 
+            }
+          }
+        }));
         localStorage.setItem('receipt_settings', JSON.stringify(data.settings));
       } else {
+        // Fallback to localStorage
         const saved = localStorage.getItem('receipt_settings');
         if (saved) {
           const parsed = JSON.parse(saved);
-          setSettings({
+          setSettings(prev => ({
             ...DEFAULT_SETTINGS,
             ...parsed,
             customerPrinter: { ...DEFAULT_SETTINGS.customerPrinter, ...parsed?.customerPrinter },
-            kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...parsed?.kitchenPrinter }
-          });
+            kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...parsed?.kitchenPrinter },
+            zreading: {  // ← I-merge din ang zreading
+              ...DEFAULT_SETTINGS.zreading,
+              ...parsed?.zreading,
+              discountTypes: { 
+                ...DEFAULT_SETTINGS.zreading.discountTypes, 
+                ...parsed?.zreading?.discountTypes 
+              },
+              showPayments: { 
+                ...DEFAULT_SETTINGS.zreading.showPayments, 
+                ...parsed?.zreading?.showPayments 
+              }
+            }
+          }));
           toast.info('Using locally saved settings');
         } else {
           setSettings(DEFAULT_SETTINGS);
@@ -95,12 +249,24 @@ export function useReceiptSettings() {
       const saved = localStorage.getItem('receipt_settings');
       if (saved) {
         const parsed = JSON.parse(saved);
-        setSettings({
+        setSettings(prev => ({
           ...DEFAULT_SETTINGS,
           ...parsed,
           customerPrinter: { ...DEFAULT_SETTINGS.customerPrinter, ...parsed?.customerPrinter },
-          kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...parsed?.kitchenPrinter }
-        });
+          kitchenPrinter: { ...DEFAULT_SETTINGS.kitchenPrinter, ...parsed?.kitchenPrinter },
+          zreading: {  // ← I-merge din ang zreading
+            ...DEFAULT_SETTINGS.zreading,
+            ...parsed?.zreading,
+            discountTypes: { 
+              ...DEFAULT_SETTINGS.zreading.discountTypes, 
+              ...parsed?.zreading?.discountTypes 
+            },
+            showPayments: { 
+              ...DEFAULT_SETTINGS.zreading.showPayments, 
+              ...parsed?.zreading?.showPayments 
+            }
+          }
+        }));
         toast.info('Using locally saved settings (offline mode)');
       } else {
         setSettings(DEFAULT_SETTINGS);
@@ -159,20 +325,15 @@ export function useReceiptSettings() {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  // FIXED: This function now properly handles nested object updates with type safety
-  const updateNestedSetting = <
-    S extends keyof ReceiptSettings,
-    F extends keyof ReceiptSettings[S]
-  >(
-    section: S,
-    field: F,
-    value: ReceiptSettings[S][F]
+  // FIXED: updateNestedSetting - para sa customerPrinter at kitchenPrinter
+  const updateNestedSetting = (
+    section: 'customerPrinter' | 'kitchenPrinter',
+    field: string,
+    value: any
   ) => {
     setSettings(prev => {
       const sectionData = prev[section];
-      
-      // Check if sectionData exists and is an object (not null, not array)
-      if (sectionData && typeof sectionData === 'object' && !Array.isArray(sectionData)) {
+      if (sectionData && typeof sectionData === 'object') {
         return {
           ...prev,
           [section]: {
@@ -181,33 +342,41 @@ export function useReceiptSettings() {
           }
         };
       }
-      
-      // If sectionData is not an object, log warning and return previous state
-      console.warn(`Cannot update nested setting: ${String(section)} is not an object`);
       return prev;
     });
   };
 
-  // Alternative FIX if you're sure all sections being passed are objects:
-  // You can use this version if you want to assert that sectionData is always an object
-  /*
-  const updateNestedSetting = <
-    S extends keyof ReceiptSettings,
-    F extends keyof ReceiptSettings[S]
-  >(
-    section: S,
-    field: F,
-    value: ReceiptSettings[S][F]
+  // NEW: updateZReadingSetting - para sa zreading settings (including starting fund)
+  const updateZReadingSetting = (
+    field: keyof ReceiptSettings['zreading'],
+    value: any
   ) => {
     setSettings(prev => ({
       ...prev,
-      [section]: {
-        ...(prev[section] as object),
+      zreading: {
+        ...prev.zreading,
         [field]: value
       }
     }));
   };
-  */
+
+  // NEW: updateZReadingNestedSetting - para sa nested zreading objects (discountTypes, showPayments)
+  const updateZReadingNestedSetting = (
+    parent: 'discountTypes' | 'showPayments',
+    field: string,
+    value: boolean
+  ) => {
+    setSettings(prev => ({
+      ...prev,
+      zreading: {
+        ...prev.zreading,
+        [parent]: {
+          ...prev.zreading[parent],
+          [field]: value
+        }
+      }
+    }));
+  };
 
   const updateSectionPosition = (
     sectionKey: string,
@@ -235,6 +404,35 @@ export function useReceiptSettings() {
     toast.info(`Testing ${type} printer connection...`);
   };
 
+  // HELPER FUNCTIONS - para sa Cash Management
+  const getOpeningFund = (): number => {
+    return settings.zreading?.defaultOpeningFund ?? 2000;
+  };
+
+  const isOpeningFundRequired = (): boolean => {
+    return settings.zreading?.requireOpeningFund ?? true;
+  };
+
+  const isOpeningFundEditable = (): boolean => {
+    return settings.zreading?.openingFundEditable ?? true;
+  };
+
+  const getVATPercentage = (): number => {
+    return settings.zreading?.vatPercentage ?? 12;
+  };
+
+  const getSoloParentPercentage = (): number => {
+    return settings.zreading?.soloParentPercentage ?? 10;
+  };
+
+  const shouldShowDiscount = (type: keyof ReceiptSettings['zreading']['discountTypes']): boolean => {
+    return settings.zreading?.discountTypes?.[type] ?? true;
+  };
+
+  const shouldShowPayment = (type: keyof ReceiptSettings['zreading']['showPayments']): boolean => {
+    return settings.zreading?.showPayments?.[type] ?? true;
+  };
+
   return {
     settings,
     isLoading,
@@ -243,12 +441,20 @@ export function useReceiptSettings() {
     saveSettings,
     updateSetting,
     updateNestedSetting,
+    updateZReadingSetting,        // ← BAGO: para sa zreading fields
+    updateZReadingNestedSetting,   // ← BAGO: para sa nested zreading
     updateSectionPosition,
     resetToDefaults,
     testPrint,
     DEFAULT_SETTINGS,
-    refreshSettings: loadSettings
-    // lohlogogog
-  }; 
+    refreshSettings: loadSettings,
+    // Helper functions para sa cash management
+    getOpeningFund,                // ← GAMITIN ITO para makuha ang starting fund
+    isOpeningFundRequired,
+    isOpeningFundEditable,
+    getVATPercentage,
+    getSoloParentPercentage,
+    shouldShowDiscount,
+    shouldShowPayment
+  };
 }
-// logo shit

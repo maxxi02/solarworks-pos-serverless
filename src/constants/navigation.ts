@@ -12,23 +12,23 @@ import {
   Users,
 } from "lucide-react";
 
-// Base paths (you can import and compose them)
 export const PATHS = {
-  // Common / shared
   DASHBOARD: "/dashboard",
   INVENTORY: "/inventory",
   PROFILE: "/profile",
   SETTINGS: "/settings",
 
-  // Admin-specific
   ADMIN: {
     SALES: "/sales",
     SALES_ALL_TRANSACTIONS: "/sales/all-transactions",
     SALES_ANALYTICS: "/sales/sales-analytics",
     SALES_REFUND_RETURN: "/sales/refund-and-return",
+    SALES_CASH_MANAGEMENT: "/sales/cash-management",
+    SALES_CLOSE_REGISTER: "/mysales/close-register",
 
     INVENTORY_CATEGORIES: "/inventory/categories",
     INVENTORY_STOCK_ALERT: "/inventory/stockalert",
+    INVENTORY_REPORTS: "/inventory/reports",
 
     CUSTOMERS: "/customers",
     CUSTOMER_LIST: "/customer/customer-list",
@@ -49,12 +49,13 @@ export const PATHS = {
     SETTINGS_PROFILE: "/settings/profile",
   },
 
-  // Staff-specific
   STAFF_NAV: {
     ORDERS: "/orders",
     MY_SALES: "/my-sales",
     MY_SALES_HISTORY: "/transactionhistory",
     MY_SALES_PERFORMANCE: "/performance",
+    CASH_MANAGEMENT: "/mysales/cash-management",
+    CLOSE_REGISTER: "/mysales/close-register",
 
     INVENTORY_VIEW_PRODUCTS: "/inventory/product",
     INVENTORY_STOCK_LEVELS: "/inventory/stock",
@@ -63,7 +64,6 @@ export const PATHS = {
   },
 } as const;
 
-// Navigation item type (for better type safety)
 export type NavItem = {
   title: string;
   url: string;
@@ -72,20 +72,16 @@ export type NavItem = {
   items?: NavItem[];
 };
 
-// Admin navigation items using the constants
 export const adminNavigation: NavItem[] = [
-  {
-    title: "Dashboard",
-    url: PATHS.DASHBOARD,
-    icon: LayoutDashboard,
-    isActive: true,
-  },
+  { title: "Dashboard", url: PATHS.DASHBOARD, icon: LayoutDashboard, isActive: true },
   {
     title: "Sales",
     url: PATHS.ADMIN.SALES,
     icon: ShoppingCart,
     items: [
       { title: "All Transactions", url: PATHS.ADMIN.SALES_ALL_TRANSACTIONS },
+      { title: "Cash Management", url: PATHS.ADMIN.SALES_CASH_MANAGEMENT },
+      { title: "Close Register", url: PATHS.ADMIN.SALES_CLOSE_REGISTER },
       { title: "Sales Analytics", url: PATHS.ADMIN.SALES_ANALYTICS },
       { title: "Refunds & Returns", url: PATHS.ADMIN.SALES_REFUND_RETURN },
     ],
@@ -97,6 +93,7 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "Categories", url: PATHS.ADMIN.INVENTORY_CATEGORIES },
       { title: "Stock Alerts", url: PATHS.ADMIN.INVENTORY_STOCK_ALERT },
+      { title: "Reports", url: PATHS.ADMIN.INVENTORY_REPORTS },
     ],
   },
   {
@@ -140,19 +137,9 @@ export const adminNavigation: NavItem[] = [
   },
 ];
 
-// Staff navigation items – clock in/out removed (embed in POS/cashier screen instead)
 export const staffNavigation: NavItem[] = [
-  {
-    title: "Dashboard",
-    url: PATHS.DASHBOARD,
-    icon: LayoutDashboard,
-    isActive: true,
-  },
-  {
-    title: "Orders",
-    url: PATHS.STAFF_NAV.ORDERS,
-    icon: ShoppingCart,
-  },
+  { title: "Dashboard", url: PATHS.DASHBOARD, icon: LayoutDashboard, isActive: true },
+  { title: "Orders", url: PATHS.STAFF_NAV.ORDERS, icon: ShoppingCart },
   {
     title: "My Sales",
     url: PATHS.STAFF_NAV.MY_SALES,
@@ -160,6 +147,8 @@ export const staffNavigation: NavItem[] = [
     items: [
       { title: "Transaction History", url: PATHS.STAFF_NAV.MY_SALES_HISTORY },
       { title: "My Performance", url: PATHS.STAFF_NAV.MY_SALES_PERFORMANCE },
+      { title: "Cash Management", url: PATHS.STAFF_NAV.CASH_MANAGEMENT },
+      { title: "Close Register", url: PATHS.STAFF_NAV.CLOSE_REGISTER },
     ],
   },
   {

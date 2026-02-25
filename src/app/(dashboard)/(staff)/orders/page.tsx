@@ -32,7 +32,7 @@ import { ReceiptModal } from './_components/Receiptmodal';
 import { DiscountModal } from './_components/DiscountModal';
 import { OrderHistoryModal } from './_components/OrderHistoryModal';
 import { PrinterStatus } from './_components/Printerstatus';
-import { InsufficientStockModal } from './_components/Insufficientstockmodal';
+import { InsufficientStockModal } from './_components/InsufficientStockModal';
 import { SavedOrdersPanel } from './_components/Savedorderspanel';
 import { useCart, useSavedOrders, buildOrder } from './_components/usePOS';
 import {
