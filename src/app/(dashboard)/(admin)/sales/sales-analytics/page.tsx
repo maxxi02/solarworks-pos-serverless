@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { io as socketIO, Socket } from 'socket.io-client';
 import { TrendingUp, Users, Clock, Star, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -177,6 +178,10 @@ export default function SalesAnalyticsPage() {
   
   // Toggle for showing/hiding line sa chart
   const [showLine, setShowLine] = useState(true);
+  
+  // Socket connection state
+  const [isLive, setIsLive] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
 
   const fetchSalesData = async (): Promise<void> => {
     setIsLoading(true);
@@ -207,7 +212,54 @@ export default function SalesAnalyticsPage() {
     }
   };
 
-  // Auto-refresh every 30 seconds
+  // Socket.IO connection for real-time updates
+  useEffect(() => {
+    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8080';
+
+    const socket = socketIO(SOCKET_URL, {
+      auth: { userId: 'analytics-dashboard' },
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('✅ Socket connected:', socket.id);
+      setIsLive(true);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Socket disconnected');
+      setIsLive(false);
+    });
+
+    // 🔥 Re-fetch whenever a new sale is completed
+    socket.on('sales:updated', () => {
+      console.log('📊 Sales updated — refreshing...');
+      fetchSalesData();
+    });
+
+    // Handle reconnection
+    socket.on('reconnect', () => {
+      console.log('🔄 Socket reconnected');
+      setIsLive(true);
+      fetchSalesData(); // Refresh data on reconnect
+    });
+
+    socket.on('reconnect_error', (error) => {
+      console.error('Socket reconnection error:', error);
+      setIsLive(false);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []); // Empty dependency array - runs once on mount
+
+  // Auto-refresh every 30 seconds as fallback
   useEffect(() => {
     fetchSalesData();
 
@@ -269,20 +321,25 @@ export default function SalesAnalyticsPage() {
   return (
     <div className="min-h-screen bg-background p-6">
       <main className="max-w-7xl mx-auto">
-        {/* Header with Last Updated */}
+        {/* Header with Last Updated and Live Indicator */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold">Sales Analytics</h1>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-muted-foreground">
-                {hasData 
-                  ? `${summary.totalTransactions} transactions found`
-                  : 'No transactions for selected period'}
+              {/* Live Indicator */}
+              <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
+              <p className="text-muted-foreground text-xs">
+                {isLive ? 'Live' : 'Reconnecting...'}
               </p>
               <span className="text-xs text-muted-foreground">
                 • Last updated: {formatDateTime(lastUpdated.toISOString())}
               </span>
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {hasData 
+                ? `${summary.totalTransactions} transactions found`
+                : 'No transactions for selected period'}
+            </p>
             {salesData?.dateRange && (
               <p className="text-xs text-muted-foreground mt-1">
                 Period: {formatDate(salesData.dateRange.from)} - {formatDate(salesData.dateRange.to)}
@@ -651,7 +708,8 @@ export default function SalesAnalyticsPage() {
                     dailyCount: daily.length,
                     productsCount: topProducts.length,
                     methodsCount: paymentMethods.length,
-                    recentCount: recentTransactions.length
+                    recentCount: recentTransactions.length,
+                    socketConnected: isLive
                   }, null, 2)}
                 </pre>
               </details>
