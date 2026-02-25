@@ -1,6 +1,21 @@
 import { NextResponse } from 'next/server';
 import MONGODB from '@/config/db';
 
+const notifySalesUpdate = async () => {
+  try {
+    await fetch(`${process.env.SOCKET_SERVER_URL}/internal/sales-updated`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.INTERNAL_SECRET || "",
+      },
+    });
+  } catch (err) {
+    // Non-critical — don't fail the payment if this errors
+    console.warn("Could not notify socket server:", err);
+  }
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -23,6 +38,9 @@ export async function POST(request: Request) {
     });
     
     console.log('Payment saved with ID:', result.insertedId);
+    
+    // Notify socket server about the sales update (fire and forget)
+    notifySalesUpdate();
     
     return NextResponse.json({
       success: true,
