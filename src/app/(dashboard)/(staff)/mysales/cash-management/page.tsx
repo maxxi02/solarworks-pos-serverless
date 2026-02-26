@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DollarSign, CreditCard, Wallet, TrendingUp,
@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReceiptSettings } from '@/hooks/useReceiptSettings';
+import { io as socketIO, Socket } from 'socket.io-client';
+import { notifyCashUpdated } from '@/lib/notifyServer';
 
 interface Payment {
   _id: string;
@@ -50,6 +52,9 @@ export default function CashManagementPage() {
   const router = useRouter();
   const { isLoading: settingsLoading } = useReceiptSettings();
 
+  const socketRef = useRef<Socket | null>(null);
+  const [isLive, setIsLive] = useState(false);
+
   const [sessionReady, setSessionReady]= useState(false);
   const [startingFundInput, setStartingFundInput] = useState('');
   const [startingFundError, setStartingFundError] = useState('');
@@ -79,6 +84,23 @@ export default function CashManagementPage() {
   const [cashOutReason, setCashOutReason]         = useState('');
   const [isCashingOut, setIsCashingOut]           = useState(false);
   const [showDrawerDetails, setShowDrawerDetails] = useState(false);
+
+  // Socket connection for real-time updates
+  useEffect(() => {
+    const socket = socketIO(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8080', {
+      auth: { userId: 'cash-management' },
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => setIsLive(true));
+    socket.on('disconnect', () => setIsLive(false));
+
+    // Re-fetch when any payment or cash event happens
+    socket.on('cash:updated', () => { loadPayments(); checkSession(); });
+    socket.on('sales:updated', () => loadPayments());
+
+    return () => { socket.disconnect(); };
+  }, []);
 
   useEffect(() => {
     if (settingsLoading) return;
@@ -248,6 +270,7 @@ export default function CashManagementPage() {
       if (result.success) {
         setSession(result.data);
         toast.success(`Cash out of ${fmtP(cashOutAmount as number)} recorded`);
+        await notifyCashUpdated();
         setCashOutAmount(''); setCashOutReason(''); setShowCashOutModal(false);
       } else { toast.error('Failed to record cash out'); }
     } catch { toast.error('Failed to record cash out'); }
@@ -366,13 +389,13 @@ export default function CashManagementPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {/* Status pill */}
+              {/* Status pill with live indicator */}
               <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${
                 session?.status === 'open'
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-muted text-muted-foreground border-border'
               }`}>
-                <div className={`w-2 h-2 rounded-full ${session?.status === 'open' ? 'bg-green-400' : 'bg-muted-foreground'}`} />
+                <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
                 {session?.status === 'open' ? 'OPEN' : 'CLOSED'}
               </div>
               <button onClick={handleRefresh} className="p-2 border border-border rounded-lg hover:bg-muted transition-colors">

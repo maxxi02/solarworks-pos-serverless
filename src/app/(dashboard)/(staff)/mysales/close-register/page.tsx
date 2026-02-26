@@ -6,6 +6,7 @@ import { CheckCircle, AlertCircle, XCircle, Save, DollarSign, Receipt } from 'lu
 import { toast } from 'sonner';
 import ZReportModal from '@/app/(dashboard)/(public)/settings/receipt-setting/components/ZReportModal';
 import { useReceiptSettings } from '@/hooks/useReceiptSettings';
+import { notifyRegisterClosed, notifyCashUpdated } from '@/lib/notifyServer';
 
 interface Payment {
   _id: string;
@@ -163,6 +164,15 @@ export default function CloseRegisterPage() {
       });
       const result = await res.json();
       if (!result.success) { toast.error('Failed to close register'); setIsClosing(false); return; }
+
+      // Notify other clients about register closure
+      await notifyRegisterClosed({
+        cashierName: summary.cashierName,
+        registerName: summary.registerName,
+        closedAt: new Date().toISOString(),
+      });
+      await notifyCashUpdated(); // also refreshes cash management on other tabs
+
     } catch {
       toast.error('Failed to close register'); setIsClosing(false); return;
     }
@@ -182,8 +192,8 @@ export default function CloseRegisterPage() {
     setIsClosing(false);
   };
 
-  const handleZReportClose  = () => { setShowZReport(false); router.replace('/cashmanagement'); };
-  const handleConfirmClose  = () => { setShowZReport(false); toast.success('Register closed successfully!'); router.replace('/cashmanagement'); };
+  const handleZReportClose  = () => { setShowZReport(false); router.replace('/mysales/cash-management'); };
+  const handleConfirmClose  = () => { setShowZReport(false); toast.success('Register closed successfully!'); router.replace('/mysales/cash-management'); };
 
   const fmt  = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const fmtP = (n: number) => `₱${fmt(n)}`;

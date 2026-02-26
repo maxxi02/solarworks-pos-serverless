@@ -95,8 +95,6 @@ interface UseInventorySocketOptions {
   onBulkImported?: (data: InventoryBulkImport) => void;
   onAuditEntry?: (data: AuditEntry) => void;
   subscribeToAudit?: boolean;
-  // FIX (Bug 3): expose connect/disconnect so callers can drive their own
-  // Live indicator rather than relying on a one-way flag that never resets.
   onConnect?: () => void;
   onDisconnect?: () => void;
 }
@@ -108,10 +106,36 @@ let _socket: Socket | null = null;
 function getSocket(userId: string, userName?: string): Socket {
   const url = process.env.NEXT_PUBLIC_SOCKET_URL ?? 'http://localhost:8080';
 
-  if (!_socket || !_socket.connected) {
+  // FIX 1 — wrong guard condition:
+  //   BEFORE: !_socket || !_socket.connected
+  //   A socket that is still CONNECTING has .connected === false, so the old
+  //   guard would spin up a second parallel socket before the first one
+  //   finished its handshake (React StrictMode triggers this every mount).
+  //   Two racing sockets → auth conflicts → one or both error out.
+  //
+  //   AFTER: !_socket || _socket.disconnected
+  //   .disconnected is only true after an explicit .disconnect() call, so we
+  //   correctly reuse a socket that is still mid-handshake.
+  //
+  // FIX 2 — transports: ['websocket'] removed:
+  //   WebSocket-only mode skips Socket.IO's normal polling→websocket handshake.
+  //   The raw WS upgrade requires CORS to be perfect on the very first request;
+  //   any mismatch → "websocket error", then "timeout" on retry.
+  //   Without this restriction Socket.IO uses polling first (always succeeds),
+  //   then silently upgrades to WebSocket on its own.
+  //
+  // FIX 3 — orphaned socket cleanup:
+  //   Before creating a new socket, cleanly remove all listeners and disconnect
+  //   the old one so it doesn't linger as a ghost connection.
+  if (!_socket || _socket.disconnected) {
+    if (_socket) {
+      _socket.removeAllListeners();
+      _socket.disconnect();
+    }
+
     _socket = io(url, {
       auth: { userId, userName },
-      transports: ['websocket'],
+      // transports: ['websocket'] ← REMOVED (was causing timeout + websocket error)
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
@@ -138,7 +162,6 @@ export function useInventorySocket({
 }: UseInventorySocketOptions) {
   const socketRef = useRef<Socket | null>(null);
 
-  // ─── FIX (Bug 1 — stale closure) ──────────────────────────────────────────
   // Store every callback in a ref, synced on every render.
   // Socket listeners call the ref instead of the function directly.
   // This means onAuditEntry (and all others) always see the LATEST values of
@@ -177,7 +200,6 @@ export function useInventorySocket({
       socket.emit('inventory:subscribe');
       socket.emit('inventory:alerts:subscribe');
       if (subscribeToAudit) socket.emit('inventory:audit:subscribe');
-      // FIX (Bug 3): let caller know the socket is up so they can set isLive
       onConnectRef.current?.();
     };
 
@@ -188,7 +210,6 @@ export function useInventorySocket({
 
     const handleDisconnect = (reason: string) => {
       console.warn('📦 [inventory socket] disconnected:', reason);
-      // FIX (Bug 3): let caller know the socket dropped so they can clear isLive
       onDisconnectRef.current?.();
     };
 

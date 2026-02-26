@@ -1,10 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import MONGODB from '@/config/db';
 
-const col = () => MONGODB.collection('sessions');
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface CashOut {
+  amount: number;
+  reason: string;
+  date: Date;
+}
+
+interface Session {
+  openingFund: number;
+  cashierName: string;
+  registerName: string;
+  openedAt: Date;
+  status: 'open' | 'closed';
+  cashOuts: CashOut[];
+  createdAt: Date;
+  updatedAt: Date;
+  closedAt?: Date;
+  actualCash?: number;
+  expectedCash?: number;
+  difference?: number;
+  closeStatus?: string;
+  closingNotes?: string;
+  snapshot?: object;
+}
+
+const col = () => MONGODB.collection<Session>('sessions');
 
 // ─── GET /api/sessions ────────────────────────────────────────────────────────
-// Returns the currently open session, or null if none.
 export async function GET() {
   try {
     const session = await col().findOne(
@@ -19,31 +43,29 @@ export async function GET() {
 }
 
 // ─── POST /api/sessions ───────────────────────────────────────────────────────
-// Opens a new session. Closes any stale open sessions first.
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { openingFund = 0, cashierName = 'Cashier', registerName = 'Main Register' } = body;
 
-    // Close any stale open sessions
     await col().updateMany(
       { status: 'open' },
       { $set: { status: 'closed', closedAt: new Date() } }
     );
 
     const now = new Date();
-    const newSession = {
+    const newSession: Omit<Session, '_id'> = {
       openingFund,
       cashierName,
       registerName,
       openedAt:  now,
       status:    'open',
-      cashOuts:  [] as Array<{ amount: number; reason: string; date: Date }>,
+      cashOuts:  [],
       createdAt: now,
       updatedAt: now,
     };
 
-    const result = await col().insertOne(newSession);
+    const result = await col().insertOne(newSession as Session);
     const session = { ...newSession, _id: result.insertedId };
 
     return NextResponse.json({ success: true, data: session }, { status: 201 });
@@ -54,8 +76,6 @@ export async function POST(req: NextRequest) {
 }
 
 // ─── PATCH /api/sessions ──────────────────────────────────────────────────────
-// action: 'cash_out' → push a cash-out entry into the open session
-// action: 'close'    → mark session closed + save Z-report snapshot
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();

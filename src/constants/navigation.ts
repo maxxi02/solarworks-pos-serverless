@@ -23,12 +23,12 @@ export const PATHS = {
     SALES_ALL_TRANSACTIONS: "/sales/all-transactions",
     SALES_ANALYTICS: "/sales/sales-analytics",
     SALES_REFUND_RETURN: "/sales/refund-and-return",
-    SALES_CASH_MANAGEMENT: "/sales/cash-management",
+    SALES_CASH_MANAGEMENT: "/mysales/cash-management",
     SALES_CLOSE_REGISTER: "/mysales/close-register",
 
     INVENTORY_CATEGORIES: "/inventory/categories",
     INVENTORY_STOCK_ALERT: "/inventory/stockalert",
-    INVENTORY_REPORTS: "/inventory/reports",
+
 
     CUSTOMERS: "/customers",
     CUSTOMER_LIST: "/customer/customer-list",
@@ -93,7 +93,6 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "Categories", url: PATHS.ADMIN.INVENTORY_CATEGORIES },
       { title: "Stock Alerts", url: PATHS.ADMIN.INVENTORY_STOCK_ALERT },
-      { title: "Reports", url: PATHS.ADMIN.INVENTORY_REPORTS },
     ],
   },
   {
