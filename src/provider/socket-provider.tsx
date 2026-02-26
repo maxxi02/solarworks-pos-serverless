@@ -10,7 +10,38 @@ import {
 } from "react";
 import { io, Socket } from "socket.io-client";
 import { printerManager, PrinterManagerStatus } from "@/lib/printers/printerManager";
-import { ReceiptBuildInput } from "@/lib/printers/escpos";
+export interface ReceiptBuildItem {
+    name: string;
+    price: number;
+    quantity: number;
+    hasDiscount?: boolean;
+    menuType?: 'food' | 'drink';
+}
+
+export interface ReceiptBuildInput {
+    orderNumber: string;
+    customerName: string;
+    cashier: string;
+    timestamp: Date;
+    orderType: "dine-in" | "takeaway";
+    tableNumber?: string;
+    orderNote?: string;
+    items: ReceiptBuildItem[];
+    subtotal: number;
+    discountTotal: number;
+    total: number;
+    paymentMethod: "cash" | "gcash" | "split";
+    splitPayment?: { cash: number; gcash: number };
+    amountPaid?: number;
+    change?: number;
+    seniorPwdCount?: number;
+    seniorPwdIds?: string[];
+    isReprint?: boolean;
+    businessName: string;
+    businessAddress?: string;
+    businessPhone?: string;
+    receiptMessage?: string;
+}
 
 const SOCKET_URL =
     process.env.NEXT_PUBLIC_SOCKET_URL || "https://rendezvous-server-gpmv.onrender.com";
@@ -50,8 +81,6 @@ export interface CustomerOrder {
     subtotal: number; total: number; timestamp: Date;
 }
 
-// ─── Print Job Types (from Socket relay) ─────────────────────────────────────
-
 export interface PrintJob {
     jobId: string;
     target: 'receipt' | 'kitchen' | 'both';
@@ -64,6 +93,12 @@ export interface PrintJobResult {
     receipt?: boolean;
     kitchen?: boolean;
     error?: string;
+}
+
+// NEW: Companion App's live printer connection state
+export interface CompanionPrinterStatus {
+    usb: boolean;   // USB receipt printer connected in the Companion App
+    bt: boolean;    // Bluetooth kitchen printer connected in the Companion App
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -105,12 +140,17 @@ interface SocketContextValue {
     onNewCustomerOrder: (cb: (order: CustomerOrder) => void) => void;
     offNewCustomerOrder: (cb?: (order: CustomerOrder) => void) => void;
 
-    // ─── Printing ──────────────────────────────────────────────────
+    // Browser printer manager (kept for backward compat)
     printerStatus: PrinterManagerStatus;
     connectUSBPrinter: () => Promise<boolean>;
     connectBluetoothPrinter: () => Promise<boolean>;
     printReceipt: (input: ReceiptBuildInput) => Promise<boolean>;
     printKitchenOrder: (input: ReceiptBuildInput) => Promise<boolean>;
+
+    // Companion App printing
+    // companionStatus → live USB/BT state reported by the Companion App
+    // printBoth       → emits print:request, waits up to 10 s for print:job:result
+    companionStatus: CompanionPrinterStatus;
     printBoth: (input: ReceiptBuildInput) => Promise<{ receipt: boolean; kitchen: boolean }>;
 }
 
@@ -132,6 +172,7 @@ const defaultContext: SocketContextValue = {
     connectBluetoothPrinter: async () => false,
     printReceipt: async () => false,
     printKitchenOrder: async () => false,
+    companionStatus: { usb: false, bt: false },
     printBoth: async () => ({ receipt: false, kitchen: false }),
 };
 
@@ -150,24 +191,38 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
     const socketRef = useRef<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [isActive, setIsActive] = useState(true);
+
+    // Browser printer manager state (unchanged from original)
     const [printerStatus, setPrinterStatus] = useState<PrinterManagerStatus>({
         usb: 'disconnected',
         bluetooth: 'disconnected',
     });
 
+    // NEW: Companion App printer state — updated via socket event
+    const [companionStatus, setCompanionStatus] = useState<CompanionPrinterStatus>({
+        usb: false,
+        bt: false,
+    });
+
+    // Pending printBoth promises keyed by jobId
+    const pendingJobs = useRef<Map<string, {
+        resolve: (r: { receipt: boolean; kitchen: boolean }) => void;
+        reject: (e: Error) => void;
+        timer: ReturnType<typeof setTimeout>;
+    }>>(new Map());
+
     const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
     const activityDebounceRef = useRef<NodeJS.Timeout | null>(null);
     const activityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // ─── Printer Status Sync ─────────────────────────────────────────
+    // ─── Browser Printer Status Sync ─────────────────────────────────────────
     useEffect(() => {
         const unsubscribe = printerManager.onStatusChange(setPrinterStatus);
-        // Try to auto-connect USB on mount (works if previously granted)
         printerManager.autoConnectAll();
         return unsubscribe;
     }, []);
 
-    // ─── Socket Connection ────────────────────────────────────────────
+    // ─── Socket Connection ────────────────────────────────────────────────────
     useEffect(() => {
         if (!userId) return;
 
@@ -190,6 +245,8 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
 
         socket.on("disconnect", (reason) => {
             setIsConnected(false);
+            // Assume companion printers offline when socket drops
+            setCompanionStatus({ usb: false, bt: false });
             if (reason === "io server disconnect") socket.connect();
         });
 
@@ -201,47 +258,33 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
 
         socket.on("connect_error", (e) => console.error("❌ Connection error:", e.message));
 
-        // ─── Print Job Relay (from server → this client's printers) ──────
-        // The server relays print jobs to the pos:cashiers room.
-        // The cashier PC (this browser) receives them and prints locally.
-        socket.on("print:job", async (job: PrintJob) => {
-            console.log(`[Socket] Received print job: ${job.jobId} → ${job.target}`);
-            let result: PrintJobResult;
+        // ── NEW: Companion App reports its printer connection state ────────────
+        // Server relays companion:printer:status → pos:cashiers room.
+        socket.on("companion:printer:status", (status: { usb: boolean; bt: boolean }) => {
+            setCompanionStatus(status);
+            console.log("[Socket] Companion printer status:", status);
+        });
 
-            try {
-                if (job.target === 'receipt') {
-                    const success = await printerManager.printReceipt(job.input);
-                    result = { jobId: job.jobId, success, receipt: success };
-                } else if (job.target === 'kitchen') {
-                    const success = await printerManager.printKitchenOrder(job.input);
-                    result = { jobId: job.jobId, success, kitchen: success };
-                } else {
-                    const res = await printerManager.printBoth(job.input);
-                    result = { jobId: job.jobId, success: res.receipt || res.kitchen, ...res };
-                }
-            } catch (err) {
-                const message = err instanceof Error ? err.message : 'Unknown error';
-                result = { jobId: job.jobId, success: false, error: message };
+        // ── NEW: Companion replies after executing a print job ─────────────────
+        // Resolves the Promise that printBoth() created.
+        socket.on("print:job:result", (result: PrintJobResult) => {
+            const pending = pendingJobs.current.get(result.jobId);
+            if (!pending) return;
+
+            clearTimeout(pending.timer);
+            pendingJobs.current.delete(result.jobId);
+
+            if (result.success) {
+                pending.resolve({
+                    receipt: result.receipt ?? false,
+                    kitchen: result.kitchen ?? false,
+                });
+            } else {
+                pending.reject(new Error(result.error ?? "Print failed"));
             }
-
-            // Report result back to server
-            socket.emit("print:job:result", result);
-            console.log(`[Socket] Print job ${job.jobId} result:`, result);
         });
 
-        // Raw bytes relay (alternative low-level approach)
-        socket.on("print:raw", async (data: { target: 'usb' | 'bluetooth'; bytes: number[]; jobId: string }) => {
-            let success = false;
-            try {
-                if (data.target === 'usb') {
-                    success = await printerManager.printRawToUSB(data.bytes);
-                } else {
-                    success = await printerManager.printRawToBluetooth(data.bytes);
-                }
-            } catch { /* silent */ }
-            socket.emit("print:raw:result", { jobId: data.jobId, success });
-        });
-
+        // Heartbeat
         heartbeatRef.current = setInterval(() => {
             if (socket.connected) socket.emit("user:activity");
         }, HEARTBEAT_INTERVAL);
@@ -254,13 +297,19 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+            // Reject any pending print jobs so callers don't hang forever
+            pendingJobs.current.forEach(({ reject, timer }) => {
+                clearTimeout(timer);
+                reject(new Error("Socket disconnected"));
+            });
+            pendingJobs.current.clear();
             socket.disconnect();
             socket.removeAllListeners();
             socketRef.current = null;
         };
     }, [userId, userName, userAvatar]);
 
-    // ─── Activity Tracking ────────────────────────────────────────────
+    // ─── Activity Tracking ────────────────────────────────────────────────────
     useEffect(() => {
         const handleActivity = () => {
             setIsActive(true);
@@ -284,7 +333,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
         };
     }, []);
 
-    // ─── Emitters ─────────────────────────────────────────────────────
+    // ─── Emitters ─────────────────────────────────────────────────────────────
     const emitOnline = () => socketRef.current?.connected && socketRef.current.emit("user:online");
     const emitActivity = () => socketRef.current?.connected && socketRef.current.emit("user:activity");
     const emitChatConversationsLoad = () => socketRef.current?.emit("chat:conversations:load");
@@ -301,7 +350,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
     const emitPosJoin = () => socketRef.current?.emit('pos:join');
     const emitCustomerOrder = (order: CustomerOrder) => socketRef.current?.emit('order:new:trigger', order);
 
-    // ─── Listeners ────────────────────────────────────────────────────
+    // ─── Listeners ────────────────────────────────────────────────────────────
     const onStatusChanged = (cb: (d: UserStatusUpdate) => void) => socketRef.current?.on("user:status:changed", cb);
     const offStatusChanged = (cb?: (d: UserStatusUpdate) => void) => socketRef.current?.off("user:status:changed", cb);
     const onActivityUpdated = (cb: (d: UserActivityUpdate) => void) => socketRef.current?.on("user:activity:updated", cb);
@@ -315,13 +364,56 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
     const onNewCustomerOrder = (cb: (order: CustomerOrder) => void) => socketRef.current?.on('order:new', cb);
     const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) => socketRef.current?.off('order:new', cb);
 
-    // ─── Printer actions ──────────────────────────────────────────────
+    // ─── Browser Printer Actions (unchanged) ─────────────────────────────────
     const connectUSBPrinter = () => printerManager.connectUSB();
     const connectBluetoothPrinter = () => printerManager.connectBluetooth();
-    const printReceipt = (input: ReceiptBuildInput) => printerManager.printReceipt(input);
-    const printKitchenOrder = (input: ReceiptBuildInput) => printerManager.printKitchenOrder(input);
-    const printBoth = (input: ReceiptBuildInput) => printerManager.printBoth(input);
 
+    const generateJobId = () =>
+        `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const printReceipt = async (input: ReceiptBuildInput): Promise<boolean> => {
+        if (!socketRef.current?.connected) return false;
+        socketRef.current.emit("print:request", { jobId: generateJobId(), target: "receipt", input });
+        return true;
+    };
+
+    const printKitchenOrder = async (input: ReceiptBuildInput): Promise<boolean> => {
+        if (!socketRef.current?.connected) return false;
+        const hasFood = input.items.some(item => item.menuType === 'food');
+        if (!hasFood) return true; // Pretend success since nothing to cook
+        socketRef.current.emit("print:request", { jobId: generateJobId(), target: "kitchen", input });
+        return true;
+    };
+
+    // ── NEW: Promise-based printBoth ───────────────────────────────────────────
+    // Emits print:request and waits up to 10 s for the companion's
+    // print:job:result reply. Returns which printers actually fired.
+    const printBoth = (input: ReceiptBuildInput): Promise<{ receipt: boolean; kitchen: boolean }> => {
+        return new Promise((resolve, reject) => {
+            const socket = socketRef.current;
+            if (!socket?.connected) {
+                reject(new Error("Companion App not connected"));
+                return;
+            }
+
+            const jobId = generateJobId();
+
+            const timer = setTimeout(() => {
+                pendingJobs.current.delete(jobId);
+                reject(new Error("Print timeout — Companion App did not respond in 10 s"));
+            }, 10_000);
+
+            pendingJobs.current.set(jobId, { resolve, reject, timer });
+
+            const hasFood = input.items.some(item => item.menuType === 'food');
+            const target = hasFood ? "both" : "receipt";
+
+            socket.emit("print:request", { jobId, target, input });
+            console.log("[Socket] print:request emitted", jobId, "target:", target);
+        });
+    };
+
+    // ─── Render ───────────────────────────────────────────────────────────────
     return (
         <SocketContext.Provider value={{
             socket: socketRef.current, isConnected, isActive,
@@ -333,7 +425,9 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
             onAttendanceStatusChanged, offAttendanceStatusChanged,
             emitPosJoin, emitCustomerOrder, onNewCustomerOrder, offNewCustomerOrder,
             printerStatus, connectUSBPrinter, connectBluetoothPrinter,
-            printReceipt, printKitchenOrder, printBoth,
+            printReceipt, printKitchenOrder,
+            companionStatus,
+            printBoth,
         }}>
             {children}
         </SocketContext.Provider>

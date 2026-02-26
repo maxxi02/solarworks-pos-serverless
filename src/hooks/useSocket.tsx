@@ -10,8 +10,9 @@ import {
 } from "react";
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL =
-    process.env.SOCKET_URL || "https://rendezvous-server-gpmv.onrender.com";
+// const SOCKET_URL =
+//     process.env.SOCKET_URL || "https://rendezvous-server-gpmv.onrender.com";
+const SOCKET_URL = "http://localhost:8080";
 
 const HEARTBEAT_INTERVAL = 30000;          // 30 seconds
 const ACTIVITY_DEBOUNCE = 5000;            // 5 seconds
