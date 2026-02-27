@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DollarSign, CreditCard, Wallet, TrendingUp,
- RefreshCw, ShoppingBag, Percent,
+  RefreshCw, ShoppingBag, Percent,
   Receipt, Minus, AlertCircle, X, Banknote, Smartphone, CheckCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -319,24 +319,7 @@ export default function CashManagementPage() {
                 )}
               </div>
 
-              {/* Quick amounts */}
-              <div>
-                <p className="text-xs text-muted-foreground mb-2 font-medium">Quick amounts:</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {[500, 1000, 2000, 5000].map(amt => (
-                    <button key={amt}
-                      onClick={() => { setStartingFundInput(String(amt)); setStartingFundError(''); }}
-                      className={`py-2 text-sm font-semibold rounded-lg border-2 transition-all ${
-                        startingFundInput === String(amt)
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-input text-foreground hover:border-primary'
-                      }`}
-                    >
-                      ₱{amt.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Quick amounts section REMOVED */}
 
               <div className="bg-muted border border-border rounded-xl p-3 text-xs text-muted-foreground flex gap-2">
                 <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5 text-foreground" />
