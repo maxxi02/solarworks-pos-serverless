@@ -4,6 +4,7 @@ import {
   BarChart3,
   LayoutDashboard,
   LucideIcon,
+  MessageSquare,
   Package,
   Receipt,
   Settings,
@@ -17,6 +18,7 @@ export const PATHS = {
   INVENTORY: "/inventory",
   PROFILE: "/profile",
   SETTINGS: "/settings",
+  MESSAGES: "/messages",
 
   ADMIN: {
     SALES: "/sales",
@@ -74,6 +76,7 @@ export type NavItem = {
 
 export const adminNavigation: NavItem[] = [
   { title: "Dashboard", url: PATHS.DASHBOARD, icon: LayoutDashboard, isActive: true },
+  { title: "Messages", url: PATHS.MESSAGES, icon: MessageSquare },
   {
     title: "Sales",
     url: PATHS.ADMIN.SALES,

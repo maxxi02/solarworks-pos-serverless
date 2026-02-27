@@ -482,7 +482,7 @@ const AdminAttendancePage = () => {
                 <DataTable
                   columns={pendingColumns}
                   data={pendingRecords}
-                  enablePagination={false}
+                  enablePagination={true}
                   emptyMessage="No pending records"
                 />
               )}
