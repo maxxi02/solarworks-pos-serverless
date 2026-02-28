@@ -3,13 +3,10 @@
 // components/_components/PrinterStatus.tsx
 // Shows live USB + Bluetooth printer status with connect buttons
 
-import { useState, useEffect } from 'react';
-import { Bluetooth, Usb, CheckCircle2, XCircle, Loader2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Smartphone, CheckCircle2, XCircle, Loader2, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useSocket } from '@/provider/socket-provider';
 import { ReceiptSettings } from '@/types/receipt';
-import { toast } from 'sonner';
 
 interface PrinterStatusProps {
   settings: ReceiptSettings;
@@ -17,113 +14,62 @@ interface PrinterStatusProps {
 
 export function PrinterStatus({ settings }: PrinterStatusProps) {
   const {
-    printerStatus,
-    connectUSBPrinter,
-    connectBluetoothPrinter,
+    isConnected,
+    companionStatus,
   } = useSocket();
-
-  const [connectingUSB, setConnectingUSB] = useState(false);
-  const [connectingBT, setConnectingBT] = useState(false);
-  const [usbSupported, setUsbSupported] = useState(false);
-  const [btSupported, setBtSupported] = useState(false);
-
-  useEffect(() => {
-    setUsbSupported(typeof navigator !== 'undefined' && 'usb' in navigator);
-    setBtSupported(typeof navigator !== 'undefined' && 'bluetooth' in navigator);
-  }, []);
-
-  const handleConnectUSB = async () => {
-    if (!usbSupported) {
-      toast.error('WebUSB not supported', { description: 'Please use Chrome or Edge browser' });
-      return;
-    }
-    setConnectingUSB(true);
-    try {
-      const ok = await connectUSBPrinter();
-      if (ok) toast.success('USB receipt printer connected!');
-      else toast.error('USB connection failed', { description: 'Make sure printer is plugged in and powered on' });
-    } finally {
-      setConnectingUSB(false);
-    }
-  };
-
-  const handleConnectBluetooth = async () => {
-    if (!btSupported) {
-      toast.error('Web Bluetooth not supported', { description: 'Please use Chrome or Edge browser' });
-      return;
-    }
-    setConnectingBT(true);
-    try {
-      const ok = await connectBluetoothPrinter();
-      if (ok) toast.success('Kitchen Bluetooth printer connected!');
-      else toast.error('Bluetooth connection failed', { description: 'Make sure printer is on and in pairing mode' });
-    } finally {
-      setConnectingBT(false);
-    }
-  };
 
   return (
     <div className="space-y-3">
-      {/* USB Receipt Printer */}
-      <div className="flex items-center justify-between p-3 border rounded-lg bg-card">
+      {/* Companion App Connection */}
+      <div className="flex items-center justify-between p-3 border rounded-lg bg-card shadow-sm">
         <div className="flex items-center gap-2">
-          <Usb className="h-4 w-4 text-muted-foreground" />
+          <Smartphone className="h-5 w-5 text-primary" />
           <div>
-            <p className="text-sm font-medium">Receipt Printer</p>
-            <p className="text-xs text-muted-foreground">XPrinter 58IIH · USB</p>
+            <p className="text-sm font-medium">Companion App</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-tight">
+              {isConnected ? 'Connection Live' : 'Not Connected'}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={printerStatus.usb} />
-          {printerStatus.usb === 'disconnected' || printerStatus.usb === 'error' ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={handleConnectUSB}
-              disabled={connectingUSB || !usbSupported}
-            >
-              {connectingUSB
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : 'Connect'}
-            </Button>
-          ) : null}
-        </div>
+        <StatusBadge status={isConnected ? 'connected' : 'offline'} />
       </div>
 
-      {/* Bluetooth Kitchen Printer */}
-      <div className="flex items-center justify-between p-3 border rounded-lg bg-card">
-        <div className="flex items-center gap-2">
-          <Bluetooth className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <p className="text-sm font-medium">Kitchen Printer</p>
-            <p className="text-xs text-muted-foreground">XPrinter 58IIB · Bluetooth</p>
+      {/* Printer Status Summaries (Internal to Companion) */}
+      {isConnected && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className={cn(
+            "p-2.5 rounded-lg border text-center transition-colors",
+            companionStatus.usb ? "bg-primary/5 border-primary/20" : "bg-muted/30 border-dashed opacity-60"
+          )}>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Receipt</p>
+            <p className={cn(
+              "text-xs font-semibold",
+              companionStatus.usb ? "text-primary" : "text-muted-foreground"
+            )}>
+              {companionStatus.usb ? "Ready" : "Not Found"}
+            </p>
+          </div>
+          <div className={cn(
+            "p-2.5 rounded-lg border text-center transition-colors",
+            companionStatus.bt ? "bg-primary/5 border-primary/20" : "bg-muted/30 border-dashed opacity-60"
+          )}>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Kitchen</p>
+            <p className={cn(
+              "text-xs font-semibold",
+              companionStatus.bt ? "text-primary" : "text-muted-foreground"
+            )}>
+              {companionStatus.bt ? "Ready" : "Not Found"}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={printerStatus.bluetooth} />
-          {printerStatus.bluetooth === 'disconnected' || printerStatus.bluetooth === 'error' ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={handleConnectBluetooth}
-              disabled={connectingBT || !btSupported}
-            >
-              {connectingBT
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : 'Pair'}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      )}
 
-      {/* Browser warning */}
-      {(!usbSupported || !btSupported) && (
-        <div className="flex items-start gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
-          <p className="text-xs text-yellow-700">
-            Printing requires <strong>Chrome</strong> or <strong>Edge</strong> browser for WebUSB/Bluetooth support.
+      {/* Connection Help */}
+      {!isConnected && (
+        <div className="flex items-start gap-2 p-3 bg-muted/50 border border-dashed rounded-lg">
+          <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+          <p className="text-xs text-muted-foreground italic leading-relaxed">
+            Open the <strong>Rendy Companion</strong> app on your device to enable automatic printing.
           </p>
         </div>
       )}
@@ -135,33 +81,26 @@ function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'connected':
       return (
-        <Badge variant="default" className="bg-green-500 text-white text-xs gap-1">
-          <CheckCircle2 className="h-3 w-3" /> Ready
+        <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 text-[10px] px-2 py-0 h-5 gap-1 font-bold">
+          <CheckCircle2 className="h-3 w-3" /> ONLINE
         </Badge>
       );
     case 'printing':
       return (
-        <Badge variant="default" className="bg-blue-500 text-white text-xs gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" /> Printing
-        </Badge>
-      );
-    case 'connecting':
-      return (
-        <Badge variant="secondary" className="text-xs gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" /> Connecting
-        </Badge>
-      );
-    case 'error':
-      return (
-        <Badge variant="destructive" className="text-xs gap-1">
-          <XCircle className="h-3 w-3" /> Error
+        <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-[10px] px-2 py-0 h-5 gap-1 font-bold">
+          <Loader2 className="h-3 w-3 animate-spin" /> PRINTING
         </Badge>
       );
     default:
       return (
-        <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
-          <XCircle className="h-3 w-3" /> Offline
+        <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 gap-1 text-muted-foreground font-bold">
+          <XCircle className="h-3 w-3" /> OFFLINE
         </Badge>
       );
   }
+}
+
+// Utility for cleaner class joining
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(' ');
 }

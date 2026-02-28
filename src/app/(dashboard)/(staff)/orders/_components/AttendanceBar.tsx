@@ -100,11 +100,7 @@ export const AttendanceBar = ({
                             showStockAlertsModal={() => setShowStockAlertsModal(true)}
                             onRefreshStock={onRefreshStock}
                             currentReceipt={currentReceipt}
-                            onReprintTest={() =>
-                                savedOrders.length
-                                    ? onReprintReceipt(savedOrders[0])
-                                    : null
-                            }
+                            onReprintReceipt={onReprintReceipt}
                             onPreviewReceipt={onPreviewReceipt}
                         />
                     </SheetContent>

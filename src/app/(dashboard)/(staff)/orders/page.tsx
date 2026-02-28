@@ -87,11 +87,6 @@ export default function OrdersPage() {
     emitPosJoin,
     onNewCustomerOrder,
     offNewCustomerOrder,
-    printerStatus, // ← ADD
-    printReceipt: printReceiptHardware, // ← ADD (rename to avoid clash)
-    printKitchenOrder, // ← ADD
-    connectUSBPrinter, // ← ADD (optional, used in PrinterStatus)
-    connectBluetoothPrinter, // ← ADD (optional, used in PrinterStatus)
     printBoth,
     isConnected,
   } = useSocket();
@@ -936,9 +931,9 @@ export default function OrdersPage() {
       <>
         <div className="max-w-[1600px] mx-auto">
           {/* Main Layout */}
-          <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-220px)]">
+          <div className="flex flex-col lg:flex-row gap-5 pb-10">
             {/* Left — Products */}
-            <div className="lg:w-7/12 flex flex-col h-full">
+            <div className="lg:w-[62%] flex flex-col">
               {/* Menu Type Filter */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 {(["all", "food", "drink"] as const).map((type) => (
@@ -974,7 +969,7 @@ export default function OrdersPage() {
               />
 
               {/* Products Grid */}
-              <div className="overflow-y-auto flex-1 pr-3">
+              <div className="pr-1">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="w-8 h-8 animate-spin mr-3" />
@@ -1005,7 +1000,7 @@ export default function OrdersPage() {
             </div>
 
             {/* Right — Cart */}
-            <div className="lg:w-5/12 h-full flex gap-3">
+            <div className="lg:w-[38%]">
               <div
                 ref={cartDropZoneRef}
                 className="flex-1 transition-all"
@@ -1013,7 +1008,7 @@ export default function OrdersPage() {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <Card className="h-full flex flex-col border">
+                <Card className="flex flex-col border shadow-sm">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-center">
                       <CardTitle className="flex items-center gap-2 text-lg">
@@ -1061,7 +1056,7 @@ export default function OrdersPage() {
                     )}
                   </CardHeader>
 
-                  <CardContent className="flex-1 overflow-y-auto space-y-4 p-4 pt-0">
+                  <CardContent className="space-y-6 p-6 pt-0">
                     {/* Senior/PWD Banner */}
                     {seniorPwdCount > 0 && (
                       <div className="bg-green-50 border border-green-200 rounded-lg p-3">
@@ -1096,8 +1091,8 @@ export default function OrdersPage() {
 
                     {/* Cart Items */}
                     <div>
-                      <Label className="text-sm">Items</Label>
-                      <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                      <Label className="text-sm font-semibold">Items</Label>
+                      <div className="space-y-3 mt-3">
                         {cart.map((item) => (
                           <CartItem
                             key={item._id}
@@ -1186,8 +1181,8 @@ export default function OrdersPage() {
                       />
                     )}
                     {paymentMethod === "gcash" && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-sm text-blue-700 flex items-center gap-2">
+                      <div className="bg-muted border rounded-lg p-3">
+                        <p className="text-sm text-muted-foreground flex items-center gap-2">
                           <Smartphone className="w-4 h-4" />
                           GCash payment of {formatCurrency(total)} will be
                           processed.

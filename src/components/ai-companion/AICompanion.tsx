@@ -343,6 +343,7 @@ export function AICompanion() {
             : "bottom-6 right-6 w-96 h-[500px] rounded-2xl",
           isOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
         )}
+        data-lenis-prevent
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-primary text-primary-foreground">
@@ -374,9 +375,9 @@ export function AICompanion() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
           {messages.length === 0 || (messages.length === 1 && isGreetingOnly(messages[0]?.content)) ? (
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="flex-1 p-4 overflow-y-auto min-h-0" data-lenis-prevent>
               {messages.length === 1 && isGreetingOnly(messages[0]?.content) && (
                 <div className="mb-4 p-3 bg-muted rounded-lg">
                   <p className="text-sm">{messages[0].content}</p>
@@ -406,7 +407,7 @@ export function AICompanion() {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 min-h-0" data-lenis-prevent>
                 <div className="space-y-4">
                   {messages.map((message) => (
                     <div

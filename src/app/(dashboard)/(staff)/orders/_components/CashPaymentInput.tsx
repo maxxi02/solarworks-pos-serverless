@@ -33,48 +33,48 @@ export const CashPaymentInput = ({
   };
 
   return (
-// Updated CashPaymentInput
-<div className="space-y-4">
-  <div className="space-y-2">
-    <Label className="text-sm flex items-center justify-between">
-      <span>Amount Received</span>
-      <span className="text-muted-foreground">Total: {formatCurrency(total)}</span>
-    </Label>
-    <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
-      <Input
-        type="number"
-        value={amountPaid || ''}
-        onChange={(e) => handleAmountChange(e.target.value)}
-        placeholder="0.00"
-        className={`pl-7 h-10 text-base border border-input bg-background focus:border-primary focus:ring-1 focus:ring-primary/50 ${isInsufficient ? 'border-destructive focus:border-destructive focus:ring-destructive/50' : ''}`}
-        step="0.01"
-        min="0"
-        disabled={disabled}
-      />
-    </div>
-  </div>
+    // Updated CashPaymentInput
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-sm flex items-center justify-between">
+          <span>Amount Received</span>
+          <span className="text-muted-foreground">Total: {formatCurrency(total)}</span>
+        </Label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
+          <Input
+            type="number"
+            value={amountPaid || ''}
+            onChange={(e) => handleAmountChange(e.target.value)}
+            placeholder="0.00"
+            className={`pl-7 h-10 text-base border border-input bg-background focus:border-primary focus:ring-1 focus:ring-primary/50 ${isInsufficient ? 'border-destructive focus:border-destructive focus:ring-destructive/50' : ''}`}
+            step="0.01"
+            min="0"
+            disabled={disabled}
+          />
+        </div>
+      </div>
 
-  {amountPaid > 0 && (
-    <div className={`rounded-lg p-4 space-y-2 border ${change >= 0 ? 'bg-success/10 border-success/30' : 'bg-destructive/10 border-destructive/30'}`}>
-      <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">Paid:</span>
-        <span>{formatCurrency(amountPaid)}</span>
-      </div>
-      <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">Total:</span>
-        <span>{formatCurrency(total)}</span>
-      </div>
-      <Separator className="my-1" />
-      <div className="flex justify-between font-bold text-base">
-        <span className="text-muted-foreground">Change:</span>
-        <span className={change >= 0 ? "text-success" : "text-destructive"}>
-          {formatCurrency(Math.abs(change))}
-        </span>
-      </div>
-      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+      {amountPaid > 0 && (
+        <div className={`rounded-lg p-4 space-y-2 border ${change >= 0 ? 'bg-primary/5 border-primary/30' : 'bg-destructive/10 border-destructive/30'}`}>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Paid:</span>
+            <span>{formatCurrency(amountPaid)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Total:</span>
+            <span>{formatCurrency(total)}</span>
+          </div>
+          <Separator className="my-1" />
+          <div className="flex justify-between font-bold text-base">
+            <span className="text-muted-foreground">Change:</span>
+            <span className={change >= 0 ? "text-primary" : "text-destructive"}>
+              {formatCurrency(Math.abs(change))}
+            </span>
+          </div>
+          {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+        </div>
+      )}
     </div>
-  )}
-</div>
   );
 };

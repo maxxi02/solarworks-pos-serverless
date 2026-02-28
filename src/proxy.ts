@@ -5,8 +5,8 @@ import { auth } from "@/lib/auth";
 
 export const config = {
   matcher: [
-    // Run on almost everything except static/assets/api/auth itself
-    "/((?!_next/static|_next/image|favicon.ico|api/auth/|_next/data).*)",
+    // Run on almost everything except internal Next.js paths and ALL API routes
+    "/((?!_next/static|_next/image|favicon.ico|api/|_next/data).*)",
     // Explicitly include your protected base paths (helps reliability)
     "/dashboard/:path*",
     "/sales/:path*",

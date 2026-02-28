@@ -106,7 +106,7 @@ export const SplitPaymentInput = ({
       </div>
 
       {/* Receipt-style Summary */}
-      <div className={`rounded-lg p-4 space-y-1 mt-3 font-mono ${totalPaid >= total ? 'bg-green-50' : 'bg-red-50'}`}>
+      <div className={`rounded-lg p-4 space-y-1 mt-3 font-mono border ${totalPaid >= total ? 'bg-primary/5 border-primary/20' : 'bg-destructive/5 border-destructive/20'}`}>
         <div className="space-y-1">
           <div className="flex justify-between text-sm">
             <span>Cash:</span>
@@ -125,8 +125,8 @@ export const SplitPaymentInput = ({
 
         {totalPaid > total ? (
           <div className="flex justify-between text-lg font-bold">
-            <span className="text-gray-600">CHANGE:</span>
-            <span className="text-green-600">{formatCurrency(totalPaid - total)}</span>
+            <span className="text-muted-foreground">CHANGE:</span>
+            <span className="text-primary">{formatCurrency(totalPaid - total)}</span>
           </div>
         ) : totalPaid < total ? (
           <div className="flex justify-between text-lg font-bold">
@@ -134,7 +134,7 @@ export const SplitPaymentInput = ({
             <span className="text-red-600">{formatCurrency(total - totalPaid)}</span>
           </div>
         ) : (
-          <div className="text-center text-green-600 font-bold text-lg">EXACT AMOUNT</div>
+          <div className="text-center text-primary font-bold text-lg">EXACT AMOUNT</div>
         )}
 
         {error && <p className="text-xs text-red-500 mt-2">{error}</p>}

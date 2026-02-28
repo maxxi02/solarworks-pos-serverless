@@ -7,7 +7,6 @@ import {
     Save,
     AlertTriangle,
     RefreshCw,
-    Printer,
     Eye,
     Utensils,
     Loader2
@@ -32,7 +31,7 @@ interface SidebarActionsProps {
     showStockAlertsModal: () => void;
     onRefreshStock: () => void;
     currentReceipt: ReceiptOrder | null;
-    onReprintTest: () => void;
+    onReprintReceipt: (order: SavedOrder) => void;
     onPreviewReceipt: (type: "customer" | "kitchen") => void;
 }
 
@@ -49,11 +48,11 @@ export const SidebarActions = ({
     showStockAlertsModal,
     onRefreshStock,
     currentReceipt,
-    onReprintTest,
+    onReprintReceipt,
     onPreviewReceipt,
 }: SidebarActionsProps) => {
     return (
-        <div className="space-y-6 overflow-y-auto h-[calc(100vh-80px)] p-2">
+        <div className="space-y-6 overflow-y-auto h-[calc(100vh-80px)] p-2" data-lenis-prevent>
             {/* Shift Status */}
             <div className="space-y-3">
                 <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -154,9 +153,13 @@ export const SidebarActions = ({
                 <Button
                     variant="outline"
                     className="w-full justify-start gap-2"
-                    onClick={onReprintTest}
+                    onClick={() =>
+                        savedOrders.length
+                            ? onReprintReceipt(savedOrders[0])
+                            : null
+                    }
                 >
-                    <Printer className="w-4 h-4" /> Test Print
+                    <RefreshCw className="w-4 h-4" /> Test Print (Reprint Last)
                 </Button>
                 {currentReceipt && (
                     <>
