@@ -76,9 +76,16 @@ export interface CustomerOrderItem {
     imageUrl?: string; ingredients: Array<{ name: string; quantity: string; unit: string }>;
 }
 export interface CustomerOrder {
-    orderId: string; customerName: string; items: CustomerOrderItem[];
-    orderNote?: string; orderType: 'dine-in' | 'takeaway'; tableNumber?: string;
-    subtotal: number; total: number; timestamp: Date;
+    orderId: string;
+    orderNumber?: string;
+    customerName: string;
+    items: CustomerOrderItem[];
+    orderNote?: string;
+    orderType: 'dine-in' | 'takeaway';
+    tableNumber?: string;
+    subtotal: number;
+    total: number;
+    timestamp: Date;
 }
 
 export interface PrintJob {
@@ -134,6 +141,14 @@ interface SocketContextValue {
     onAttendanceStatusChanged: (cb: (data: AttendanceStatusChangedData) => void) => void;
     offAttendanceStatusChanged: (cb?: (data: AttendanceStatusChangedData) => void) => void;
 
+    // Sales & Admin
+    onSalesUpdated: (cb: (data: { timestamp: Date }) => void) => void;
+    offSalesUpdated: (cb?: (data: { timestamp: Date }) => void) => void;
+    onCashUpdated: (cb: (data: { timestamp: Date }) => void) => void;
+    offCashUpdated: (cb?: (data: { timestamp: Date }) => void) => void;
+    onRegisterClosed: (cb: (data: { cashierName: string; registerName: string; closedAt: string; timestamp: Date }) => void) => void;
+    offRegisterClosed: (cb?: (data: { cashierName: string; registerName: string; closedAt: string; timestamp: Date }) => void) => void;
+
     // Orders
     emitPosJoin: () => void;
     emitCustomerOrder: (order: CustomerOrder) => void;
@@ -165,6 +180,9 @@ const defaultContext: SocketContextValue = {
     onAttendanceApproved: () => { }, offAttendanceApproved: () => { },
     onAttendanceRejected: () => { }, offAttendanceRejected: () => { },
     onAttendanceStatusChanged: () => { }, offAttendanceStatusChanged: () => { },
+    onSalesUpdated: () => { }, offSalesUpdated: () => { },
+    onCashUpdated: () => { }, offCashUpdated: () => { },
+    onRegisterClosed: () => { }, offRegisterClosed: () => { },
     emitPosJoin: () => { }, emitCustomerOrder: () => { },
     onNewCustomerOrder: () => { }, offNewCustomerOrder: () => { },
     printerStatus: { usb: 'disconnected', bluetooth: 'disconnected' },
@@ -361,6 +379,14 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
     const offAttendanceRejected = (cb?: (d: AttendanceRejectedData) => void) => socketRef.current?.off("attendance:rejected", cb);
     const onAttendanceStatusChanged = (cb: (d: AttendanceStatusChangedData) => void) => socketRef.current?.on("attendance:status:changed", cb);
     const offAttendanceStatusChanged = (cb?: (d: AttendanceStatusChangedData) => void) => socketRef.current?.off("attendance:status:changed", cb);
+
+    const onSalesUpdated = (cb: (d: { timestamp: Date }) => void) => socketRef.current?.on("sales:updated", cb);
+    const offSalesUpdated = (cb?: (d: { timestamp: Date }) => void) => socketRef.current?.off("sales:updated", cb);
+    const onCashUpdated = (cb: (d: { timestamp: Date }) => void) => socketRef.current?.on("cash:updated", cb);
+    const offCashUpdated = (cb?: (d: { timestamp: Date }) => void) => socketRef.current?.off("cash:updated", cb);
+    const onRegisterClosed = (cb: (d: { cashierName: string; registerName: string; closedAt: string; timestamp: Date }) => void) => socketRef.current?.on("register:closed", cb);
+    const offRegisterClosed = (cb?: (d: { cashierName: string; registerName: string; closedAt: string; timestamp: Date }) => void) => socketRef.current?.off("register:closed", cb);
+
     const onNewCustomerOrder = (cb: (order: CustomerOrder) => void) => socketRef.current?.on('order:new', cb);
     const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) => socketRef.current?.off('order:new', cb);
 
@@ -423,6 +449,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
             onStatusChanged, offStatusChanged, onActivityUpdated, offActivityUpdated,
             onAttendanceApproved, offAttendanceApproved, onAttendanceRejected, offAttendanceRejected,
             onAttendanceStatusChanged, offAttendanceStatusChanged,
+            onSalesUpdated, offSalesUpdated, onCashUpdated, offCashUpdated, onRegisterClosed, offRegisterClosed,
             emitPosJoin, emitCustomerOrder, onNewCustomerOrder, offNewCustomerOrder,
             printerStatus, connectUSBPrinter, connectBluetoothPrinter,
             printReceipt, printKitchenOrder,

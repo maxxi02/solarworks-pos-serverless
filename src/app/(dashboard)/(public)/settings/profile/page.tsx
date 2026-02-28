@@ -24,6 +24,8 @@ import Image from "next/image";
 import { ExtendedUser } from "@/lib/auth";
 import { EditProfileDialog } from "@/components/edit-profile-dialog";
 import { SecuritySettings } from "@/components/security-settings";
+import { ModeToggle } from "@/components/mode-toggle";
+import { Moon, Sun } from "lucide-react";
 
 function getUserInitials(name?: string | null): string {
   if (!name?.trim()) return "U";
@@ -267,6 +269,40 @@ export default function ProfilePage() {
                   )}
                 </div>
               ))}
+            </div>
+          </section>
+
+          <hr className="border-border/50" />
+
+          {/* ─── Appearance ──────────────────────────────────────────── */}
+          <section className="space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-semibold tracking-tight">Appearance</h2>
+                <p className="text-sm text-muted-foreground">
+                  Customize how your dashboard looks.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-6 sm:flex-row">
+              <div className="flex flex-1 items-start gap-4 rounded-xl border bg-muted/40 p-6">
+                <div className="mt-1 rounded-full bg-primary/10 p-2 text-primary">
+                  <Moon className="h-5 w-5 dark:hidden" />
+                  <Sun className="hidden h-5 w-5 dark:block" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-lg font-medium">Dark Mode</p>
+                      <p className="text-sm text-muted-foreground">
+                        Switch between light and dark themes.
+                      </p>
+                    </div>
+                    <ModeToggle />
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 

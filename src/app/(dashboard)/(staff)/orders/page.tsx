@@ -384,8 +384,8 @@ export default function OrdersPage() {
           orderNote: order.orderNote,
           seniorPwdCount: order.seniorPwdCount || 0,
           seniorPwdIds,
-          cashier: "Cashier",
-          cashierId: "current-user-id",
+          cashier: staffName,
+          cashierId: session?.user?.id || "unknown",
           status: "completed",
           amountPaid: order.amountPaid,
           change: order.change,
@@ -498,6 +498,8 @@ export default function OrdersPage() {
         seniorPwdIds: order.seniorPwdIds || seniorPwdIds,
         isReprint: true,
       });
+      setShowSavedOrders(false);
+      setShowOrderHistory(false);
       setShowReceipt(true);
     },
     [seniorPwdIds],
@@ -1321,6 +1323,7 @@ export default function OrdersPage() {
               cashier: order.cashier || "Cashier",
               seniorPwdIds: order.seniorPwdIds,
             });
+            setShowOrderHistory(false);
             setShowReceipt(true);
           }}
         />
@@ -1332,6 +1335,7 @@ export default function OrdersPage() {
               settings={settings}
               onClose={() => setShowReceipt(false)}
               onPrint={handlePrintReceipt}
+              isPrinting={isPrinting}
             />
           )
         }

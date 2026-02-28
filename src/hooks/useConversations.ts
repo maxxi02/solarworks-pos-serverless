@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSocket } from "../provider/socket-provider"; 
+import { useSocket } from "../provider/socket-provider";
 import type {
   ConversationWithDetails,
   DmReceivePayload,
@@ -169,4 +169,13 @@ export function useConversations(currentUserId: string) {
     startConversation,
     createGroup,
   };
+}
+
+export function useUnreadCount(currentUserId: string | undefined) {
+  const { conversations } = useConversations(currentUserId || "");
+  const totalUnread = conversations.reduce(
+    (sum, conv) => sum + (conv.unreadCount || 0),
+    0,
+  );
+  return totalUnread;
 }

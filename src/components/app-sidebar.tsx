@@ -31,6 +31,7 @@ import { ExtendedUser } from "@/types/user.type";
 import { UserRole } from "@/types/role.type";
 import { adminNavigation, staffNavigation } from "@/constants/navigation";
 import { useSocket } from "@/hooks/useSocket";
+import { useUnreadCount } from "@/hooks/useConversations";
 
 const storeData = {
   name: "SolarWorks POS",
@@ -131,42 +132,44 @@ const UserProfileContent = ({
         </span>
       </div>
 
-      <Dialog>
-        <DialogTrigger asChild>
-          <button
-            disabled={isLoggingOut}
-            className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-            title="Logout"
-            aria-label="Logout"
-          >
-            {isLoggingOut ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : (
-              <LogOut className="h-4 w-4" />
-            )}
-          </button>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Logout?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to logout?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { }}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={onLogout}
+      <div className="ml-auto flex items-center gap-1">
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
               disabled={isLoggingOut}
+              className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              title="Logout"
+              aria-label="Logout"
             >
-              {isLoggingOut ? "Logging out..." : "Yes, Logout"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {isLoggingOut ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Logout?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to logout?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { }}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={onLogout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? "Logging out..." : "Yes, Logout"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 };
@@ -184,7 +187,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const user = session?.user;
   const userRole = getUserRole(user);
-  const navigationItems = userRole === "admin" ? adminNavigation : staffNavigation;
+  const unreadCount = useUnreadCount(user?.id);
+
+  const navigationItems = React.useMemo(() => {
+    const baseNav = userRole === "admin" ? adminNavigation : staffNavigation;
+    return baseNav.map((item) => {
+      if (item.title === "Messages") {
+        return { ...item, badge: unreadCount };
+      }
+      return item;
+    });
+  }, [userRole, unreadCount]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Bot,
   X,
+  Clock,
   Sparkles,
   Package,
   Calendar,
@@ -80,8 +81,16 @@ const stripMarkdown = (text: string): string => {
 export function AICompanion() {
   const { theme } = useTheme();
   const { data: session } = authClient.useSession();
-  const userName = session?.user?.name || session?.user?.email?.split('@')[0] || 'Admin';
+  const isAdmin = session?.user?.role === 'admin';
+  const userName = session?.user?.name || session?.user?.email?.split('@')[0] || (isAdmin ? 'Admin' : 'Staff');
   const { playOrder, playSuccess } = useNotificationSound();
+
+  const roleQuickActions = isAdmin ? quickActions : [
+    { id: 'today-highlights', label: "Your Highlights", icon: Zap, description: 'Your revenue, sold items, and activity' },
+    { id: 'monthly-trends', label: 'Your Trends', icon: Calendar, description: 'Personal performance this month' },
+    { id: 'stats', label: 'Personal Stats', icon: BarChart3, description: 'Total transactions and revenue' },
+    { id: 'attendance', label: 'My Attendance', icon: Clock, description: 'Quick check of your status' },
+  ];
 
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -158,7 +167,11 @@ export function AICompanion() {
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      const res = await fetch(`/api/ai-companion?type=${type}`);
+      let url = `/api/ai-companion?type=${type}`;
+      if (!isAdmin && session?.user?.id) {
+        url += `&staffId=${session.user.id}`;
+      }
+      const res = await fetch(url);
       const json = await res.json();
 
       const assistantMessage: Message = {
@@ -186,30 +199,30 @@ export function AICompanion() {
   };
 
   const generateResponse = (type: string, data: AnalyticsData): string => {
+    const p = isAdmin ? "" : "Your ";
     switch (type) {
       case 'today-highlights':
-        return `Today's Performance\n` +
+        return `${p}Today's Performance\n` +
           `Revenue: ${formatCurrency(data.todayRevenue)} (${data.revenueChange}% vs yesterday)\n` +
           `Transactions: ${data.todayTransactions}\n\n` +
-          `Top Products Today:\n` +
-          data.topProductsToday?.map((p: unknown, i: number) => `${i + 1}. ${(p as { name: string }).name} - ${(p as { quantity: number }).quantity} sold`).join('\n') || 'No sales today';
+          `${p}Top Products Today:\n` +
+          data.topProductsToday?.map((p: any, i: number) => `${i + 1}. ${p.name} - ${p.quantity} sold`).join('\n') || 'No sales today';
 
       case 'monthly-trends':
-        return `Monthly Trends (Last 30 Days)\n` +
+        return `${p}Monthly Trends (Last 30 Days)\n` +
           `Revenue: ${formatCurrency(data.monthRevenue)} (${data.monthChange}% vs last month)\n` +
           `Transactions: ${data.monthTransactions}\n\n` +
-          `Top Products This Month:\n` +
-          data.topProductsMonth?.map((p: unknown, i: number) => `${i + 1}. ${(p as { name: string }).name} - ${(p as { quantity: number }).quantity} sold (${formatCurrency((p as { revenue: number }).revenue)})`).join('\n') || 'No data';
+          `${p}Top Products This Month:\n` +
+          data.topProductsMonth?.map((p: any, i: number) => `${i + 1}. ${p.name} - ${p.quantity} sold (${formatCurrency(p.revenue)})`).join('\n') || 'No data';
 
       case 'all-time-stats':
-        return `All-Time Statistics\n` +
+      case 'stats':
+        return `${p}All-Time Statistics\n` +
           `Total Revenue: ${formatCurrency(data.totalRevenue)}\n` +
           `Total Transactions: ${data.totalTransactions}\n` +
-          `Products: ${data.totalProducts}\n` +
-          `Customers: ${data.totalCustomers}\n` +
-          `Staff: ${data.totalStaff}\n\n` +
-          `All-Time Best Sellers:\n` +
-          data.topProductsAllTime?.map((p: unknown, i: number) => `${i + 1}. ${(p as { name: string }).name} - ${(p as { quantity: number }).quantity} sold`).join('\n') || 'No data';
+          (isAdmin ? `Products: ${data.totalProducts}\nCustomers: ${data.totalCustomers}\nStaff: ${data.totalStaff}\n\n` : '\n') +
+          `${p}Best Sellers:\n` +
+          data.topProductsAllTime?.map((p: any, i: number) => `${i + 1}. ${p.name} - ${p.quantity} sold`).join('\n') || 'No data';
 
       case 'inventory-insights':
         return `Inventory Insights\n` +
@@ -217,17 +230,20 @@ export function AICompanion() {
           `Inventory Value: ${formatCurrency(data.totalInventoryValue)}\n` +
           `Items Needing Restock: ${data.itemsNeedingRestock}\n\n` +
           `Critical Stock:\n` +
-          data.criticalStockItems?.map((p: unknown) => `${(p as { name: string }).name}: ${(p as { currentStock: number }).currentStock} left`).join('\n') || 'None\n\n' +
+          data.criticalStockItems?.map((p: any) => `${p.name}: ${p.currentStock} left`).join('\n') || 'None\n\n' +
           `Low Stock:\n` +
-          data.lowStockItems?.map((p: unknown) => `${(p as { name: string }).name}: ${(p as { currentStock: number }).currentStock} (min: ${(p as { reorderPoint: number }).reorderPoint})`).join('\n') || 'None';
+          data.lowStockItems?.map((p: any) => `${p.name}: ${p.currentStock} (min: ${p.reorderPoint})`).join('\n') || 'None';
 
       case 'full-summary':
         return `Complete Dashboard Summary\n` +
           `Today: ${formatCurrency(data.today?.todayRevenue)} revenue, ${data.today?.todayTransactions} transactions\n` +
           `This Month: ${formatCurrency(data.month?.monthRevenue)} revenue, ${data.month?.monthTransactions} transactions\n` +
           `All Time: ${formatCurrency(data.allTime?.totalRevenue)} total revenue\n` +
-          `Inventory: ${data.inventory?.itemsNeedingRestock} items need restock\n\n` +
-          `Your business is ${parseFloat(data.today?.revenueChange || '0') > 0 ? 'growing' : 'down'} compared to yesterday!`;
+          (isAdmin ? `Inventory: ${data.inventory?.itemsNeedingRestock} items need restock\n\n` : '\n') +
+          `${p}business is ${parseFloat(data.today?.revenueChange || '0') > 0 ? 'growing' : 'down'} compared to yesterday!`;
+
+      case 'attendance':
+        return `Your Attendance Status\nCurrently: ${data.status || 'Unknown'}\nLast Clock-in: ${data.lastClockIn || 'N/A'}\nTotal Hours (Week): ${data.totalHours || 0}`;
 
       default:
         return 'Here are your analytics.';
@@ -388,7 +404,7 @@ export function AICompanion() {
                 <p className="text-sm text-muted-foreground">What would you like to know?</p>
               </div>
               <div className="grid grid-cols-1 gap-2">
-                {quickActions.map((action) => (
+                {roleQuickActions.map((action) => (
                   <Button
                     key={action.id}
                     variant="outline"
@@ -453,7 +469,7 @@ export function AICompanion() {
                         {isGreetingOnly(message.content) ? (
                           <div className="text-sm">
                             <span className="font-medium">{message.content}</span>
-                            <p className="text-xs text-muted-foreground mt-1">I&apos;m here to help you with your business analytics. Ask me anything!</p>
+                            <p className="text-xs text-muted-foreground mt-1">I&apos;m here to help you with your {isAdmin ? 'business' : 'personal'} analytics. Ask me anything!</p>
                           </div>
                         ) : (
                           renderFormattedContent(message)
@@ -476,7 +492,7 @@ export function AICompanion() {
               {/* Quick Actions Bar */}
               <div className="p-3 border-t bg-muted/30 shrink-0">
                 <div className="flex gap-1 overflow-x-auto pb-1">
-                  {quickActions.slice(0, 3).map((action) => (
+                  {roleQuickActions.slice(0, 3).map((action) => (
                     <Button
                       key={action.id}
                       variant="outline"

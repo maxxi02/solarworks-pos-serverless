@@ -30,7 +30,6 @@ export const PATHS = {
     INVENTORY_CATEGORIES: "/inventory/categories",
     INVENTORY_STOCK_ALERT: "/inventory/stockalert",
 
-
     CUSTOMERS: "/customers",
     CUSTOMER_LIST: "/customer/customer-list",
     CUSTOMER_ANALYTICS: "/customer/analytics",
@@ -74,7 +73,12 @@ export type NavItem = {
 };
 
 export const adminNavigation: NavItem[] = [
-  { title: "Dashboard", url: PATHS.DASHBOARD, icon: LayoutDashboard, isActive: true },
+  {
+    title: "Dashboard",
+    url: PATHS.DASHBOARD,
+    icon: LayoutDashboard,
+    isActive: true,
+  },
   { title: "Messages", url: PATHS.MESSAGES, icon: MessageSquare },
   {
     title: "Sales",
@@ -82,7 +86,10 @@ export const adminNavigation: NavItem[] = [
     icon: ShoppingCart,
     items: [
       { title: "All Transactions", url: PATHS.ADMIN.SALES_ALL_TRANSACTIONS },
-      { title: "Close Register History", url: PATHS.ADMIN.SALES_CLOSE_REGISTER },
+      {
+        title: "Close Register History",
+        url: PATHS.ADMIN.SALES_CLOSE_REGISTER,
+      },
       { title: "Sales Analytics", url: PATHS.ADMIN.SALES_ANALYTICS },
       { title: "Refunds & Returns", url: PATHS.ADMIN.SALES_REFUND_RETURN },
     ],
@@ -138,7 +145,13 @@ export const adminNavigation: NavItem[] = [
 ];
 
 export const staffNavigation: NavItem[] = [
-  { title: "Dashboard", url: PATHS.DASHBOARD, icon: LayoutDashboard, isActive: true },
+  {
+    title: "Dashboard",
+    url: PATHS.DASHBOARD,
+    icon: LayoutDashboard,
+    isActive: true,
+  },
+  { title: "Messages", url: PATHS.MESSAGES, icon: MessageSquare },
   { title: "Orders", url: PATHS.STAFF_NAV.ORDERS, icon: ShoppingCart },
   {
     title: "My Sales",

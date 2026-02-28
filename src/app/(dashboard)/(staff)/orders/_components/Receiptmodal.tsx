@@ -1,17 +1,23 @@
 "use client";
 
 import {
-  Receipt,
-  X,
   Printer,
   BluetoothConnected,
   BluetoothOff,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReceiptOrder } from "./pos.types";
 import { formatCurrency, DISCOUNT_RATE } from "./pos.utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSocket } from "@/provider/socket-provider";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface ReceiptModalProps {
   receipt: ReceiptOrder | null;
@@ -30,355 +36,135 @@ export const ReceiptModal = ({
 }: ReceiptModalProps) => {
   const { isConnected: companionConnected } = useSocket();
 
+  const rawText = useMemo(() => {
+    if (!receipt || !settings) return "";
+
+    const is58mm = settings.receiptWidth === "58mm";
+    const width = is58mm ? 32 : 42;
+    const dash = "-".repeat(width);
+    const center = (text: string) => {
+      const padding = Math.max(0, Math.floor((width - text.length) / 2));
+      return " ".repeat(padding) + text;
+    };
+    const justify = (left: string, right: string) => {
+      const space = Math.max(1, width - left.length - right.length);
+      return left + " ".repeat(space) + right;
+    };
+
+    let lines: string[] = [];
+
+    // Header
+    if (receipt.isReprint) lines.push(center("*** REPRINT ***"));
+    lines.push(center(settings.businessName || "RENDEZVOUS CAFE"));
+    if (settings.locationAddress) lines.push(center(settings.locationAddress));
+    if (settings.phoneNumber) lines.push(center(settings.phoneNumber));
+    lines.push(dash);
+
+    // Order Info
+    lines.push(justify("Order #:", receipt.orderNumber));
+    lines.push(justify("Date:", new Date(receipt.timestamp).toLocaleString()));
+    lines.push(justify("Cashier:", receipt.cashier || "Staff"));
+    lines.push(justify("Type:", receipt.orderType.toUpperCase()));
+    if (receipt.tableNumber) lines.push(justify("Table:", receipt.tableNumber));
+    if (receipt.customerName) lines.push(justify("Customer:", receipt.customerName));
+    lines.push(dash);
+
+    // Items
+    lines.push(justify("ITEM", "QTY   AMT"));
+    receipt.items.forEach((item) => {
+      const price = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price;
+      const amt = (price * item.quantity).toFixed(2);
+      lines.push(justify(item.name, `${item.quantity}  ${amt}`));
+      if (item.hasDiscount) {
+        lines.push("  (20% Senior/PWD Discount)");
+      }
+    });
+    lines.push(dash);
+
+    // Totals
+    lines.push(justify("Subtotal:", receipt.subtotal.toFixed(2)));
+    if (receipt.discountTotal > 0) {
+      lines.push(justify("Discount:", `-${receipt.discountTotal.toFixed(2)}`));
+    }
+    lines.push(justify("TOTAL:", `PHP ${receipt.total.toFixed(2)}`));
+    lines.push(dash);
+
+    // Payment
+    lines.push(justify("Payment:", receipt.paymentMethod.toUpperCase()));
+    if (receipt.paymentMethod === "cash" && receipt.amountPaid) {
+      lines.push(justify("Amount Paid:", receipt.amountPaid.toFixed(2)));
+      lines.push(justify("Change:", (receipt.change || 0).toFixed(2)));
+    } else if (receipt.paymentMethod === "split" && receipt.splitPayment) {
+      lines.push(justify("Cash:", receipt.splitPayment.cash.toFixed(2)));
+      lines.push(justify("GCash:", receipt.splitPayment.gcash.toFixed(2)));
+    }
+    lines.push(dash);
+
+    // Footer
+    if (settings.receiptMessage) lines.push(center(settings.receiptMessage));
+    lines.push(center("Thank you for your patronage!"));
+
+    return lines.join("\n");
+  }, [receipt, settings]);
+
   if (!receipt || !settings) return null;
 
-  const is58mm = settings.receiptWidth === "58mm";
-  const dash = "-".repeat(is58mm ? 24 : 32);
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-      <div
-        className={`w-full ${is58mm ? "max-w-[320px]" : "max-w-[380px]"} rounded-xl bg-white dark:bg-gray-900 border shadow-xl overflow-hidden`}
-      >
-        {/* Header */}
-        <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50 dark:bg-gray-800">
-          <h3 className="font-extrabold text-base flex items-center gap-2">
-            <Receipt className="w-5 h-5" />
-            <span>{receipt.isReprint ? "REPRINT" : "RECEIPT"}</span>
-          </h3>
-          <div className="flex items-center gap-2">
-            {/* Bluetooth status indicator */}
-            <span
-              className={`flex items-center gap-1 text-xs ${companionConnected ? "text-green-600" : "text-gray-400"}`}
-            >
-              {companionConnected ? (
-                <>
-                  <BluetoothConnected className="w-4 h-4" />
-                  Companion Online
-                </>
-              ) : (
-                <>
-                  <BluetoothOff className="w-4 h-4" />
-                  Companion Offline
-                </>
-              )}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-full"
-              onClick={onClose}
-            >
-              <X className="h-5 w-5" />
-            </Button>
+    <Dialog open={!!receipt} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md sm:max-w-[450px] p-0 overflow-hidden border-none shadow-2xl">
+        <DialogHeader className="px-6 py-4 border-b bg-muted/30">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <FileText className="w-5 h-5 text-primary" />
+              {receipt.isReprint ? "Reprint Receipt" : "Order Receipt"}
+            </DialogTitle>
+            <div className="flex items-center gap-2 mr-6">
+              <span
+                className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${companionConnected ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
+              >
+                {companionConnected ? (
+                  <>
+                    <BluetoothConnected className="w-3 h-3" />
+                    Online
+                  </>
+                ) : (
+                  <>
+                    <BluetoothOff className="w-3 h-3" />
+                    Offline
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="p-6 bg-white dark:bg-black">
+          <div className="rounded-lg border bg-slate-50 dark:bg-zinc-950 p-4 font-mono text-[13px] leading-relaxed shadow-inner overflow-x-auto">
+            <pre className="whitespace-pre whitespace-pre-wrap break-words text-slate-800 dark:text-slate-200">
+              {rawText}
+            </pre>
           </div>
         </div>
 
-        {/* Receipt Content */}
-        <div className="max-h-[70vh] overflow-y-auto">
-          <div
-            id="receipt-content"
-            className={`font-mono ${is58mm ? "text-[10px]" : "text-xs"} bg-white dark:bg-black p-4`}
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30 flex sm:flex-row gap-3">
+          <Button
+            onClick={onPrint}
+            disabled={isPrinting}
+            className="flex-1 gap-2 h-11 text-base font-bold shadow-sm"
+            variant={companionConnected ? "default" : "secondary"}
           >
-            {/* Logo */}
-            {settings.showLogo && settings.logoPreview && (
-              <div className="mb-2 flex justify-center">
-                <img
-                  src={settings.logoPreview}
-                  alt="Logo"
-                  className="h-12 object-contain mx-auto"
-                  style={{ maxHeight: settings.logoSize || "48px" }}
-                />
-              </div>
-            )}
-
-            {/* Store Info */}
-            {settings.sections?.storeName?.header &&
-              !settings.sections?.storeName?.disabled && (
-                <div className="text-center font-bold mb-1">
-                  {settings.businessName}
-                </div>
-              )}
-            {settings.sections?.locationAddress?.header &&
-              !settings.sections?.locationAddress?.disabled &&
-              settings.locationAddress && (
-                <div className="text-center mb-1 text-[10px]">
-                  {settings.locationAddress}
-                </div>
-              )}
-            {settings.sections?.phoneNumber?.header &&
-              !settings.sections?.phoneNumber?.disabled &&
-              settings.phoneNumber && (
-                <div className="text-center mb-1 text-[10px]">
-                  {settings.phoneNumber}
-                </div>
-              )}
-
-            <div className="text-center mb-1">{dash}</div>
-
-            {/* Order Details */}
-            <div className="mb-1 text-[10px]">
-              {[
-                ["Order #:", receipt.orderNumber],
-                [
-                  "Date:",
-                  `${new Date(receipt.timestamp).toLocaleDateString()}, ${new Date(receipt.timestamp).toLocaleTimeString()}`,
-                ],
-                ["Cashier:", receipt.cashier || "Cashier"],
-                ["Customer:", receipt.customerName],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between">
-                  <span>{label}</span>
-                  <span>{value}</span>
-                </div>
-              ))}
-              {settings.sections?.transactionType?.header &&
-                !settings.sections?.transactionType?.disabled && (
-                  <div className="flex justify-between">
-                    <span>Type:</span>
-                    <span className="uppercase">{receipt.orderType}</span>
-                  </div>
-                )}
-              {settings.sections?.orderType?.header &&
-                !settings.sections?.orderType?.disabled &&
-                receipt.tableNumber && (
-                  <div className="flex justify-between">
-                    <span>Table:</span>
-                    <span>{receipt.tableNumber}</span>
-                  </div>
-                )}
-              {receipt.orderNote && (
-                <div className="flex justify-between">
-                  <span>Note:</span>
-                  <span>{receipt.orderNote}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="text-center mb-1">{dash}</div>
-
-            {/* Senior/PWD IDs */}
-            {settings.sections?.customerInfo?.footer &&
-              !settings.sections?.customerInfo?.disabled &&
-              receipt.seniorPwdIds?.length && (
-                <div className="mb-1 text-[10px]">
-                  <div>Senior/PWD IDs: {receipt.seniorPwdIds.join(", ")}</div>
-                </div>
-              )}
-
-            {/* Items */}
-            <div className="mb-1 text-[10px]">
-              <div className="flex justify-between font-bold mb-1">
-                <span>Item</span>
-                <span>Qty Amount</span>
-              </div>
-
-              {receipt.items
-                .filter((i) => !i.hasDiscount)
-                .map((item, idx) => (
-                  <div key={idx} className="flex justify-between">
-                    <span>{item.name}</span>
-                    <span>
-                      {item.quantity}{" "}
-                      {formatCurrency(item.price * item.quantity)}
-                    </span>
-                  </div>
-                ))}
-
-              {receipt.items
-                .filter((i) => i.hasDiscount)
-                .map((item, idx) => {
-                  const discountedPrice = item.price * (1 - DISCOUNT_RATE);
-                  return (
-                    <div key={idx}>
-                      <div className="flex justify-between">
-                        <span>{item.name}</span>
-                        <span>
-                          {item.quantity}{" "}
-                          {formatCurrency(discountedPrice * item.quantity)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-green-600 text-[8px] pl-2">
-                        <span> (20% Senior/PWD)</span>
-                        <span>
-                          -
-                          {formatCurrency(
-                            item.price * item.quantity * DISCOUNT_RATE,
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-
-              {settings.showSKU &&
-                receipt.items.map((item) => (
-                  <div
-                    key={`sku-${item._id}`}
-                    className="text-[8px] text-gray-500"
-                  >
-                    SKU: {item._id.slice(-6)}
-                  </div>
-                ))}
-            </div>
-
-            <div className="text-center mb-1">{dash}</div>
-
-            {/* Totals */}
-            <div className="mb-1 text-[10px]">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>{formatCurrency(receipt.subtotal)}</span>
-              </div>
-              {receipt.discountTotal > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>Discount:</span>
-                  <span>-{formatCurrency(receipt.discountTotal)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold mt-1">
-                <span>TOTAL:</span>
-                <span>{formatCurrency(receipt.total)}</span>
-              </div>
-            </div>
-
-            <div className="text-center mb-1">{dash}</div>
-
-            {/* Payment */}
-            <div className="mb-1 text-[10px]">
-              <div className="flex justify-between mb-1">
-                <span>Payment:</span>
-                <span className="uppercase">{receipt.paymentMethod}</span>
-              </div>
-
-              {receipt.paymentMethod === "split" && receipt.splitPayment && (
-                <>
-                  <div className="space-y-1 text-[8px] mb-1">
-                    <div className="flex justify-between">
-                      <span>Cash:</span>
-                      <span>{formatCurrency(receipt.splitPayment.cash)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>GCash:</span>
-                      <span>{formatCurrency(receipt.splitPayment.gcash)}</span>
-                    </div>
-                  </div>
-                  <div className="border-t border-dashed border-gray-300 my-1" />
-                  <div className="text-right font-bold">
-                    {formatCurrency(
-                      receipt.splitPayment.cash + receipt.splitPayment.gcash,
-                    )}
-                  </div>
-                  <div className="text-right text-muted-foreground">
-                    -{formatCurrency(receipt.total)}
-                  </div>
-                  <div className="border-t border-dashed border-gray-300 my-1" />
-                  {receipt.splitPayment.cash + receipt.splitPayment.gcash >
-                    receipt.total && (
-                      <div className="flex justify-between font-bold">
-                        <span>CHANGE:</span>
-                        <span className="text-green-600">
-                          {formatCurrency(
-                            receipt.splitPayment.cash +
-                            receipt.splitPayment.gcash -
-                            receipt.total,
-                          )}
-                        </span>
-                      </div>
-                    )}
-                </>
-              )}
-
-              {receipt.paymentMethod === "cash" && receipt.amountPaid && (
-                <>
-                  <div className="text-right font-bold">
-                    {formatCurrency(receipt.amountPaid)}
-                  </div>
-                  <div className="text-right text-muted-foreground">
-                    -{formatCurrency(receipt.total)}
-                  </div>
-                  <div className="border-t border-dashed border-gray-300 my-1" />
-                  <div className="flex justify-between font-bold">
-                    <span>CHANGE:</span>
-                    <span className="text-green-600">
-                      {formatCurrency(receipt.change || 0)}
-                    </span>
-                  </div>
-                </>
-              )}
-
-              {receipt.paymentMethod === "gcash" && (
-                <div className="flex justify-between">
-                  <span>GCash Received:</span>
-                  <span>{formatCurrency(receipt.total)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Footer Sections */}
-            {settings.sections?.barcode?.header &&
-              !settings.sections?.barcode?.disabled && (
-                <div className="mt-2 text-center text-[8px]">
-                  <div>[BARCODE: {receipt.orderNumber}]</div>
-                </div>
-              )}
-            {settings.showBusinessHours && settings.businessHours && (
-              <div className="mt-2 text-center text-[8px]">
-                <div>{settings.businessHours}</div>
-              </div>
-            )}
-            {settings.showTaxPIN && settings.taxPin && (
-              <div className="mt-1 text-center text-[8px]">
-                <div>Tax PIN: {settings.taxPin}</div>
-              </div>
-            )}
-            {settings.sections?.message?.footer &&
-              !settings.sections?.message?.disabled &&
-              settings.receiptMessage && (
-                <div className="mt-2 text-center text-[8px]">
-                  <div>{settings.receiptMessage}</div>
-                </div>
-              )}
-            {!settings.sections?.disclaimer?.disabled &&
-              settings.disclaimer && (
-                <div className="mt-1 text-center text-[8px]">
-                  <div>{settings.disclaimer}</div>
-                </div>
-              )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="border-t-2 bg-gray-50 dark:bg-gray-800 p-3 sticky bottom-0">
-          <div className="flex gap-2">
-            <Button
-              onClick={onPrint}
-              disabled={isPrinting}
-              className="flex-1 gap-2 h-11 text-base font-extrabold"
-              variant={companionConnected ? "default" : "secondary"}
-            >
-              <Printer className="w-5 h-5" />
-              {isPrinting
-                ? "PRINTING..."
-                : companionConnected
-                  ? "PRINT RECEIPT"
-                  : "PRINTER OFFLINE"}
-            </Button>
-            <Button
-              onClick={onClose}
-              variant="outline"
-              className="flex-1 h-11 text-base font-extrabold"
-            >
-              CLOSE
-            </Button>
-          </div>
-          {!companionConnected && (
-            <p className="text-xs text-center text-muted-foreground mt-2">
-              Open Companion App on device to print
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+            <Printer className="w-5 h-5" />
+            {isPrinting ? "Printing..." : "Print Receipt"}
+          </Button>
+          <Button
+            onClick={onClose}
+            variant="outline"
+            className="flex-1 h-11 text-base font-bold border-2"
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

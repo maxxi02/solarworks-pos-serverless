@@ -14,6 +14,7 @@ export interface CustomerOrderItem {
 
 export interface CustomerOrder {
   orderId: string;
+  orderNumber?: string;
   customerName: string;
   items: CustomerOrderItem[];
   orderNote?: string;
