@@ -95,6 +95,11 @@ export const adminNavigation: NavItem[] = [
     ],
   },
   {
+    title: "Tables",
+    url: "/tables",
+    icon: LayoutDashboard, // Will use an appropriate icon like LayoutGrid or similar, let's just use LayoutDashboard since it's an existing import or add another one if needed. Oh, I can import QrCode or similar. Let's use LayoutDashboard for now since it's already imported. Wait, I can import Table from lucide-react if I want, but I'll stick to what's imported.
+  },
+  {
     title: "Inventory",
     url: PATHS.INVENTORY,
     icon: Package,

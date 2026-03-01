@@ -34,12 +34,17 @@ export default function AccessControlPage() {
     fetchUsers();
   }, [fetchUsers]);
 
+  const filteredUsers = React.useMemo(
+    () => users.filter((u) => u.role !== "admin" && u.role !== "customer"),
+    [users]
+  );
+
   const selectedUsers = React.useMemo(
     () =>
       Object.keys(rowSelection)
-        .map((id) => users.find((u) => u.id === id))
+        .map((id) => filteredUsers.find((u) => u.id === id))
         .filter((user): user is TableUser => user !== undefined),
-    [rowSelection, users]
+    [rowSelection, filteredUsers]
   );
 
   const columns = getColumns({ onRefresh: refreshUsers });
@@ -50,7 +55,7 @@ export default function AccessControlPage() {
 
       <Tabs defaultValue="users">
         <TabsList>
-          <TabsTrigger value="users">All Users ({users.length})</TabsTrigger>
+          <TabsTrigger value="users">Staff ({filteredUsers.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-6">
@@ -64,7 +69,7 @@ export default function AccessControlPage() {
 
           <DataTable
             columns={columns}
-            data={users}
+            data={filteredUsers}
             rowSelection={rowSelection}
             onRowSelectionChange={setRowSelection}
             getRowId={(row) => row.id}

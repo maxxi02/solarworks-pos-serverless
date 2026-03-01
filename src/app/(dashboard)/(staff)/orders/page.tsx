@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,8 @@ import { StockAlertsModal } from "./_components/StockAlertsModal";
 import { IncomingOrderModal } from "./_components/IncomingOrderModal";
 import { SavedOrdersPanel } from "./_components/Savedorderspanel";
 import { CategoryFilter } from "./_components/CategoryFilter";
+import { QueueBoard } from "./_components/QueueBoard";
+import { ChatDrawer } from "./_components/ChatDrawer";
 import { AttendanceBar } from "./_components/AttendanceBar";
 import { ProductCard } from "./_components/ProductCard";
 import { CartItem } from "./_components/CartItem";
@@ -205,6 +208,7 @@ export default function OrdersPage() {
   const [incomingOrder, setIncomingOrder] = useState<CustomerOrder | null>(
     null,
   );
+  const [activeChat, setActiveChat] = useState<{ sessionId?: string; tableId?: string } | null>(null);
 
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const cartDropZoneRef = useRef<HTMLDivElement>(null);
@@ -931,355 +935,374 @@ export default function OrdersPage() {
       />
 
       <>
-        <div className="max-w-[1600px] mx-auto">
-          {/* Main Layout */}
-          <div className="flex flex-col lg:flex-row gap-5 pb-10">
-            {/* Left — Products */}
-            <div className="lg:w-[62%] flex flex-col">
-              {/* Menu Type Filter */}
-              <div className="grid grid-cols-3 gap-3 mb-5">
-                {(["all", "food", "drink"] as const).map((type) => (
-                  <Button
-                    key={type}
-                    variant={selectedMenuType === type ? "default" : "outline"}
-                    onClick={() => {
-                      setSelectedMenuType(type);
-                      setSelectedCategory("All");
-                    }}
-                    className="h-11 text-base"
-                  >
-                    {type === "food" && <Utensils className="w-4 h-4 mr-2" />}
-                    {type === "drink" && <Coffee className="w-4 h-4 mr-2" />}
-                    {type === "all" ? "All" : type}
-                  </Button>
-                ))}
-              </div>
+        <Tabs defaultValue="pos" className="w-full max-w-[1600px] mx-auto px-6">
+          <div className="flex items-center justify-between mt-2 mb-6">
+            <h1 className="text-2xl font-bold">Orders</h1>
+            <TabsList>
+              <TabsTrigger value="pos">Point of Sale</TabsTrigger>
+              <TabsTrigger value="queue">Queue Board</TabsTrigger>
+            </TabsList>
+          </div>
 
-              <CategoryFilter
-                categories={categories}
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-                showLeftScroll={showLeftScroll}
-                showRightScroll={showRightScroll}
-                onScroll={scrollCategories}
-                containerRef={categoriesContainerRef}
-                isDragging={isDraggingCategory}
-                onMouseDown={handleCategoryMouseDown}
-                onMouseMove={handleCategoryMouseMove}
-                onMouseUp={() => setIsDraggingCategory(false)}
-                onMouseLeave={() => setIsDraggingCategory(false)}
-              />
+          <TabsContent value="pos" className="m-0">
+            {/* Main Layout */}
+            <div className="flex flex-col lg:flex-row gap-5 pb-10">
+              {/* Left — Products */}
+              <div className="lg:w-[62%] flex flex-col">
+                {/* Menu Type Filter */}
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  {(["all", "food", "drink"] as const).map((type) => (
+                    <Button
+                      key={type}
+                      variant={selectedMenuType === type ? "default" : "outline"}
+                      onClick={() => {
+                        setSelectedMenuType(type);
+                        setSelectedCategory("All");
+                      }}
+                      className="h-11 text-base"
+                    >
+                      {type === "food" && <Utensils className="w-4 h-4 mr-2" />}
+                      {type === "drink" && <Coffee className="w-4 h-4 mr-2" />}
+                      {type === "all" ? "All" : type}
+                    </Button>
+                  ))}
+                </div>
 
-              {/* Products Grid */}
-              <div className="pr-1">
-                {isLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <Loader2 className="w-8 h-8 animate-spin mr-3" />
-                    Loading...
-                  </div>
-                ) : !filteredProducts.length ? (
-                  <div className="text-center py-10 text-muted-foreground text-base">
-                    No products found
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {filteredProducts.map((product) => (
-                      <ProductCard
-                        key={product._id}
-                        product={product}
-                        isDragged={draggedItem?._id === product._id}
-                        onAddToCart={addToCart}
-                        onDragStart={handleDragStart}
-                        onDragEnd={() => setDraggedItem(null)}
-                        onTouchStart={handleTouchStart}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={handleTouchEnd}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                <CategoryFilter
+                  categories={categories}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                  showLeftScroll={showLeftScroll}
+                  showRightScroll={showRightScroll}
+                  onScroll={scrollCategories}
+                  containerRef={categoriesContainerRef}
+                  isDragging={isDraggingCategory}
+                  onMouseDown={handleCategoryMouseDown}
+                  onMouseMove={handleCategoryMouseMove}
+                  onMouseUp={() => setIsDraggingCategory(false)}
+                  onMouseLeave={() => setIsDraggingCategory(false)}
+                />
 
-            {/* Right — Cart */}
-            <div className="lg:w-[38%]">
-              <div
-                ref={cartDropZoneRef}
-                className="flex-1 transition-all"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <Card className="flex flex-col border shadow-sm">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-center">
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <ShoppingCart className="w-5 h-5" />
-                        Current Order ({cart.length})
-                      </CardTitle>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="default"
-                          onClick={() => setShowDiscountModal(true)}
-                          disabled={!cart.length || isDisabled}
-                          className="h-9 text-sm px-3"
-                        >
-                          <Percent className="w-4 h-4 mr-2" />
-                          Discount
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="default"
-                          onClick={saveCurrentOrder}
-                          disabled={!cart.length || isDisabled}
-                          className="h-9 w-9 p-0"
-                          title="Save Order"
-                        >
-                          <Save className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="default"
-                          onClick={clearCart}
-                          disabled={!cart.length || isDisabled}
-                          className="h-9 w-9 p-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                {/* Products Grid */}
+                <div className="pr-1">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="w-8 h-8 animate-spin mr-3" />
+                      Loading...
                     </div>
-                    {!cart.length && (
-                      <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30">
-                        <p className="text-sm text-muted-foreground">
-                          ↓ Drop products here ↓
-                        </p>
-                      </div>
-                    )}
-                  </CardHeader>
+                  ) : !filteredProducts.length ? (
+                    <div className="text-center py-10 text-muted-foreground text-base">
+                      No products found
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {filteredProducts.map((product) => (
+                        <ProductCard
+                          key={product._id}
+                          product={product}
+                          isDragged={draggedItem?._id === product._id}
+                          onAddToCart={addToCart}
+                          onDragStart={handleDragStart}
+                          onDragEnd={() => setDraggedItem(null)}
+                          onTouchStart={handleTouchStart}
+                          onTouchMove={handleTouchMove}
+                          onTouchEnd={handleTouchEnd}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                  <CardContent className="space-y-6 p-6 pt-0">
-                    {/* Senior/PWD Banner */}
-                    {seniorPwdCount > 0 && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <p className="text-sm font-medium text-green-700 mb-2">
-                          Senior/PWD Discount Applied:
-                        </p>
-                        <p className="text-xs text-green-600">
-                          {seniorPwdCount} item(s) with 20% discount
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Order Type */}
-                    <div>
-                      <Label className="text-sm">Order Type</Label>
-                      <div className="flex gap-2 mt-2">
-                        {(["dine-in", "takeaway"] as const).map((type) => (
+              {/* Right — Cart */}
+              <div className="lg:w-[38%]">
+                <div
+                  ref={cartDropZoneRef}
+                  className="flex-1 transition-all"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <Card className="flex flex-col border shadow-sm">
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <ShoppingCart className="w-5 h-5" />
+                          Current Order ({cart.length})
+                        </CardTitle>
+                        <div className="flex gap-2">
                           <Button
-                            key={type}
-                            variant={orderType === type ? "default" : "outline"}
-                            onClick={() => setOrderType(type)}
-                            className="flex-1 h-9 text-sm"
-                            disabled={isDisabled}
+                            variant="outline"
+                            size="default"
+                            onClick={() => setShowDiscountModal(true)}
+                            disabled={!cart.length || isDisabled}
+                            className="h-9 text-sm px-3"
                           >
-                            {type === "dine-in" ? "Dine In" : "Take Away"}
+                            <Percent className="w-4 h-4 mr-2" />
+                            Discount
                           </Button>
-                        ))}
+                          <Button
+                            variant="outline"
+                            size="default"
+                            onClick={saveCurrentOrder}
+                            disabled={!cart.length || isDisabled}
+                            className="h-9 w-9 p-0"
+                            title="Save Order"
+                          >
+                            <Save className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="default"
+                            onClick={clearCart}
+                            disabled={!cart.length || isDisabled}
+                            className="h-9 w-9 p-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Cart Items */}
-                    <div>
-                      <Label className="text-sm font-semibold">Items</Label>
-                      <div className="space-y-3 mt-3">
-                        {cart.map((item) => (
-                          <CartItem
-                            key={item._id}
-                            item={item}
-                            isDisabled={isDisabled}
-                            onUpdateQuantity={updateQuantity}
-                            onRemoveDiscount={removeDiscount}
-                            onRemoveFromCart={removeFromCart}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Totals */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>Subtotal:</span>
-                        <span>{formatCurrency(subtotal)}</span>
-                      </div>
-                      {discountTotal > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>Discount:</span>
-                          <span>-{formatCurrency(discountTotal)}</span>
+                      {!cart.length && (
+                        <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30">
+                          <p className="text-sm text-muted-foreground">
+                            ↓ Drop products here ↓
+                          </p>
                         </div>
                       )}
-                      <Separator className="my-2" />
-                      <div className="flex justify-between font-bold text-lg">
-                        <span>Total:</span>
-                        <span className="text-primary">
-                          {formatCurrency(total)}
-                        </span>
+                    </CardHeader>
+
+                    <CardContent className="space-y-6 p-6 pt-0">
+                      {/* Senior/PWD Banner */}
+                      {seniorPwdCount > 0 && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <p className="text-sm font-medium text-green-700 mb-2">
+                            Senior/PWD Discount Applied:
+                          </p>
+                          <p className="text-xs text-green-600">
+                            {seniorPwdCount} item(s) with 20% discount
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Order Type */}
+                      <div>
+                        <Label className="text-sm">Order Type</Label>
+                        <div className="flex gap-2 mt-2">
+                          {(["dine-in", "takeaway"] as const).map((type) => (
+                            <Button
+                              key={type}
+                              variant={orderType === type ? "default" : "outline"}
+                              onClick={() => setOrderType(type)}
+                              className="flex-1 h-9 text-sm"
+                              disabled={isDisabled}
+                            >
+                              {type === "dine-in" ? "Dine In" : "Take Away"}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
 
-                    <Separator />
+                      <Separator />
 
-                    {/* Payment Method */}
-                    <div>
-                      <Label className="text-sm">Payment</Label>
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        {(["cash", "gcash", "split"] as const).map((method) => (
-                          <Button
-                            key={method}
-                            variant={
-                              paymentMethod === method ? "default" : "outline"
-                            }
-                            onClick={() => setPaymentMethod(method)}
-                            className="h-9 text-sm"
-                            disabled={isDisabled}
-                          >
-                            {method === "cash" && (
-                              <DollarSign className="w-4 h-4 mr-2" />
-                            )}
-                            {method === "gcash" && (
-                              <Smartphone className="w-4 h-4 mr-2" />
-                            )}
-                            {method === "split" && (
-                              <Receipt className="w-4 h-4 mr-2" />
-                            )}
-                            {method === "cash"
-                              ? "Cash"
-                              : method === "gcash"
-                                ? "GCash"
-                                : "Split"}
-                          </Button>
-                        ))}
+                      {/* Cart Items */}
+                      <div>
+                        <Label className="text-sm font-semibold">Items</Label>
+                        <div className="space-y-3 mt-3">
+                          {cart.map((item) => (
+                            <CartItem
+                              key={item._id}
+                              item={item}
+                              isDisabled={isDisabled}
+                              onUpdateQuantity={updateQuantity}
+                              onRemoveDiscount={removeDiscount}
+                              onRemoveFromCart={removeFromCart}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
 
-                    {paymentMethod === "cash" && (
-                      <CashPaymentInput
-                        total={total}
-                        amountPaid={amountPaid}
-                        setAmountPaid={setAmountPaid}
-                        disabled={isDisabled}
-                      />
-                    )}
-                    {paymentMethod === "split" && (
-                      <SplitPaymentInput
-                        total={total}
-                        splitPayment={splitPayment}
-                        setSplitPayment={setSplitPayment}
-                        disabled={isDisabled}
-                      />
-                    )}
-                    {paymentMethod === "gcash" && (
-                      <div className="bg-muted border rounded-lg p-3">
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Smartphone className="w-4 h-4" />
-                          GCash payment of {formatCurrency(total)} will be
-                          processed.
-                        </p>
+                      <Separator />
+
+                      {/* Totals */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span>Subtotal:</span>
+                          <span>{formatCurrency(subtotal)}</span>
+                        </div>
+                        {discountTotal > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Discount:</span>
+                            <span>-{formatCurrency(discountTotal)}</span>
+                          </div>
+                        )}
+                        <Separator className="my-2" />
+                        <div className="flex justify-between font-bold text-lg">
+                          <span>Total:</span>
+                          <span className="text-primary">
+                            {formatCurrency(total)}
+                          </span>
+                        </div>
                       </div>
-                    )}
 
-                    {/* Customer Info */}
-                    <Input
-                      placeholder="Customer name (optional)"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="h-10 text-sm"
-                      disabled={isDisabled}
-                    />
-                    <Input
-                      placeholder="Order notes"
-                      value={orderNote}
-                      onChange={(e) => setOrderNote(e.target.value)}
-                      className="h-10 text-sm"
-                      disabled={isDisabled}
-                    />
-                    {orderType === "dine-in" && (
+                      <Separator />
+
+                      {/* Payment Method */}
+                      <div>
+                        <Label className="text-sm">Payment</Label>
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {(["cash", "gcash", "split"] as const).map((method) => (
+                            <Button
+                              key={method}
+                              variant={
+                                paymentMethod === method ? "default" : "outline"
+                              }
+                              onClick={() => setPaymentMethod(method)}
+                              className="h-9 text-sm"
+                              disabled={isDisabled}
+                            >
+                              {method === "cash" && (
+                                <DollarSign className="w-4 h-4 mr-2" />
+                              )}
+                              {method === "gcash" && (
+                                <Smartphone className="w-4 h-4 mr-2" />
+                              )}
+                              {method === "split" && (
+                                <Receipt className="w-4 h-4 mr-2" />
+                              )}
+                              {method === "cash"
+                                ? "Cash"
+                                : method === "gcash"
+                                  ? "GCash"
+                                  : "Split"}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {paymentMethod === "cash" && (
+                        <CashPaymentInput
+                          total={total}
+                          amountPaid={amountPaid}
+                          setAmountPaid={setAmountPaid}
+                          disabled={isDisabled}
+                        />
+                      )}
+                      {paymentMethod === "split" && (
+                        <SplitPaymentInput
+                          total={total}
+                          splitPayment={splitPayment}
+                          setSplitPayment={setSplitPayment}
+                          disabled={isDisabled}
+                        />
+                      )}
+                      {paymentMethod === "gcash" && (
+                        <div className="bg-muted border rounded-lg p-3">
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            GCash payment of {formatCurrency(total)} will be
+                            processed.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Customer Info */}
                       <Input
-                        placeholder="Table number"
-                        value={selectedTable}
-                        onChange={(e) => setSelectedTable(e.target.value)}
+                        placeholder="Customer name (optional)"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
                         className="h-10 text-sm"
                         disabled={isDisabled}
                       />
-                    )}
+                      <Input
+                        placeholder="Order notes"
+                        value={orderNote}
+                        onChange={(e) => setOrderNote(e.target.value)}
+                        className="h-10 text-sm"
+                        disabled={isDisabled}
+                      />
+                      {orderType === "dine-in" && (
+                        <Input
+                          placeholder="Table number"
+                          value={selectedTable}
+                          onChange={(e) => setSelectedTable(e.target.value)}
+                          className="h-10 text-sm"
+                          disabled={isDisabled}
+                        />
+                      )}
 
-                    {/* Pay Button */}
-                    <Button
-                      onClick={processPayment}
-                      disabled={
-                        !cart.length ||
-                        isDisabled ||
-                        settingsLoading ||
-                        !canProcessPayment
-                      }
-                      className="w-full h-12 text-base font-semibold"
-                      size="lg"
-                      variant={canProcessPayment ? "default" : "secondary"}
-                    >
-                      {isProcessing || isCheckingStock ? (
-                        <>
-                          <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
-                          {isCheckingStock
-                            ? "Checking Stock..."
-                            : "Processing..."}
-                        </>
-                      ) : isPrinting ? (
-                        <>
-                          <Printer className="w-5 h-5 mr-3 animate-pulse" />
-                          Printing...
-                        </>
-                      ) : (
-                        <>
-                          <Receipt className="w-5 h-5 mr-3" />
-                          {paymentMethod === "cash" && amountPaid >= total
-                            ? `Pay & Change: ₱${(amountPaid - total).toFixed(2)}`
-                            : paymentMethod === "split" &&
-                              splitPayment.cash + splitPayment.gcash >= total
-                              ? "Pay (Split)"
-                              : `Pay ${formatCurrency(total)}`}
-                        </>
-                      )}
-                    </Button>
+                      {/* Pay Button */}
+                      <Button
+                        onClick={processPayment}
+                        disabled={
+                          !cart.length ||
+                          isDisabled ||
+                          settingsLoading ||
+                          !canProcessPayment
+                        }
+                        className="w-full h-12 text-base font-semibold"
+                        size="lg"
+                        variant={canProcessPayment ? "default" : "secondary"}
+                      >
+                        {isProcessing || isCheckingStock ? (
+                          <>
+                            <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
+                            {isCheckingStock
+                              ? "Checking Stock..."
+                              : "Processing..."}
+                          </>
+                        ) : isPrinting ? (
+                          <>
+                            <Printer className="w-5 h-5 mr-3 animate-pulse" />
+                            Printing...
+                          </>
+                        ) : (
+                          <>
+                            <Receipt className="w-5 h-5 mr-3" />
+                            {paymentMethod === "cash" && amountPaid >= total
+                              ? `Pay & Change: ₱${(amountPaid - total).toFixed(2)}`
+                              : paymentMethod === "split" &&
+                                splitPayment.cash + splitPayment.gcash >= total
+                                ? "Pay (Split)"
+                                : `Pay ${formatCurrency(total)}`}
+                          </>
+                        )}
+                      </Button>
 
-                    {/* Underpayment hints */}
-                    {paymentMethod === "cash" &&
-                      amountPaid > 0 &&
-                      amountPaid < total && (
-                        <p className="text-xs text-red-500 text-center">
-                          Need {formatCurrency(total - amountPaid)} more
-                        </p>
-                      )}
-                    {paymentMethod === "split" &&
-                      splitPayment.cash + splitPayment.gcash > 0 &&
-                      splitPayment.cash + splitPayment.gcash < total && (
-                        <p className="text-xs text-red-500 text-center">
-                          Need{" "}
-                          {formatCurrency(
-                            total - (splitPayment.cash + splitPayment.gcash),
-                          )}{" "}
-                          more
-                        </p>
-                      )}
-                  </CardContent>
-                </Card>
+                      {/* Underpayment hints */}
+                      {paymentMethod === "cash" &&
+                        amountPaid > 0 &&
+                        amountPaid < total && (
+                          <p className="text-xs text-red-500 text-center">
+                            Need {formatCurrency(total - amountPaid)} more
+                          </p>
+                        )}
+                      {paymentMethod === "split" &&
+                        splitPayment.cash + splitPayment.gcash > 0 &&
+                        splitPayment.cash + splitPayment.gcash < total && (
+                          <p className="text-xs text-red-500 text-center">
+                            Need{" "}
+                            {formatCurrency(
+                              total - (splitPayment.cash + splitPayment.gcash),
+                            )}{" "}
+                            more
+                          </p>
+                        )}
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="queue" className="m-0 pb-10">
+            <QueueBoard onOpenChat={
+              (order) => setActiveChat({
+                sessionId: order.sessionId,
+                tableId: order.tableNumber
+              })
+            } />
+          </TabsContent>
+        </Tabs>
 
         <Dialog open={showSavedOrders} onOpenChange={setShowSavedOrders}>
           <DialogContent className="max-w-2xl">
@@ -1389,6 +1412,16 @@ export default function OrdersPage() {
             playSuccess();
           }}
         />
+
+        {activeChat && (
+          <ChatDrawer
+            sessionId={activeChat.sessionId}
+            tableId={activeChat.tableId}
+            staffId={session?.user?.id || ""}
+            staffName={staffName}
+            onClose={() => setActiveChat(null)}
+          />
+        )}
       </>
     </div>
   );

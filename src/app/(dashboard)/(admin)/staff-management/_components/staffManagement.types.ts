@@ -1,6 +1,4 @@
-// staffManagement.types.ts
-
-export type UserRole = "staff" | "manager" | "admin";
+import { UserRole } from "@/types/role.type";
 
 export interface BetterAuthUser {
   id: string;
