@@ -51,7 +51,7 @@ export function MessagingPage({
     };
 
     return (
-        <div className="flex h-full w-full overflow-hidden bg-background">
+        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
             <aside className={cn(
                 "w-full md:w-80 lg:w-72 xl:w-80 flex-shrink-0 h-full",
                 mobileView === "chat" ? "hidden md:flex md:flex-col" : "flex flex-col"
@@ -68,7 +68,7 @@ export function MessagingPage({
             </aside>
 
             <main className={cn(
-                "flex-1 h-full flex flex-col",
+                "flex-1 h-full min-h-0 flex flex-col",
                 mobileView === "list" ? "hidden md:flex" : "flex"
             )}>
                 {activeConversation ? (
