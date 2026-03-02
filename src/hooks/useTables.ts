@@ -7,7 +7,7 @@ export interface Table {
   tableId: string;
   label: string;
   qrCodeUrl: string;
-  qrType: "dine-in" | "walk-in" | "drive-thru";
+  qrType: "dine-in" | "walk-in" | "drive-thru" | "take-away";
   status: "available" | "occupied" | "reserved";
   currentSessionId: string | null;
   createdBy: string;
@@ -91,19 +91,22 @@ export function useTables() {
     }
   }, []);
 
-  const generateQR = useCallback(async (qrType: "walk-in" | "drive-thru") => {
-    try {
-      const res = await fetch("/api/tables/qr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qrType }),
-      });
-      if (!res.ok) throw new Error("Failed to generate QR");
-      return await res.json();
-    } catch (err) {
-      throw err;
-    }
-  }, []);
+  const generateQR = useCallback(
+    async (qrType: "walk-in" | "drive-thru" | "take-away") => {
+      try {
+        const res = await fetch("/api/tables/qr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qrType }),
+        });
+        if (!res.ok) throw new Error("Failed to generate QR");
+        return await res.json();
+      } catch (err) {
+        throw err;
+      }
+    },
+    [],
+  );
 
   return {
     tables,

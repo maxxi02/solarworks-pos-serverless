@@ -47,13 +47,17 @@ export async function POST(request: NextRequest) {
 
     const newUserId = signUpResult.user.id;
 
-    // Update user role if not default
-    if (role && role !== "staff") {
-      await MONGODB.collection("user").updateOne(
-        { id: newUserId },
-        { $set: { role, updatedAt: new Date() } },
-      );
-    }
+    // Update user role and mark as verified
+    await MONGODB.collection("user").updateOne(
+      { id: newUserId },
+      {
+        $set: {
+          role: role || "staff",
+          emailVerified: true,
+          updatedAt: new Date(),
+        },
+      },
+    );
 
     // Generate verification token
     const token = crypto.randomBytes(32).toString("hex");
