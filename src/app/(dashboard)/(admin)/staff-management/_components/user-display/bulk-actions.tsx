@@ -49,6 +49,14 @@ export function BulkActions({
     const [newRole, setNewRole] = useState<UserRole>("staff");
     const [loading, setLoading] = useState(false);
 
+    const roleVariants: Record<UserRole, "destructive" | "default" | "secondary" | "outline"> = {
+        admin: "destructive",
+        manager: "default",
+        staff: "secondary",
+        customer: "outline",
+        user: "outline"
+    };
+
     const handleRoleChange = async () => {
         setLoading(true);
         try {

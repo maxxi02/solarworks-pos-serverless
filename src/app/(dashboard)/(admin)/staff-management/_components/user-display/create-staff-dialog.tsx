@@ -33,11 +33,14 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
     const [open, setOpen] = useState(false);
     const [email, setEmail] = useState("");
     const [name, setName] = useState("");
+    const [password, setPassword] = useState("");
     const [role, setRole] = useState<UserRole>("staff");
     const [loading, setLoading] = useState(false);
 
     const handleCreate = async () => {
         if (!email.trim()) return toast.error("Email is required");
+        if (!password.trim()) return toast.error("Password is required");
+        if (password.length < 8) return toast.error("Password must be at least 8 characters");
 
         // Basic email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -47,10 +50,6 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
 
         setLoading(true);
         try {
-            // Generate a secure random password
-            const password = Math.random().toString(36).slice(-12) +
-                Math.random().toString(36).toUpperCase().slice(-4);
-
             const response = await fetch('/api/admin/create-user-with-verification', {
                 method: 'POST',
                 headers: {
@@ -71,8 +70,8 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
             }
 
             toast.success(
-                `User "${email}" created successfully. Verification email sent with temporary password.`,
-                { duration: 5000 }
+                `User "${email}" created successfully. They can login immediately with the temporary password: ${password}`,
+                { duration: 10000 }
             );
 
             resetForm();
@@ -89,6 +88,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
     const resetForm = () => {
         setEmail("");
         setName("");
+        setPassword("");
         setRole("staff");
     };
 
@@ -104,7 +104,7 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
                 <DialogHeader>
                     <DialogTitle>Add New User</DialogTitle>
                     <DialogDescription>
-                        Create a new user account. They will receive a verification email with a temporary password.
+                        Create a new user account. They will be able to log in immediately with a temporary password.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -138,49 +138,29 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="user-role">Role</Label>
-                        <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                            <SelectTrigger id="user-role">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="user">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">User</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Basic access and permissions
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="staff">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">Staff</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Can manage limited resources
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="manager">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">Manager</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Can manage staff and operations
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="admin">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">Admin</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Full system access
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <Label htmlFor="user-password" title="required" className="text-foreground required">Password</Label>
+                        <Input
+                            id="user-password"
+                            type="password"
+                            placeholder="********"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                        />
                         <p className="text-xs text-muted-foreground">
-                            Assign the appropriate role for this user
+                            Minimum 8 characters
                         </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="user-role">Role</Label>
+                        <Input
+                            id="user-role"
+                            value="Staff"
+                            readOnly
+                            disabled
+                            className="bg-muted"
+                        />
                     </div>
                 </div>
 

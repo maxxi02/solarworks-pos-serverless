@@ -8,18 +8,20 @@ interface RoleBadgeProps {
 }
 
 export function RoleBadge({ role }: RoleBadgeProps) {
-    const variantMap: Record<UserRole | "user", "destructive" | "default" | "secondary" | "outline"> = {
+    const variantMap: Record<UserRole, "destructive" | "default" | "secondary" | "outline"> = {
         admin: "destructive",
         manager: "default",
         staff: "secondary",
-        user: "outline",           // ← added this (or "secondary", "default", whatever fits "default/unknown user")
+        customer: "default",
+        user: "outline",
     };
 
-    const icons: Record<UserRole | "user", React.ReactNode> = {
+    const icons: Record<UserRole, React.ReactNode> = {
         admin: <IconShield className="size-3" />,
         manager: <IconUserCheck className="size-3" />,
         staff: <IconUserX className="size-3" />,
-        user: null,                // already good
+        customer: <IconUserCheck className="size-3" />,
+        user: null,
     };
 
     const display = role ?? "user";

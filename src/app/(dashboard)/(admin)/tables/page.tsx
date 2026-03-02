@@ -52,6 +52,15 @@ export default function TablesPage() {
         }
     };
 
+    const handleGenerateTakeAwayQR = async () => {
+        try {
+            const result = await generateQR("take-away");
+            setQrPreview({ url: result.qrCodeUrl, label: result.label });
+        } catch {
+            toast.error("Failed to generate QR");
+        }
+    };
+
     const handleMarkAvailable = async (tableId: string) => {
         try {
             await updateTable(tableId, { status: "available" });
@@ -65,10 +74,83 @@ export default function TablesPage() {
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-8">
-            {/* ... other parts ... */}
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">Tables & QR Management</h1>
+                    <p className="text-muted-foreground text-sm">
+                        Manage your restaurant layout and generate ordering QR codes.
+                    </p>
+                </div>
+                <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                    <Plus className="w-5 h-5" />
+                    Add New Table
+                </button>
+            </div>
+
+            {/* Quick QR Section */}
+            <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <QrCode className="w-5 h-5 text-primary" />
+                    General QR Codes
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <button
+                        onClick={handleGenerateWalkInQR}
+                        className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                                <User className="w-5 h-5" />
+                            </div>
+                            <div className="text-left">
+                                <p className="font-semibold text-sm">Walk-In QR</p>
+                                <p className="text-xs text-muted-foreground">For on-site orders</p>
+                            </div>
+                        </div>
+                        <QrCode className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </button>
+
+                    <button
+                        onClick={handleGenerateDriveThruQR}
+                        className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
+                                <Truck className="w-5 h-5" />
+                            </div>
+                            <div className="text-left">
+                                <p className="font-semibold text-sm">Drive-Thru QR</p>
+                                <p className="text-xs text-muted-foreground">For vehicle orders</p>
+                            </div>
+                        </div>
+                        <QrCode className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </button>
+
+                    <button
+                        onClick={handleGenerateTakeAwayQR}
+                        className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+                                <Plus className="w-5 h-5" />
+                            </div>
+                            <div className="text-left">
+                                <p className="font-semibold text-sm">Take-Away QR</p>
+                                <p className="text-xs text-muted-foreground">For self-pickup</p>
+                            </div>
+                        </div>
+                        <QrCode className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </button>
+                </div>
+            </div>
+
             {/* Tables Grid */}
-            <div>
-                <h2 className="text-lg font-semibold text-foreground mb-4">
+            <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-foreground">
                     Dine-In Tables ({dineInTables.length})
                 </h2>
 

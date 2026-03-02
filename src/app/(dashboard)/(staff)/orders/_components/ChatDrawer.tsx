@@ -37,7 +37,7 @@ export function ChatDrawer({ sessionId, tableId, staffName, staffId, onClose }: 
     useEffect(() => {
         // Dynamic import to avoid SSR issues
         import("socket.io-client").then(({ io }) => {
-            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8080";
+            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://rendezvous-server-gpmv.onrender.com";
             const socket = io(socketUrl, {
                 auth: { userId: staffId, userName: staffName },
             });

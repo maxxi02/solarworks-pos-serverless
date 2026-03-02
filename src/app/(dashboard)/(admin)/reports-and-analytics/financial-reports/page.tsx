@@ -54,7 +54,7 @@ export default function ClosedRegistersPage() {
 
   useEffect(() => {
     // Connect to socket server for printing
-    const socketInstance = socketIO(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8080', {
+    const socketInstance = socketIO(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://rendezvous-server-gpmv.onrender.com', {
       auth: { userId: 'financial-reports' },
     })
     setSocket(socketInstance)
@@ -99,7 +99,7 @@ export default function ClosedRegistersPage() {
     }
 
     setPrintingId(register._id)
-    
+
     try {
       const businessName = "Rendezvous Cafe";
       const businessAddress = "Your Store Address";
@@ -190,7 +190,7 @@ export default function ClosedRegistersPage() {
 
       // Emit print request
       socket.emit('print:request', printData)
-      
+
       toast.success('Print job sent to printer')
     } catch (error) {
       console.error('Print error:', error)
@@ -309,11 +309,10 @@ export default function ClosedRegistersPage() {
             <button
               key={period.id}
               onClick={() => setSelectedPeriod(period.id)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                selectedPeriod === period.id
+              className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${selectedPeriod === period.id
                   ? 'bg-primary text-primary-foreground'
                   : 'border border-border text-muted-foreground hover:bg-muted'
-              }`}
+                }`}
             >
               {period.label}
             </button>
@@ -345,9 +344,8 @@ export default function ClosedRegistersPage() {
             </div>
             <div className="bg-card border border-border rounded-lg p-4">
               <p className="text-xs text-muted-foreground">Net Difference</p>
-              <p className={`text-xl font-bold ${
-                summary.totalDifference >= 0 ? 'text-green-500' : 'text-red-500'
-              }`}>
+              <p className={`text-xl font-bold ${summary.totalDifference >= 0 ? 'text-green-500' : 'text-red-500'
+                }`}>
                 {summary.totalDifference >= 0 ? '+' : ''}{formatCurrency(summary.totalDifference)}
               </p>
             </div>
@@ -434,9 +432,8 @@ export default function ClosedRegistersPage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Actual Cash</p>
-                      <p className={`font-medium ${
-                        (register.difference || 0) >= 0 ? 'text-green-500' : 'text-red-500'
-                      }`}>
+                      <p className={`font-medium ${(register.difference || 0) >= 0 ? 'text-green-500' : 'text-red-500'
+                        }`}>
                         {formatCurrency(register.actualCash)}
                       </p>
                     </div>
@@ -450,11 +447,10 @@ export default function ClosedRegistersPage() {
                         ) : (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         )}
-                        <span className={`font-medium ${
-                          (register.difference || 0) > 0 ? 'text-green-500' :
-                          (register.difference || 0) < 0 ? 'text-red-500' :
-                          'text-green-500'
-                        }`}>
+                        <span className={`font-medium ${(register.difference || 0) > 0 ? 'text-green-500' :
+                            (register.difference || 0) < 0 ? 'text-red-500' :
+                              'text-green-500'
+                          }`}>
                           {(register.difference || 0) > 0 ? '+' : ''}
                           {formatCurrency(register.difference || 0)}
                         </span>
