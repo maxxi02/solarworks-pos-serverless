@@ -272,6 +272,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
             setIsConnected(true);
             socket.emit("user:online");
             socket.emit("chat:conversations:load");
+            socket.emit("pos:join"); // Re-join cashiers room after reconnect
         });
 
         socket.on("connect_error", (e) => console.error("❌ Connection error:", e.message));
@@ -366,7 +367,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
     const emitChatMessagesRead = (conversationId: string) =>
         socketRef.current?.emit("chat:messages:read", { conversationId });
     const emitPosJoin = () => socketRef.current?.emit('pos:join');
-    const emitCustomerOrder = (order: CustomerOrder) => socketRef.current?.emit('order:new:trigger', order);
+    const emitCustomerOrder = (order: CustomerOrder) => socketRef.current?.emit('order:submit', order);
 
     // ─── Listeners ────────────────────────────────────────────────────────────
     const onStatusChanged = (cb: (d: UserStatusUpdate) => void) => socketRef.current?.on("user:status:changed", cb);

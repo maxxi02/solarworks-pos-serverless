@@ -8,6 +8,7 @@ import { admin as adminPlugin, twoFactor } from "better-auth/plugins";
 import { sendVerificationEmail } from "./email";
 import { nextCookies } from "better-auth/next-js";
 import { adminClient } from "better-auth/client/plugins";
+import { UserRole } from "@/types/role.type";
 
 export const auth = betterAuth({
   database: mongodbAdapter(MONGODB),
@@ -16,7 +17,7 @@ export const auth = betterAuth({
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "http://localhost:3000",
     "https://rendezvous-cafe.vercel.app",
-    "http://localhost:3001"
+    "http://localhost:3001",
   ],
   emailAndPassword: {
     enabled: true,
@@ -102,7 +103,8 @@ export const auth = betterAuth({
   socialProviders: {
     google: {
       prompt: "select_account",
-      redirectURI: "https://rendezvous-cafe.vercel.app/api/auth/callback/google",
+      redirectURI:
+        "https://rendezvous-cafe.vercel.app/api/auth/callback/google",
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     },
@@ -119,7 +121,6 @@ export const auth = betterAuth({
 });
 
 // Type definitions
-export type UserRole = "staff" | "manager" | "admin";
 
 export type ExtendedUser = typeof auth.$Infer.Session.user & {
   role?: UserRole;

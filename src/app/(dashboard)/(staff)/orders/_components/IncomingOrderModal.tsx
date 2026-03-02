@@ -18,6 +18,7 @@ interface IncomingOrderModalProps {
     order: CustomerOrder | null;
     onClose: () => void;
     onAccept: (order: CustomerOrder) => void;
+    onDecline?: (order: CustomerOrder) => void;
     formatCurrency: (val: number) => string;
 }
 
@@ -25,6 +26,7 @@ export const IncomingOrderModal = ({
     order,
     onClose,
     onAccept,
+    onDecline,
     formatCurrency,
 }: IncomingOrderModalProps) => {
     if (!order) return null;
@@ -94,7 +96,7 @@ export const IncomingOrderModal = ({
                 </div>
 
                 <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={onClose}>
+                    <Button variant="outline" onClick={() => onDecline ? onDecline(order) : onClose()}>
                         Decline
                     </Button>
                     <Button onClick={() => onAccept(order)}>Accept Order</Button>

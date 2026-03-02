@@ -22,8 +22,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { UserRole } from "@/types/role.type";
 
-type UserRole = "user" | "staff" | "manager" | "admin";
 
 interface CreateStaffDialogProps {
     onSuccess: () => Promise<void>;

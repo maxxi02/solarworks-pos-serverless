@@ -1,12 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Search,Mail, CheckCircle, UserX, Star } from 'lucide-react';
+import { Users, Search, Mail, CheckCircle, UserX, Star } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+import { useUsers } from '../../staff-management/_components/use-users';
+import { TableUser } from '../../staff-management/_components/staffManagement.types';
+import { useEffect, useMemo } from 'react';
 
 interface Customer {
   id: string;
@@ -18,22 +22,36 @@ interface Customer {
   loginCount: number;
 }
 
-const customers: Customer[] = [
-  { id: 'CUST001', email: 'alex.johnson@email.com', name: 'Alex Johnson', createdAt: '2023-12-15', lastLogin: '2024-01-29 09:15', status: 'active', loginCount: 42 },
-  { id: 'CUST002', email: 'sarah.chen@email.com', name: 'Sarah Chen', createdAt: '2023-11-20', lastLogin: '2024-01-29 08:45', status: 'active', loginCount: 28 },
-  { id: 'CUST003', email: 'miguel.santos@email.com', name: 'Miguel Santos', createdAt: '2024-01-25', lastLogin: '2024-01-29 10:30', status: 'new', loginCount: 3 },
-  { id: 'CUST004', email: 'lisa.r@email.com', name: 'Lisa Rodriguez', createdAt: '2023-10-10', lastLogin: '2024-01-28 14:20', status: 'active', loginCount: 56 },
-  { id: 'CUST005', email: 'james.wilson@email.com', name: 'James Wilson', createdAt: '2024-01-10', lastLogin: '2024-01-27 11:45', status: 'inactive', loginCount: 8 },
-];
+// Static data removed, using useUsers hook below
 
 export default function CustomerListPage() {
+  const { users, loading, fetchUsers } = useUsers();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  const filteredCustomers = customers
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const customerList = useMemo(() => {
+    return users
+      .filter((u) => u.role === "customer" || !u.role) // Assuming default role might be customer if empty
+      .map((u): Customer => ({
+        id: u.id,
+        name: u.name || "Unknown",
+        email: u.email,
+        createdAt: u.createdAt.toString(),
+        lastLogin: u.lastActive ? u.lastActive.toString() : u.createdAt.toString(),
+        status: u.status === 'banned' ? 'inactive' : (new Date().getTime() - new Date(u.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 ? 'new' : 'active'),
+        loginCount: 0 // Placeholder as logic not in useUsers
+      }));
+  }, [users]);
+
+  const filteredCustomers = customerList
     .filter(customer => {
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
@@ -52,7 +70,7 @@ export default function CustomerListPage() {
       new: { icon: <Star className="h-3 w-3" />, color: 'bg-blue-100 text-blue-800' }
     };
     const { icon, color } = config[status as keyof typeof config] || config.active;
-    
+
     return (
       <Badge className={`${color} gap-1 capitalize`}>
         {icon} {status}
@@ -64,10 +82,10 @@ export default function CustomerListPage() {
   const formatTime = (dateString: string) => new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const stats = {
-    total: customers.length,
-    active: customers.filter(c => c.status === 'active').length,
-    new: customers.filter(c => c.status === 'new').length,
-    today: customers.filter(c => new Date(c.lastLogin).toDateString() === new Date().toDateString()).length
+    total: customerList.length,
+    active: customerList.filter(c => c.status === 'active').length,
+    new: customerList.filter(c => c.status === 'new').length,
+    today: customerList.filter(c => new Date(c.lastLogin).toDateString() === new Date().toDateString()).length
   };
 
   return (
@@ -92,7 +110,7 @@ export default function CustomerListPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -104,7 +122,7 @@ export default function CustomerListPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -116,7 +134,7 @@ export default function CustomerListPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -145,7 +163,7 @@ export default function CustomerListPage() {
                   />
                 </div>
               </div>
-              
+
               <div className="flex gap-2">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-35">
@@ -180,42 +198,48 @@ export default function CustomerListPage() {
             <CardTitle>Customers ({filteredCustomers.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredCustomers.map((customer) => (
-                <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="font-medium text-primary">
-                        {customer.name.split(' ').map(n => n[0]).join('')}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="font-medium">{customer.name}</div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Mail className="h-3 w-3" />
-                        {customer.email}
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <Users className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredCustomers.map((customer) => (
+                  <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="font-medium text-primary">
+                          {customer.name.split(' ').map(n => n[0]).join('')}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium">{customer.name}</div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Mail className="h-3 w-3" />
+                          {customer.email}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="text-sm">{formatDate(customer.createdAt)}</div>
-                      <div className="text-xs text-muted-foreground">{formatTime(customer.lastLogin)}</div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-sm">{formatDate(customer.createdAt)}</div>
+                        <div className="text-xs text-muted-foreground">{formatTime(customer.lastLogin)}</div>
+                      </div>
+
+                      {getStatusBadge(customer.status)}
+
+                      <div className="text-right">
+                        <div className="font-medium">{customer.loginCount}</div>
+                        <div className="text-xs text-muted-foreground">logins</div>
+                      </div>
+
+                      <Button variant="ghost" size="sm">View</Button>
                     </div>
-                    
-                    {getStatusBadge(customer.status)}
-                    
-                    <div className="text-right">
-                      <div className="font-medium">{customer.loginCount}</div>
-                      <div className="text-xs text-muted-foreground">logins</div>
-                    </div>
-                    
-                    <Button variant="ghost" size="sm">View</Button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {filteredCustomers.length === 0 && (
               <div className="text-center py-12">
