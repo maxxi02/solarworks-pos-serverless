@@ -28,6 +28,8 @@ export function getPayRange(role: UserRole): string {
     admin: "$8,000 – $15,000",
     manager: "$5,500 – $10,000",
     staff: "$3,500 – $7,000",
+    customer: "—",
+    user: "—",
   };
-  return map[role] ?? "—";
+  return map[role];
 }

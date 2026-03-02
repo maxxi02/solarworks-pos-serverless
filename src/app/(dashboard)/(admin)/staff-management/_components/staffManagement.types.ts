@@ -1,4 +1,5 @@
 import { UserRole } from "@/types/role.type";
+export type { UserRole };
 
 export interface BetterAuthUser {
   id: string;
