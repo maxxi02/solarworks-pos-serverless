@@ -8,6 +8,7 @@ import { useMessages } from "@/hooks/useMessages";
 import { MessageBubble, DateSeparator, isSameGroup, needsDateSeparator } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import type { ConversationWithDetails, Message, OptimisticMessage } from "@/types/messaging.types";
+import { cn } from "@/lib/utils";
 
 type DisplayMessage = Message | OptimisticMessage;
 
@@ -38,11 +39,15 @@ export function ChatWindow({
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevScrollHeight = useRef(0);
 
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (!isLoading && messages.length > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      const timer = setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [messages.length, isLoading]);
+  }, [messages.length]);
 
   const handleLoadMore = useCallback(() => {
     if (!scrollRef.current) return;
@@ -89,11 +94,11 @@ export function ChatWindow({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card flex-shrink-0 z-10 animate-in fade-in duration-200">
         {onBack && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1" onClick={onBack}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1 md:hidden" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
@@ -120,12 +125,16 @@ export function ChatWindow({
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{headerTitle}</p>
-          <p className="text-xs text-muted-foreground">{headerSubtitle()}</p>
+          <p className="text-[11px] text-muted-foreground">{headerSubtitle()}</p>
         </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1" onScroll={handleScroll}>
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 scroll-smooth scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 transition-colors"
+        onScroll={handleScroll}
+      >
         {hasMore && (
           <div className="flex justify-center py-2">
             {isLoading
@@ -136,58 +145,63 @@ export function ChatWindow({
         )}
 
         {isLoading && messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="flex items-center justify-center h-full animate-in fade-in duration-300">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
+              <p className="text-xs text-muted-foreground">Loading messages...</p>
+            </div>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center h-full text-center animate-in zoom-in-95 duration-300">
             {isGroup ? (
-              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                <Users className="h-7 w-7 text-primary" />
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Users className="h-8 w-8 text-primary" />
               </div>
             ) : (
-              <Avatar className="h-14 w-14 mb-3">
+              <Avatar className="h-16 w-16 mb-4">
                 <AvatarImage src={conversation.otherParticipant?.image} />
-                <AvatarFallback className="text-xl">
+                <AvatarFallback className="text-2xl">
                   {headerTitle?.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             )}
-            <p className="font-medium text-sm">{headerTitle}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {isGroup ? "Group created. Say hello!" : "Send a message to start the conversation"}
+            <p className="font-semibold text-base">{headerTitle}</p>
+            <p className="text-sm text-muted-foreground mt-2 max-w-[200px]">
+              {isGroup ? "Group created. Start the conversation!" : `This is the beginning of your chat with ${headerTitle}.`}
             </p>
           </div>
         ) : (
-          <MessageList
-            messages={messages}
-            currentUserId={currentUserId}
-            isGroup={isGroup}
-            conversation={conversation}
-          />
+          <div className="animate-in fade-in duration-300">
+            <MessageList
+              messages={messages}
+              currentUserId={currentUserId}
+              isGroup={isGroup}
+              conversation={conversation}
+            />
+          </div>
         )}
 
         {typingUsers.length > 0 && (
-          <div className="flex items-end gap-2 mt-1">
+          <div className="flex items-end gap-2 mt-2 animate-in slide-in-from-bottom-2 duration-200">
             <div className="w-7 flex-shrink-0" />
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-1">
               {isGroup && (
-                <span className="text-[11px] text-muted-foreground px-1">
-                  {typingUsers.map((u) => u.userName).join(", ")} typing...
+                <span className="text-[10px] text-muted-foreground px-1">
+                  {typingUsers.map((u) => u.userName).join(", ")} is typing...
                 </span>
               )}
-              <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2">
+              <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 w-fit">
                 <TypingDots />
               </div>
             </div>
           </div>
         )}
 
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-1" />
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 p-3 bg-background/80 backdrop-blur-sm">
         <MessageInput onSend={handleSend} onTypingStart={startTyping} onTypingStop={stopTyping} />
       </div>
     </div>
@@ -208,7 +222,7 @@ function MessageList({
   conversation: ConversationWithDetails;
 }) {
   return (
-    <>
+    <div className="flex flex-col gap-1">
       {messages.map((msg, i) => {
         const prev = messages[i - 1];
         const next = messages[i + 1];
@@ -230,7 +244,7 @@ function MessageList({
           <div key={msg._id as string}>
             {showDate && <DateSeparator date={new Date(msg.createdAt)} />}
             {showSenderName && (
-              <p className="text-[11px] text-muted-foreground ml-9 mb-0.5 mt-1">
+              <p className="text-[10px] font-medium text-muted-foreground ml-9 mb-0.5 mt-2 transition-all">
                 {msg.senderName}
               </p>
             )}
@@ -245,15 +259,15 @@ function MessageList({
           </div>
         );
       })}
-    </>
+    </div>
   );
 }
 
 function TypingDots() {
   return (
-    <div className="flex items-center gap-1 h-4">
+    <div className="flex items-center gap-1 h-3">
       {[0, 1, 2].map((i) => (
-        <span key={i} className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60 animate-bounce"
+        <span key={i} className="h-1 w-1 rounded-full bg-muted-foreground/50 animate-bounce"
           style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />
       ))}
     </div>
