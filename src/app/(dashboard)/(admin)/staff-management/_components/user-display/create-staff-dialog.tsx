@@ -154,48 +154,13 @@ export function CreateStaffDialog({ onSuccess }: CreateStaffDialogProps) {
 
                     <div className="space-y-2">
                         <Label htmlFor="user-role">Role</Label>
-                        <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                            <SelectTrigger id="user-role">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="user">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">User</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Basic access and permissions
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="staff">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">Staff</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Can manage limited resources
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="manager">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">Manager</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Can manage staff and operations
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                                <SelectItem value="admin">
-                                    <div className="flex flex-col items-start">
-                                        <span className="font-medium">Admin</span>
-                                        <span className="text-xs text-muted-foreground">
-                                            Full system access
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Assign the appropriate role for this user
-                        </p>
+                        <Input
+                            id="user-role"
+                            value="Staff"
+                            readOnly
+                            disabled
+                            className="bg-muted"
+                        />
                     </div>
                 </div>
 
