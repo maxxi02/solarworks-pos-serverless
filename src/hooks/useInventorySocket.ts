@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { toast } from 'sonner';
-import { Inventory } from '@/models/Inventory';
-import { UnitCategory } from '@/lib/unit-conversion';
+import { useEffect, useRef, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
+import { toast } from "sonner";
+import { Inventory } from "@/models/Inventory";
+import { UnitCategory } from "@/lib/unit-conversion";
 
 // ─── Types (mirror rendezvous-server/events/inventoryEvents.ts) ───────────────
 
 export interface InventoryAdjustment {
   itemId: string;
   itemName: string;
-  adjustmentType: 'restock' | 'usage' | 'waste' | 'correction';
+  adjustmentType: "restock" | "usage" | "waste" | "correction";
   quantity: number;
   unit: string;
   displayUnit: string;
   newStock: number;
-  status: 'critical' | 'low' | 'warning' | 'ok';
+  status: "critical" | "low" | "warning" | "ok";
   performedBy: string;
   notes?: string;
   timestamp: Date;
@@ -32,7 +32,7 @@ export interface InventoryAlert {
   unit: string;
   displayUnit: string;
   unitCategory: UnitCategory;
-  status: 'critical' | 'low' | 'warning';
+  status: "critical" | "low" | "warning";
   location: string;
 }
 
@@ -64,7 +64,13 @@ export interface AuditEntry {
   _id: string;
   itemId: string;
   itemName: string;
-  type: 'restock' | 'usage' | 'waste' | 'correction' | 'deduction' | 'adjustment';
+  type:
+    | "restock"
+    | "usage"
+    | "waste"
+    | "correction"
+    | "deduction"
+    | "adjustment";
   quantity: number;
   unit: string;
   originalQuantity?: number;
@@ -74,7 +80,7 @@ export interface AuditEntry {
   notes?: string;
   conversionNote?: string;
   reference?: {
-    type: 'order' | 'manual' | 'return' | 'adjustment' | 'rollback';
+    type: "order" | "manual" | "return" | "adjustment" | "rollback";
     id?: string;
     number?: string;
   };
@@ -104,7 +110,9 @@ interface UseInventorySocketOptions {
 let _socket: Socket | null = null;
 
 function getSocket(userId: string, userName?: string): Socket {
-  const url = process.env.NEXT_PUBLIC_SOCKET_URL ?? 'http://localhost:8080';
+  const url =
+    process.env.NEXT_PUBLIC_SOCKET_URL ??
+    "https://rendezvous-server-gpmv.onrender.com";
 
   // FIX 1 — wrong guard condition:
   //   BEFORE: !_socket || !_socket.connected
@@ -168,24 +176,40 @@ export function useInventorySocket({
   // searchQuery, pagination.page, selectedType, etc. — not the stale values
   // frozen at mount time when the useEffect registered the listener.
   const onInventoryAdjustedRef = useRef(onInventoryAdjusted);
-  const onInventoryAlertRef    = useRef(onInventoryAlert);
-  const onItemCreatedRef       = useRef(onItemCreated);
-  const onItemDeletedRef       = useRef(onItemDeleted);
-  const onBulkImportedRef      = useRef(onBulkImported);
-  const onAuditEntryRef        = useRef(onAuditEntry);
-  const onConnectRef           = useRef(onConnect);
-  const onDisconnectRef        = useRef(onDisconnect);
+  const onInventoryAlertRef = useRef(onInventoryAlert);
+  const onItemCreatedRef = useRef(onItemCreated);
+  const onItemDeletedRef = useRef(onItemDeleted);
+  const onBulkImportedRef = useRef(onBulkImported);
+  const onAuditEntryRef = useRef(onAuditEntry);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
 
   // Sync refs with the latest props on every render.
   // Intentionally no dep array — these run after every render cheaply.
-  useEffect(() => { onInventoryAdjustedRef.current = onInventoryAdjusted; });
-  useEffect(() => { onInventoryAlertRef.current    = onInventoryAlert; });
-  useEffect(() => { onItemCreatedRef.current       = onItemCreated; });
-  useEffect(() => { onItemDeletedRef.current       = onItemDeleted; });
-  useEffect(() => { onBulkImportedRef.current      = onBulkImported; });
-  useEffect(() => { onAuditEntryRef.current        = onAuditEntry; });
-  useEffect(() => { onConnectRef.current           = onConnect; });
-  useEffect(() => { onDisconnectRef.current        = onDisconnect; });
+  useEffect(() => {
+    onInventoryAdjustedRef.current = onInventoryAdjusted;
+  });
+  useEffect(() => {
+    onInventoryAlertRef.current = onInventoryAlert;
+  });
+  useEffect(() => {
+    onItemCreatedRef.current = onItemCreated;
+  });
+  useEffect(() => {
+    onItemDeletedRef.current = onItemDeleted;
+  });
+  useEffect(() => {
+    onBulkImportedRef.current = onBulkImported;
+  });
+  useEffect(() => {
+    onAuditEntryRef.current = onAuditEntry;
+  });
+  useEffect(() => {
+    onConnectRef.current = onConnect;
+  });
+  useEffect(() => {
+    onDisconnectRef.current = onDisconnect;
+  });
 
   useEffect(() => {
     const socket = getSocket(userId, userName);
@@ -195,68 +219,73 @@ export function useInventorySocket({
     // They delegate to refs so they always call the latest callback.
 
     const handleConnect = () => {
-      console.log('📦 [inventory socket] connected:', socket.id);
-      socket.emit('user:online');
-      socket.emit('inventory:subscribe');
-      socket.emit('inventory:alerts:subscribe');
-      if (subscribeToAudit) socket.emit('inventory:audit:subscribe');
+      console.log("📦 [inventory socket] connected:", socket.id);
+      socket.emit("user:online");
+      socket.emit("inventory:subscribe");
+      socket.emit("inventory:alerts:subscribe");
+      if (subscribeToAudit) socket.emit("inventory:audit:subscribe");
       onConnectRef.current?.();
     };
 
     const handleConnectError = (err: Error) => {
-      console.error('❌ [inventory socket] error:', err.message);
+      console.error("❌ [inventory socket] error:", err.message);
       onDisconnectRef.current?.();
     };
 
     const handleDisconnect = (reason: string) => {
-      console.warn('📦 [inventory socket] disconnected:', reason);
+      console.warn("📦 [inventory socket] disconnected:", reason);
       onDisconnectRef.current?.();
     };
 
     // Each handler calls through its ref — always the latest version
-    const handleAdjusted     = (data: InventoryAdjustment) => onInventoryAdjustedRef.current?.(data);
-    const handleAlert        = (data: InventoryAlert) => {
-      const emoji = data.status === 'critical' ? '🚨' : '⚠️';
+    const handleAdjusted = (data: InventoryAdjustment) =>
+      onInventoryAdjustedRef.current?.(data);
+    const handleAlert = (data: InventoryAlert) => {
+      const emoji = data.status === "critical" ? "🚨" : "⚠️";
       toast.warning(`${emoji} ${data.itemName} is ${data.status}`, {
         description: `Stock: ${data.currentStock} ${data.unit} (${data.displayUnit})`,
         duration: 6000,
       });
       onInventoryAlertRef.current?.(data);
     };
-    const handleItemCreated  = (data: InventoryItemCreated) => onItemCreatedRef.current?.(data);
-    const handleItemDeleted  = (data: InventoryItemDeleted) => onItemDeletedRef.current?.(data);
-    const handleBulkImported = (data: InventoryBulkImport)  => onBulkImportedRef.current?.(data);
-    const handleAuditEntry   = (data: AuditEntry)           => onAuditEntryRef.current?.(data);
+    const handleItemCreated = (data: InventoryItemCreated) =>
+      onItemCreatedRef.current?.(data);
+    const handleItemDeleted = (data: InventoryItemDeleted) =>
+      onItemDeletedRef.current?.(data);
+    const handleBulkImported = (data: InventoryBulkImport) =>
+      onBulkImportedRef.current?.(data);
+    const handleAuditEntry = (data: AuditEntry) =>
+      onAuditEntryRef.current?.(data);
 
-    socket.on('connect',                 handleConnect);
-    socket.on('connect_error',           handleConnectError);
-    socket.on('disconnect',              handleDisconnect);
-    socket.on('inventory:adjusted',      handleAdjusted);
-    socket.on('inventory:alert',         handleAlert);
-    socket.on('inventory:item:created',  handleItemCreated);
-    socket.on('inventory:item:deleted',  handleItemDeleted);
-    socket.on('inventory:bulk:imported', handleBulkImported);
-    socket.on('inventory:audit:new',     handleAuditEntry);
+    socket.on("connect", handleConnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("inventory:adjusted", handleAdjusted);
+    socket.on("inventory:alert", handleAlert);
+    socket.on("inventory:item:created", handleItemCreated);
+    socket.on("inventory:item:deleted", handleItemDeleted);
+    socket.on("inventory:bulk:imported", handleBulkImported);
+    socket.on("inventory:audit:new", handleAuditEntry);
 
     if (socket.connected) handleConnect();
 
     return () => {
-      socket.off('connect',                 handleConnect);
-      socket.off('connect_error',           handleConnectError);
-      socket.off('disconnect',              handleDisconnect);
-      socket.off('inventory:adjusted',      handleAdjusted);
-      socket.off('inventory:alert',         handleAlert);
-      socket.off('inventory:item:created',  handleItemCreated);
-      socket.off('inventory:item:deleted',  handleItemDeleted);
-      socket.off('inventory:bulk:imported', handleBulkImported);
-      socket.off('inventory:audit:new',     handleAuditEntry);
-      socket.emit('inventory:unsubscribe');
-      socket.emit('inventory:alerts:unsubscribe');
-      if (subscribeToAudit) socket.emit('inventory:audit:unsubscribe');
+      socket.off("connect", handleConnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("inventory:adjusted", handleAdjusted);
+      socket.off("inventory:alert", handleAlert);
+      socket.off("inventory:item:created", handleItemCreated);
+      socket.off("inventory:item:deleted", handleItemDeleted);
+      socket.off("inventory:bulk:imported", handleBulkImported);
+      socket.off("inventory:audit:new", handleAuditEntry);
+      socket.emit("inventory:unsubscribe");
+      socket.emit("inventory:alerts:unsubscribe");
+      if (subscribeToAudit) socket.emit("inventory:audit:unsubscribe");
     };
-  // Only re-run when connection identity changes. Callback freshness is handled
-  // by the ref pattern above — callbacks are intentionally NOT in deps here.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only re-run when connection identity changes. Callback freshness is handled
+    // by the ref pattern above — callbacks are intentionally NOT in deps here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, subscribeToAudit]);
 
   // ─── Emit helpers ──────────────────────────────────────────────────────────
@@ -264,14 +293,14 @@ export function useInventorySocket({
   const emitAdjusted = useCallback(
     (
       item: Inventory,
-      adjustmentType: InventoryAdjustment['adjustmentType'],
+      adjustmentType: InventoryAdjustment["adjustmentType"],
       quantity: number,
       newStock: number,
-      status: InventoryAdjustment['status'],
+      status: InventoryAdjustment["status"],
       performedBy: string,
-      notes?: string
+      notes?: string,
     ) => {
-      socketRef.current?.emit('inventory:adjusted:trigger', {
+      socketRef.current?.emit("inventory:adjusted:trigger", {
         itemId: item._id!.toString(),
         itemName: item.name,
         adjustmentType,
@@ -285,54 +314,48 @@ export function useInventorySocket({
         timestamp: new Date(),
       } satisfies InventoryAdjustment);
     },
-    []
+    [],
   );
 
-  const emitItemCreated = useCallback(
-    (item: Inventory, createdBy: string) => {
-      socketRef.current?.emit('inventory:item:created:trigger', {
-        itemId: item._id!.toString(),
-        name: item.name,
-        category: item.category,
-        currentStock: item.currentStock,
-        unit: item.unit,
-        displayUnit: item.displayUnit,
-        unitCategory: item.unitCategory,
-        createdBy,
-      } satisfies InventoryItemCreated);
-    },
-    []
-  );
+  const emitItemCreated = useCallback((item: Inventory, createdBy: string) => {
+    socketRef.current?.emit("inventory:item:created:trigger", {
+      itemId: item._id!.toString(),
+      name: item.name,
+      category: item.category,
+      currentStock: item.currentStock,
+      unit: item.unit,
+      displayUnit: item.displayUnit,
+      unitCategory: item.unitCategory,
+      createdBy,
+    } satisfies InventoryItemCreated);
+  }, []);
 
   const emitItemDeleted = useCallback(
     (itemId: string, itemName: string, deletedBy: string) => {
-      socketRef.current?.emit('inventory:item:deleted:trigger', {
+      socketRef.current?.emit("inventory:item:deleted:trigger", {
         itemId,
         name: itemName,
         deletedBy,
       } satisfies InventoryItemDeleted);
     },
-    []
+    [],
   );
 
   const emitBulkImported = useCallback(
     (importedCount: number, failedCount: number, importedBy: string) => {
-      socketRef.current?.emit('inventory:bulk:imported:trigger', {
+      socketRef.current?.emit("inventory:bulk:imported:trigger", {
         importedCount,
         failedCount,
         importedBy,
         timestamp: new Date(),
       } satisfies InventoryBulkImport);
     },
-    []
+    [],
   );
 
-  const emitAuditEntry = useCallback(
-    (entry: AuditEntry) => {
-      socketRef.current?.emit('inventory:audit:trigger', entry);
-    },
-    []
-  );
+  const emitAuditEntry = useCallback((entry: AuditEntry) => {
+    socketRef.current?.emit("inventory:audit:trigger", entry);
+  }, []);
 
   return {
     emitAdjusted,

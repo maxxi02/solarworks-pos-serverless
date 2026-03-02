@@ -55,16 +55,16 @@ export default function CashManagementPage() {
   const socketRef = useRef<Socket | null>(null);
   const [isLive, setIsLive] = useState(false);
 
-  const [sessionReady, setSessionReady]= useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const [startingFundInput, setStartingFundInput] = useState('');
   const [startingFundError, setStartingFundError] = useState('');
-  const [isOpeningSession, setIsOpeningSession]   = useState(false);
+  const [isOpeningSession, setIsOpeningSession] = useState(false);
 
-  const [loading, setLoading]               = useState(true);
-  const [isRefreshing, setIsRefreshing]     = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
 
-  const [session, setSession]   = useState<SessionData | null>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
 
   const [drawer, setDrawer] = useState<DrawerBreakdown>({
@@ -76,18 +76,18 @@ export default function CashManagementPage() {
     cashSales: 0, gcashSales: 0, splitSales: 0,
     transactionCount: 0, itemCount: 0,
     hourlySales: [] as Array<{ hour: string; sales: number }>,
-    topItems:    [] as Array<{ name: string; qty: number; amount: number }>,
+    topItems: [] as Array<{ name: string; qty: number; amount: number }>,
   });
 
-  const [showCashOutModal, setShowCashOutModal]   = useState(false);
-  const [cashOutAmount, setCashOutAmount]         = useState<number | ''>('');
-  const [cashOutReason, setCashOutReason]         = useState('');
-  const [isCashingOut, setIsCashingOut]           = useState(false);
+  const [showCashOutModal, setShowCashOutModal] = useState(false);
+  const [cashOutAmount, setCashOutAmount] = useState<number | ''>('');
+  const [cashOutReason, setCashOutReason] = useState('');
+  const [isCashingOut, setIsCashingOut] = useState(false);
   const [showDrawerDetails, setShowDrawerDetails] = useState(false);
 
   // Socket connection for real-time updates
   useEffect(() => {
-    const socket = socketIO(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8080', {
+    const socket = socketIO(process.env.NEXT_PUBLIC_SOCKET_URL || 'https://rendezvous-server-gpmv.onrender.com', {
       auth: { userId: 'cash-management' },
     });
     socketRef.current = socket;
@@ -117,7 +117,7 @@ export default function CashManagementPage() {
 
   const checkSession = async () => {
     try {
-      const res    = await fetch('/api/session');
+      const res = await fetch('/api/session');
       const result = await res.json();
       if (result.success && result.data) {
         setSession(result.data);
@@ -173,7 +173,7 @@ export default function CashManagementPage() {
   const loadPayments = async () => {
     setLoading(true);
     try {
-      const res    = await fetch('/api/payments');
+      const res = await fetch('/api/payments');
       const result = await res.json();
       if (result.success && result.data) setPayments(result.data.payments);
     } catch {
@@ -185,28 +185,28 @@ export default function CashManagementPage() {
 
   const calculateAll = () => {
     if (!session) return;
-    const now          = new Date();
+    const now = new Date();
     const sessionStart = new Date(session.openedAt);
-    const today        = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     let startDate: Date;
-    if (selectedPeriod === 'week')       startDate = new Date(today.getTime() - 7  * 86400000);
+    if (selectedPeriod === 'week') startDate = new Date(today.getTime() - 7 * 86400000);
     else if (selectedPeriod === 'month') startDate = new Date(today.getTime() - 30 * 86400000);
-    else                                 startDate = today;
+    else startDate = today;
 
     const effectiveStart = startDate < sessionStart ? sessionStart : startDate;
 
-    const filtered  = payments.filter(p => { const d = new Date(p.createdAt); return d >= effectiveStart && d <= now; });
+    const filtered = payments.filter(p => { const d = new Date(p.createdAt); return d >= effectiveStart && d <= now; });
     const completed = filtered.filter(p => p.status === 'completed');
-    const refunded  = filtered.filter(p => p.status === 'refunded');
+    const refunded = filtered.filter(p => p.status === 'refunded');
 
-    const totalSales     = completed.reduce((s, p) => s + p.total, 0);
+    const totalSales = completed.reduce((s, p) => s + p.total, 0);
     const totalDiscounts = completed.reduce((s, p) => s + (p.discountTotal || p.discount || 0), 0);
-    const totalRefunds   = refunded.reduce((s, p) => s + p.total, 0);
-    const cashSales      = completed.filter(p => p.paymentMethod === 'cash').reduce((s, p) => s + p.total, 0);
-    const gcashSales     = completed.filter(p => p.paymentMethod === 'gcash').reduce((s, p) => s + p.total, 0);
-    const splitSales     = completed.filter(p => p.paymentMethod === 'split').reduce((s, p) => s + p.total, 0);
-    const cashRefunds    = refunded.filter(p => p.paymentMethod === 'cash').reduce((s, p) => s + p.total, 0);
+    const totalRefunds = refunded.reduce((s, p) => s + p.total, 0);
+    const cashSales = completed.filter(p => p.paymentMethod === 'cash').reduce((s, p) => s + p.total, 0);
+    const gcashSales = completed.filter(p => p.paymentMethod === 'gcash').reduce((s, p) => s + p.total, 0);
+    const splitSales = completed.filter(p => p.paymentMethod === 'split').reduce((s, p) => s + p.total, 0);
+    const cashRefunds = refunded.filter(p => p.paymentMethod === 'cash').reduce((s, p) => s + p.total, 0);
 
     const periodCashOuts = (session.cashOuts || [])
       .filter(c => { const d = new Date(c.date); return d >= effectiveStart && d <= now; })
@@ -256,8 +256,8 @@ export default function CashManagementPage() {
 
   const handleCashOut = async () => {
     if (!cashOutAmount || cashOutAmount <= 0) { toast.error('Please enter a valid amount'); return; }
-    if (!cashOutReason.trim())               { toast.error('Please enter a reason');        return; }
-    if (cashOutAmount > drawer.expectedCash) { toast.error('Insufficient cash in drawer');  return; }
+    if (!cashOutReason.trim()) { toast.error('Please enter a reason'); return; }
+    if (cashOutAmount > drawer.expectedCash) { toast.error('Insufficient cash in drawer'); return; }
 
     setIsCashingOut(true);
     try {
@@ -277,7 +277,7 @@ export default function CashManagementPage() {
     finally { setIsCashingOut(false); }
   };
 
-  const fmt  = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const fmtP = (n: number) => `₱${fmt(n)}`;
 
   // ─── Open Register Gate ───────────────────────────────────────────────────
@@ -305,11 +305,10 @@ export default function CashManagementPage() {
                     value={startingFundInput}
                     onChange={e => { setStartingFundInput(e.target.value); setStartingFundError(''); }}
                     onKeyDown={e => e.key === 'Enter' && handleConfirmStartingFund()}
-                    className={`w-full pl-10 pr-4 py-3 text-xl font-bold border-2 rounded-xl bg-background text-foreground focus:outline-none transition-colors ${
-                      startingFundError
+                    className={`w-full pl-10 pr-4 py-3 text-xl font-bold border-2 rounded-xl bg-background text-foreground focus:outline-none transition-colors ${startingFundError
                         ? 'border-destructive focus:border-destructive'
                         : 'border-input focus:border-primary'
-                    }`}
+                      }`}
                   />
                 </div>
                 {startingFundError && (
@@ -373,11 +372,10 @@ export default function CashManagementPage() {
             </div>
             <div className="flex items-center gap-3">
               {/* Status pill with live indicator */}
-              <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${
-                session?.status === 'open'
+              <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${session?.status === 'open'
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-muted text-muted-foreground border-border'
-              }`}>
+                }`}>
                 <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
                 {session?.status === 'open' ? 'OPEN' : 'CLOSED'}
               </div>
@@ -419,11 +417,10 @@ export default function CashManagementPage() {
         <div className="flex gap-2 mb-6">
           {[{ id: 'today', label: 'Today' }, { id: 'week', label: 'This Week' }, { id: 'month', label: 'This Month' }].map(p => (
             <button key={p.id} onClick={() => setSelectedPeriod(p.id as any)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                selectedPeriod === p.id
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${selectedPeriod === p.id
                   ? 'bg-primary text-primary-foreground'
                   : 'border border-border text-muted-foreground hover:bg-muted'
-              }`}
+                }`}
             >{p.label}</button>
           ))}
         </div>
@@ -431,10 +428,10 @@ export default function CashManagementPage() {
         {/* Sales Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Gross Sales',     value: summary.totalSales,     icon: TrendingUp, sub: null },
-            { label: 'Net Sales',       value: summary.netSales,       icon: DollarSign, sub: 'After discounts & refunds' },
-            { label: 'Total Discounts', value: summary.totalDiscounts, icon: Percent,    sub: null },
-            { label: 'Total Refunds',   value: summary.totalRefunds,   icon: Minus,      sub: null },
+            { label: 'Gross Sales', value: summary.totalSales, icon: TrendingUp, sub: null },
+            { label: 'Net Sales', value: summary.netSales, icon: DollarSign, sub: 'After discounts & refunds' },
+            { label: 'Total Discounts', value: summary.totalDiscounts, icon: Percent, sub: null },
+            { label: 'Total Refunds', value: summary.totalRefunds, icon: Minus, sub: null },
           ].map(({ label, value, icon: Icon, sub }) => (
             <div key={label} className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-start justify-between">
@@ -454,8 +451,8 @@ export default function CashManagementPage() {
         {/* Payment Methods */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {[
-            { label: 'Cash Sales',     value: summary.cashSales,  icon: Banknote },
-            { label: 'GCash Sales',    value: summary.gcashSales, icon: Smartphone },
+            { label: 'Cash Sales', value: summary.cashSales, icon: Banknote },
+            { label: 'GCash Sales', value: summary.gcashSales, icon: Smartphone },
             { label: 'Split Payments', value: summary.splitSales, icon: CreditCard },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="bg-card border border-border rounded-lg p-4">
@@ -541,7 +538,7 @@ export default function CashManagementPage() {
             </div>
           </div>
         )}
-        
+
         {/* Cash Out Modal */}
         {showCashOutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

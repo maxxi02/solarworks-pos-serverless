@@ -14,20 +14,22 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q")?.trim();
 
-    if (!query || query.length < 2) {
-      return NextResponse.json({ users: [] });
-    }
-
     const db = MONGODB;
     const users = getUsersCollection(db);
 
+    let filter: any = {
+      role: { $in: ["staff", "admin", "manager"] },
+    };
+
+    if (query && query.length >= 2) {
+      filter.$or = [
+        { name: { $regex: query, $options: "i" } },
+        { email: { $regex: query, $options: "i" } },
+      ];
+    }
+
     const results = await users
-      .find({
-        $or: [
-          { name: { $regex: query, $options: "i" } },
-          { email: { $regex: query, $options: "i" } },
-        ],
-      })
+      .find(filter)
       .project({
         _id: 1,
         id: 1,

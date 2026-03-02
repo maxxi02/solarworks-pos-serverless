@@ -5,14 +5,14 @@ import { io as socketIO, Socket } from 'socket.io-client';
 import { TrendingUp, Users, Clock, Star, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -96,9 +96,9 @@ const COLORS = {
 
 // ============ Utils ============
 const formatCurrency = (value: number): string => {
-  return `₱${value.toLocaleString(undefined, { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 2 
+  return `₱${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   })}`;
 };
 
@@ -118,9 +118,9 @@ const formatDate = (dateStr: string): string => {
       return dateStr;
     }
 
-    return date.toLocaleDateString('en-PH', { 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-PH', {
+      month: 'short',
+      day: 'numeric'
     });
   } catch {
     return dateStr;
@@ -175,10 +175,10 @@ export default function SalesAnalyticsPage() {
   const [salesData, setSalesData] = useState<SalesData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  
+
   // Toggle for showing/hiding line sa chart
   const [showLine, setShowLine] = useState(true);
-  
+
   // Socket connection state
   const [isLive, setIsLive] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -190,7 +190,7 @@ export default function SalesAnalyticsPage() {
     try {
       const url = `/api/payments/summary?period=${period}&_=${Date.now()}`;
       console.log('Fetching from:', url);
-      
+
       const response = await fetch(url);
       const result: ApiResponse = await response.json();
 
@@ -214,7 +214,7 @@ export default function SalesAnalyticsPage() {
 
   // Socket.IO connection for real-time updates
   useEffect(() => {
-    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8080';
+    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://rendezvous-server-gpmv.onrender.com';
 
     const socket = socketIO(SOCKET_URL, {
       auth: { userId: 'analytics-dashboard' },
@@ -304,12 +304,12 @@ export default function SalesAnalyticsPage() {
   };
 
   // Process daily data to ensure correct dates
-  const daily = Array.isArray(salesData?.daily) 
+  const daily = Array.isArray(salesData?.daily)
     ? [...salesData.daily].sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateA.getTime() - dateB.getTime();
-      })
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA.getTime() - dateB.getTime();
+    })
     : [];
 
   const topProducts = Array.isArray(salesData?.topProducts) ? salesData.topProducts : [];
@@ -336,7 +336,7 @@ export default function SalesAnalyticsPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {hasData 
+              {hasData
                 ? `${summary.totalTransactions} transactions found`
                 : 'No transactions for selected period'}
             </p>
@@ -360,9 +360,9 @@ export default function SalesAnalyticsPage() {
               <option value="all">All Time</option>
             </select>
 
-            <Button 
-              variant="outline" 
-              onClick={fetchSalesData} 
+            <Button
+              variant="outline"
+              onClick={fetchSalesData}
               className="gap-2"
               disabled={isLoading}
             >
@@ -380,8 +380,8 @@ export default function SalesAnalyticsPage() {
               <p className="text-muted-foreground">
                 Complete transactions in the POS system to see analytics here.
               </p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="mt-4"
                 onClick={() => {
                   // Test data for development
@@ -488,7 +488,7 @@ export default function SalesAnalyticsPage() {
                         )}
                       </Button>
                       <span className="text-xs text-muted-foreground">
-                        {daily.length > 0 && `${formatDate(daily[0]?.date)} - ${formatDate(daily[daily.length-1]?.date)}`}
+                        {daily.length > 0 && `${formatDate(daily[0]?.date)} - ${formatDate(daily[daily.length - 1]?.date)}`}
                       </span>
                     </div>
                   </div>
@@ -498,36 +498,36 @@ export default function SalesAnalyticsPage() {
                     <ResponsiveContainer>
                       <LineChart data={daily} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="date" 
+                        <XAxis
+                          dataKey="date"
                           tickFormatter={formatDate}
                           tick={{ fontSize: 12 }}
                         />
-                        <YAxis 
-                          tickFormatter={(v) => `₱${(v || 0)/1000}k`}
+                        <YAxis
+                          tickFormatter={(v) => `₱${(v || 0) / 1000}k`}
                           tick={{ fontSize: 12 }}
                         />
-                        <Tooltip 
+                        <Tooltip
                           formatter={(value: number) => formatCurrency(value || 0)}
                           labelFormatter={formatDate}
                         />
                         <Legend />
-                        
+
                         {/* Conditionally render line based on showLine state */}
                         {showLine ? (
-                          <Line 
-                            type="monotone" 
-                            dataKey="revenue" 
-                            stroke={COLORS.primary} 
+                          <Line
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke={COLORS.primary}
                             strokeWidth={2}
                             dot={{ r: 4 }}
                             activeDot={{ r: 6 }}
                             name="Revenue"
                           />
                         ) : (
-                          <Line 
-                            type="monotone" 
-                            dataKey="revenue" 
+                          <Line
+                            type="monotone"
+                            dataKey="revenue"
                             stroke="transparent"
                             dot={{ r: 4, fill: COLORS.primary }}
                             activeDot={{ r: 6, fill: COLORS.primary }}
@@ -559,14 +559,14 @@ export default function SalesAnalyticsPage() {
                               outerRadius={80}
                               paddingAngle={5}
                               dataKey="total"
-                              label={({ _id, percent }) => 
+                              label={({ _id, percent }) =>
                                 `${_id || ''} (${((percent || 0) * 100).toFixed(0)}%)`
                               }
                             >
                               {paymentMethods.map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={COLORS[entry._id as keyof typeof COLORS] || COLORS.primary} 
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={COLORS[entry._id as keyof typeof COLORS] || COLORS.primary}
                                 />
                               ))}
                             </Pie>
@@ -578,11 +578,11 @@ export default function SalesAnalyticsPage() {
                         {paymentMethods.map((method) => (
                           <div key={method._id} className="flex justify-between items-center">
                             <div className="flex items-center gap-2">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ 
-                                  backgroundColor: COLORS[method._id as keyof typeof COLORS] || COLORS.primary 
-                                }} 
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{
+                                  backgroundColor: COLORS[method._id as keyof typeof COLORS] || COLORS.primary
+                                }}
                               />
                               <span className="text-sm capitalize">{method._id || 'Unknown'}</span>
                             </div>
@@ -614,10 +614,10 @@ export default function SalesAnalyticsPage() {
                       <div key={product.name || index} className="flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-1">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
-                            ${index === 0 ? 'bg-amber-100 text-amber-700' : 
-                              index === 1 ? 'bg-gray-100 text-gray-700' : 
-                              index === 2 ? 'bg-green-100 text-green-700' : 
-                              'bg-blue-100 text-blue-700'}`}>
+                            ${index === 0 ? 'bg-amber-100 text-amber-700' :
+                              index === 1 ? 'bg-gray-100 text-gray-700' :
+                                index === 2 ? 'bg-green-100 text-green-700' :
+                                  'bg-blue-100 text-blue-700'}`}>
                             {index + 1}
                           </div>
                           <div>

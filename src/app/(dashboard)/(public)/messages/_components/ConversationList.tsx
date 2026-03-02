@@ -68,12 +68,12 @@ export function ConversationList({
     const searchQuery2 = panelMode === "dm" ? dmSearch : groupSearch;
     useEffect(() => {
         if (panelMode === "none") return;
-        if (searchQuery2.length < 2) {
-            if (panelMode === "dm") {
-                setDmResults([]);
-            } else {
-                setGroupResults([]);
-            }
+
+        // If query is empty, it will return default staff/admin list
+        // If query is 1 char, we stop to avoid too many results (optionally we could allow it)
+        if (searchQuery2.length === 1) {
+            if (panelMode === "dm") setDmResults([]);
+            else setGroupResults([]);
             return;
         }
         clearTimeout(searchTimer.current!);
