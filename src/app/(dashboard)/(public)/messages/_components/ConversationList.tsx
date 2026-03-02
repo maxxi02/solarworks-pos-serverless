@@ -44,9 +44,8 @@ export function ConversationList({
     const [searchQuery, setSearchQuery] = useState("");
     const [panelMode, setPanelMode] = useState<PanelMode>("none");
 
-    // DM state
-    const [dmSearch, setDmSearch] = useState("");
-    const [dmResults, setDmResults] = useState<UserSearchResult[]>([]);
+    const [allUsers, setAllUsers] = useState<UserSearchResult[]>([]);
+    const [isUsersLoading, setIsUsersLoading] = useState(false);
 
     // Group state
     const [groupSearch, setGroupSearch] = useState("");
@@ -59,47 +58,75 @@ export function ConversationList({
     const [isCreating, setIsCreating] = useState(false);
     const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
-    const filtered = conversations.filter((c) => {
+    // Fetch all staff/admins on load
+    useEffect(() => {
+        const fetchUsers = async () => {
+            setIsUsersLoading(true);
+            try {
+                const res = await fetch('/api/users/search?q='); // Empty query returns default list
+                const data = await res.json() as { users: UserSearchResult[] };
+                setAllUsers(data.users || []);
+            } catch (err) {
+                console.error("Failed to fetch users:", err);
+            } finally {
+                setIsUsersLoading(false);
+            }
+        };
+        fetchUsers();
+    }, []);
+
+    // Filter conversations based on search
+    const filteredConversations = conversations.filter((c) => {
         const name = c.isGroup ? c.groupName : c.otherParticipant?.name;
         return name?.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
-    // Search users for DM or group
-    const searchQuery2 = panelMode === "dm" ? dmSearch : groupSearch;
-    useEffect(() => {
-        if (panelMode === "none") return;
+    // Get user IDs of people we already have conversations with (to exclude from "Available Contacts")
+    const usersInConversations = new Set<string>();
+    conversations.forEach(c => {
+        if (!c.isGroup && c.otherParticipant) {
+            usersInConversations.add(c.otherParticipant.userId);
+        }
+    });
 
-        // If query is empty, it will return default staff/admin list
-        // If query is 1 char, we stop to avoid too many results (optionally we could allow it)
-        if (searchQuery2.length === 1) {
-            if (panelMode === "dm") setDmResults([]);
-            else setGroupResults([]);
+    // Available contacts: users who don't have a conversation yet
+    const availableContacts = allUsers.filter(u =>
+        u.id !== currentUserId &&
+        !usersInConversations.has(u.id) &&
+        (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    // Search logic for Group Panel ONLY
+    useEffect(() => {
+        if (panelMode !== "group") return;
+
+        if (groupSearch.length === 1) {
+            setGroupResults([]);
             return;
         }
+
         clearTimeout(searchTimer.current!);
         searchTimer.current = setTimeout(async () => {
             setIsSearching(true);
             try {
-                const res = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery2)}`);
+                const res = await fetch(`/api/users/search?q=${encodeURIComponent(groupSearch)}`);
                 const data = await res.json() as { users: UserSearchResult[] };
-                if (panelMode === "dm") setDmResults(data.users || []);
-                else {
-                    // Exclude already selected members
-                    setGroupResults((data.users || []).filter(
-                        (u) => !selectedMembers.some((m) => m.id === u.id)
-                    ));
-                }
+                setGroupResults((data.users || []).filter(
+                    (u) => !selectedMembers.some((m) => m.id === u.id)
+                ));
             } finally {
                 setIsSearching(false);
             }
         }, 300);
-    }, [searchQuery2, panelMode, selectedMembers]);
+    }, [groupSearch, panelMode, selectedMembers]);
 
     const closePanel = () => {
         setPanelMode("none");
-        setDmSearch(""); setDmResults([]);
-        setGroupSearch(""); setGroupResults([]);
-        setSelectedMembers([]); setGroupName("");
+        setGroupSearch("");
+        setGroupResults([]);
+        setSelectedMembers([]);
+        setGroupName("");
         setGroupStep("members");
     };
 
@@ -143,51 +170,12 @@ export function ConversationList({
                         >
                             <Users className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="ghost" size="icon" className="h-8 w-8"
-                            onClick={() => panelMode === "dm" ? closePanel() : (closePanel(), setPanelMode("dm"))}
-                            title="New message"
-                        >
-                            <MessageSquarePlus className="h-4 w-4" />
-                        </Button>
                     </div>
                 </div>
 
-                {/* DM search panel */}
-                {panelMode === "dm" && (
-                    <div className="space-y-2">
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input autoFocus placeholder="Search people..." className="pl-8 h-8 text-sm"
-                                value={dmSearch} onChange={(e) => setDmSearch(e.target.value)} />
-                        </div>
-                        {isSearching && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
-                        {dmResults.length > 0 && (
-                            <div className="rounded-md border bg-popover shadow-md overflow-hidden">
-                                {dmResults.map((user) => (
-                                    <button key={user.id} onClick={() => handleStartDM(user.id)}
-                                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left">
-                                        <div className="relative flex-shrink-0">
-                                            <Avatar className="h-7 w-7">
-                                                <AvatarImage src={user.image} />
-                                                <AvatarFallback className="text-xs">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
-                                            </Avatar>
-                                            {user.isOnline && <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-background" />}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium truncate">{user.name}</p>
-                                            <p className="text-xs text-muted-foreground truncate">{user.role}</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
                 {/* Group creation panel */}
                 {panelMode === "group" && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 mb-2">
                         {groupStep === "members" ? (
                             <>
                                 <p className="text-xs text-muted-foreground">Select members to add</p>
@@ -240,6 +228,9 @@ export function ConversationList({
                                 >
                                     Next ({selectedMembers.length} selected)
                                 </Button>
+                                <Button variant="ghost" className="w-full h-8 text-sm" size="sm" onClick={closePanel}>
+                                    Cancel
+                                </Button>
                             </>
                         ) : (
                             <>
@@ -267,19 +258,19 @@ export function ConversationList({
                     </div>
                 )}
 
-                {/* Search existing conversations */}
+                {/* Search existing conversations and all users */}
                 {panelMode === "none" && (
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input placeholder="Search conversations..." className="pl-8 h-8 text-sm"
+                        <Input placeholder="Search people or groups..." className="pl-8 h-8 text-sm"
                             value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                     </div>
                 )}
             </div>
 
-            {/* Conversation list */}
+            {/* Combined list */}
             <ScrollArea className="flex-1">
-                {isLoading ? (
+                {isLoading || (searchQuery === "" && isUsersLoading) ? (
                     <div className="flex flex-col gap-2 p-3">
                         {[...Array(5)].map((_, i) => (
                             <div key={`skeleton-${i}`} className="flex items-center gap-3 px-2 py-2">
@@ -291,27 +282,61 @@ export function ConversationList({
                             </div>
                         ))}
                     </div>
-                ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                        <MessageSquarePlus className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                        <p className="text-sm text-muted-foreground">
-                            {searchQuery ? "No conversations match" : "No messages yet"}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Use the buttons above to start a chat or create a group
-                        </p>
-                    </div>
                 ) : (
                     <div className="py-1">
-                        {filtered.map((conv) => (
-                            <ConversationItem
-                                key={conv._id as string}
-                                conversation={conv}
-                                isActive={activeConversationId === conv._id}
-                                currentUserId={currentUserId}
-                                onClick={() => onSelectConversation(conv._id as string)}
-                            />
-                        ))}
+                        {/* 1. Conversations Section */}
+                        {filteredConversations.length > 0 && (
+                            <div className="space-y-1">
+                                <div className="px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Conversations</div>
+                                {filteredConversations.map((conv) => (
+                                    <ConversationItem
+                                        key={conv._id as string}
+                                        conversation={conv}
+                                        isActive={activeConversationId === conv._id}
+                                        currentUserId={currentUserId}
+                                        onClick={() => onSelectConversation(conv._id as string)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* 2. Available Contacts Section */}
+                        {availableContacts.length > 0 && (
+                            <div className="mt-4 space-y-1">
+                                <div className="px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Other Contacts</div>
+                                {availableContacts.map((user) => (
+                                    <button key={user.id} onClick={() => handleStartDM(user.id)}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/60 transition-colors text-left">
+                                        <div className="relative flex-shrink-0">
+                                            <Avatar className="h-9 w-9">
+                                                <AvatarImage src={user.image} />
+                                                <AvatarFallback className="text-sm font-medium">
+                                                    {user.name.charAt(0).toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            {user.isOnline && (
+                                                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <span className="text-sm font-medium truncate">{user.name}</span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {filteredConversations.length === 0 && availableContacts.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+                                <Search className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                                <p className="text-sm text-muted-foreground">
+                                    No results found for "{searchQuery}"
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </ScrollArea>
