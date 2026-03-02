@@ -132,8 +132,10 @@ export function ChatWindow({
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 scroll-smooth scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 transition-colors"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 transition-colors overscroll-contain"
         onScroll={handleScroll}
+        data-lenis-prevent
+        data-lenis-scroll-container
       >
         {hasMore && (
           <div className="flex justify-center py-2">
