@@ -205,9 +205,8 @@ export default function OrdersPage() {
   const [scrollLeft, setScrollLeft] = useState(0);
 
   //ORDER STATES
-  const [incomingOrder, setIncomingOrder] = useState<CustomerOrder | null>(
-    null,
-  );
+  const [pendingWebOrders, setPendingWebOrders] = useState<CustomerOrder[]>([]);
+  const [activeCustomerOrderId, setActiveCustomerOrderId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<{ sessionId?: string; tableId?: string } | null>(null);
 
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
@@ -263,7 +262,7 @@ export default function OrdersPage() {
     emitPosJoin();
 
     const handleNewOrder = (order: CustomerOrder) => {
-      setIncomingOrder(order);
+      setPendingWebOrders((prev) => [...prev, order]);
       playOrder();
       toast.info(`New order from ${order.customerName}!`, {
         description: `${order.items.length} item(s) · ${formatCurrency(order.total)}`,
@@ -273,6 +272,22 @@ export default function OrdersPage() {
 
     onNewCustomerOrder(handleNewOrder);
     return () => offNewCustomerOrder(handleNewOrder);
+  }, []);
+
+  // Fetch missed pending customer orders on load
+  useEffect(() => {
+    const fetchPendingCustomerOrders = async () => {
+      try {
+        const res = await fetch("/api/orders/queue?statuses=pending_payment");
+        if (res.ok) {
+          const pending = await res.json();
+          setPendingWebOrders(pending);
+        }
+      } catch (e) {
+        // silent fail
+      }
+    };
+    fetchPendingCustomerOrders();
   }, []);
 
   useEffect(() => {
@@ -420,6 +435,7 @@ export default function OrdersPage() {
     setSelectedTable("");
     setOrderNote("");
     setSeniorPwdIds([]);
+    setActiveCustomerOrderId(null);
     clearStockCheck();
   }, [clearCartItems, clearStockCheck]);
 
@@ -706,6 +722,20 @@ export default function OrdersPage() {
         seniorPwdIds: seniorPwdIds.length ? seniorPwdIds : undefined,
       });
       setShowReceipt(true);
+
+      // Complete the customer order so it transitions to the QueueBoard
+      if (activeCustomerOrderId) {
+        try {
+          await fetch("/api/orders/queue", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: activeCustomerOrderId, queueStatus: "paid" }),
+          });
+        } catch (e) {
+          console.error("Failed to update active customer order to paid", e);
+        }
+      }
+
       clearCart();
       toast.success("Payment successful!");
       playSuccess();
@@ -1390,8 +1420,19 @@ export default function OrdersPage() {
         />
 
         <IncomingOrderModal
-          order={incomingOrder}
-          onClose={() => setIncomingOrder(null)}
+          order={pendingWebOrders[0] || null}
+          onClose={() => setPendingWebOrders((prev) => prev.slice(1))}
+          onDecline={async (order) => {
+            setPendingWebOrders((prev) => prev.slice(1));
+            toast.info("Customer order declined");
+            try {
+              await fetch("/api/orders/queue", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ orderId: order.orderId, queueStatus: "cancelled" }),
+              });
+            } catch (e) { }
+          }}
           formatCurrency={formatCurrency}
           onAccept={(order) => {
             order.items.forEach((item) => {
@@ -1407,7 +1448,10 @@ export default function OrdersPage() {
             if (order.orderNote) setOrderNote(order.orderNote);
             if (order.orderType) setOrderType(order.orderType);
             if (order.tableNumber) setSelectedTable(order.tableNumber);
-            setIncomingOrder(null);
+
+            setActiveCustomerOrderId(order.orderId);
+            setPendingWebOrders((prev) => prev.slice(1));
+
             toast.success("Order loaded into cart");
             playSuccess();
           }}

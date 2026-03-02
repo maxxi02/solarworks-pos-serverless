@@ -100,6 +100,30 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    // Notify socket server to update the customer's waiting page
+    try {
+      if (result.sessionId) {
+        await fetch(`${process.env.SOCKET_URL}/internal/order-status-changed`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": process.env.BETTER_AUTH_SECRET || "",
+          },
+          body: JSON.stringify({
+            orderId: result.orderId,
+            orderNumber: result.orderNumber,
+            queueStatus: result.queueStatus,
+            sessionId: result.sessionId,
+          }),
+        });
+      }
+    } catch (err) {
+      console.warn(
+        "Could not notify socket server about order status change:",
+        err,
+      );
+    }
+
     return NextResponse.json({
       ...result,
       _id: result._id.toString(),
