@@ -84,7 +84,7 @@ import { useSocket } from "@/provider/socket-provider";
 import { CustomerOrder } from "@/types/order.type";
 
 
-// ============ Main Component ============
+// ============ Main Component ===========
 export default function OrdersPage() {
   const {
     emitPosJoin,
@@ -106,7 +106,7 @@ export default function OrdersPage() {
   } = useAttendance();
   const { playSuccess, playError, playOrder } = useNotificationSound();
   const { settings, isLoading: settingsLoading } = useReceiptSettings();
-  
+
   // Temporarily modified - inventory deduction postponed
   const {
     isProcessing,
@@ -207,7 +207,7 @@ export default function OrdersPage() {
   const [scrollLeft, setScrollLeft] = useState(0);
 
   //ORDER STATES
-  const [pendingWebOrders, setPendingWebOrders] = useState<CustomerOrder[]>([]);
+  // pendingWebOrders removed — orders go directly into Queue Board via socket now
   const [activeCustomerOrderId, setActiveCustomerOrderId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<{ sessionId?: string; tableId?: string } | null>(null);
 
@@ -259,38 +259,29 @@ export default function OrdersPage() {
     preloadNotificationSounds();
   }, []);
 
-  // Join POS room + listen for customer orders
+  // Join POS room whenever socket connects/reconnects, then listen for new orders
   useEffect(() => {
+    if (!isConnected) return;
+
+    // Re-join room on every connect/reconnect
     emitPosJoin();
 
     const handleNewOrder = (order: CustomerOrder) => {
-      setPendingWebOrders((prev) => [...prev, order]);
+      // Don't show a modal - order goes directly into Queue Board via order:queue:updated
+      // Just play a sound and show a brief toast
       playOrder();
       toast.info(`New order from ${order.customerName}!`, {
-        description: `${order.items.length} item(s) · ${formatCurrency(order.total)}`,
-        duration: 10000,
+        description: `${order.items.length} item(s) · ${formatCurrency(order.total)} · Check Queue Board`,
+        duration: 6000,
       });
     };
 
     onNewCustomerOrder(handleNewOrder);
     return () => offNewCustomerOrder(handleNewOrder);
-  }, []);
+  }, [isConnected]); // Re-runs every time socket connects/reconnects
 
-  // Fetch missed pending customer orders on load
-  useEffect(() => {
-    const fetchPendingCustomerOrders = async () => {
-      try {
-        const res = await fetch("/api/orders/queue?statuses=pending_payment");
-        if (res.ok) {
-          const pending = await res.json();
-          setPendingWebOrders(pending);
-        }
-      } catch (e) {
-        // silent fail
-      }
-    };
-    fetchPendingCustomerOrders();
-  }, []);
+  // Fetch missed pending customer orders on load (already in Queue Board's own fetch)
+  // Removed the pendingWebOrders fetch — Queue Board fetches pending_payment directly
 
   useEffect(() => {
     fetchProducts();
@@ -1421,43 +1412,7 @@ export default function OrdersPage() {
           onRefresh={fetchStockAlerts}
         />
 
-        <IncomingOrderModal
-          order={pendingWebOrders[0] || null}
-          onClose={() => setPendingWebOrders((prev) => prev.slice(1))}
-          onDecline={async (order) => {
-            setPendingWebOrders((prev) => prev.slice(1));
-            toast.info("Customer order declined");
-            try {
-              await fetch("/api/orders/queue", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ orderId: order.orderId, queueStatus: "cancelled" }),
-              });
-            } catch (e) { }
-          }}
-          formatCurrency={formatCurrency}
-          onAccept={(order) => {
-            order.items.forEach((item) => {
-              for (let i = 0; i < item.quantity; i++) {
-                addToCart({
-                  ...item,
-                  available: true,
-                  ingredients: item.ingredients ?? [],
-                });
-              }
-            });
-            if (order.customerName) setCustomerName(order.customerName);
-            if (order.orderNote) setOrderNote(order.orderNote);
-            if (order.orderType) setOrderType(order.orderType);
-            if (order.tableNumber) setSelectedTable(order.tableNumber);
-
-            setActiveCustomerOrderId(order.orderId);
-            setPendingWebOrders((prev) => prev.slice(1));
-
-            toast.success("Order loaded into cart");
-            playSuccess();
-          }}
-        />
+        {/* IncomingOrderModal removed: customer orders now go directly into Queue Board */}
 
         {activeChat && (
           <ChatDrawer

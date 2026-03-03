@@ -154,6 +154,9 @@ interface SocketContextValue {
     emitCustomerOrder: (order: CustomerOrder) => void;
     onNewCustomerOrder: (cb: (order: CustomerOrder) => void) => void;
     offNewCustomerOrder: (cb?: (order: CustomerOrder) => void) => void;
+    emitOrderQueueUpdate: (orderId: string, queueStatus: string) => void;
+    onQueueUpdated: (cb: (data: { orderId: string; queueStatus: string; order: CustomerOrder }) => void) => void;
+    offQueueUpdated: (cb?: (data: { orderId: string; queueStatus: string; order: CustomerOrder }) => void) => void;
 
     // Browser printer manager (kept for backward compat)
     printerStatus: PrinterManagerStatus;
@@ -185,6 +188,8 @@ const defaultContext: SocketContextValue = {
     onRegisterClosed: () => { }, offRegisterClosed: () => { },
     emitPosJoin: () => { }, emitCustomerOrder: () => { },
     onNewCustomerOrder: () => { }, offNewCustomerOrder: () => { },
+    emitOrderQueueUpdate: () => { },
+    onQueueUpdated: () => { }, offQueueUpdated: () => { },
     printerStatus: { usb: 'disconnected', bluetooth: 'disconnected' },
     connectUSBPrinter: async () => false,
     connectBluetoothPrinter: async () => false,
@@ -368,6 +373,8 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
         socketRef.current?.emit("chat:messages:read", { conversationId });
     const emitPosJoin = () => socketRef.current?.emit('pos:join');
     const emitCustomerOrder = (order: CustomerOrder) => socketRef.current?.emit('order:submit', order);
+    const emitOrderQueueUpdate = (orderId: string, queueStatus: string) =>
+        socketRef.current?.emit('order:queue:update', { orderId, queueStatus, updatedBy: 'staff' });
 
     // ─── Listeners ────────────────────────────────────────────────────────────
     const onStatusChanged = (cb: (d: UserStatusUpdate) => void) => socketRef.current?.on("user:status:changed", cb);
@@ -390,6 +397,11 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
 
     const onNewCustomerOrder = (cb: (order: CustomerOrder) => void) => socketRef.current?.on('order:new', cb);
     const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) => socketRef.current?.off('order:new', cb);
+
+    const onQueueUpdated = (cb: (data: { orderId: string; queueStatus: string; order: CustomerOrder }) => void) =>
+        socketRef.current?.on('order:queue:updated', cb);
+    const offQueueUpdated = (cb?: (data: { orderId: string; queueStatus: string; order: CustomerOrder }) => void) =>
+        socketRef.current?.off('order:queue:updated', cb);
 
     // ─── Browser Printer Actions (unchanged) ─────────────────────────────────
     const connectUSBPrinter = () => printerManager.connectUSB();
@@ -452,6 +464,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
             onAttendanceStatusChanged, offAttendanceStatusChanged,
             onSalesUpdated, offSalesUpdated, onCashUpdated, offCashUpdated, onRegisterClosed, offRegisterClosed,
             emitPosJoin, emitCustomerOrder, onNewCustomerOrder, offNewCustomerOrder,
+            emitOrderQueueUpdate, onQueueUpdated, offQueueUpdated,
             printerStatus, connectUSBPrinter, connectBluetoothPrinter,
             printReceipt, printKitchenOrder,
             companionStatus,

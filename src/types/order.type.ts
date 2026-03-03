@@ -6,6 +6,7 @@ export type QueueStatus =
   | "pending_payment"
   | "paid"
   | "preparing"
+  | "serving"
   | "ready"
   | "served"
   | "completed"
@@ -53,6 +54,7 @@ export interface CustomerOrder {
   createdAt?: Date;
   paidAt?: Date;
   preparingAt?: Date;
+  servingAt?: Date;
   readyAt?: Date;
   servedAt?: Date;
   completedAt?: Date;
