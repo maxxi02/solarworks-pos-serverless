@@ -86,7 +86,7 @@ interface ProductFormData {
   available: boolean;
   categoryId?: string;
   menuType?: MenuType;
-  imageUrl?: string; // ← ADD THIS
+  imageUrl?: string;
 }
 interface InventoryItem {
   _id: string;
@@ -109,7 +109,7 @@ interface Product {
   available: boolean;
   categoryId?: string;
   menuType?: MenuType;
-  imageUrl?: string; // ← ADD THIS
+  imageUrl?: string;
   createdAt?: string;
 }
 interface Category {
@@ -363,10 +363,11 @@ function ProductDialog({
       return;
     }
 
-    if (ingredients.length === 0) {
-      toast.error('Please add at least one ingredient');
-      return;
-    }
+    // Temporarily commented out - ingredients validation postponed
+    // if (ingredients.length === 0) {
+    //   toast.error('Please add at least one ingredient');
+    //   return;
+    // }
 
     setLoading(true);
     try {
@@ -492,7 +493,7 @@ function ProductDialog({
             <Separator />
 
             <div className="space-y-2">
-              <Label>Ingredients</Label>
+              <Label>Ingredients (Optional for now - inventory tracking postponed)</Label>
               {inventoryItems.length === 0 && !inventoryLoading && (
                 <Card className="bg-muted">
                   <CardContent className="pt-6">
@@ -501,7 +502,7 @@ function ProductDialog({
                       <div>
                         <p className="text-sm font-medium">No Inventory Items</p>
                         <p className="text-sm text-muted-foreground">
-                          Add items to inventory first before creating products.
+                          You can still create products without ingredients for now.
                         </p>
                       </div>
                     </div>
@@ -524,7 +525,8 @@ function ProductDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={loading || !name.trim() || !price || ingredients.length === 0}
+            disabled={loading || !name.trim() || !price}
+            // Removed ingredients.length check from disabled state
           >
             {loading ? (
               <>
@@ -1012,7 +1014,7 @@ export default function CategoriesPage() {
                 {category.products?.map((product) => (
                   <TableRow key={product._id}>
                     <TableCell>
-                      <div className="flex items-center gap-3"> {/* ← wrap in flex */}
+                      <div className="flex items-center gap-3">
                         {/* Thumbnail */}
                         {product.imageUrl ? (
                           <img

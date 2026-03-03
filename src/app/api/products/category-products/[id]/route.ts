@@ -131,13 +131,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       if (!category) errors.push("Category not found");
     }
 
-    if (!Array.isArray(body.ingredients) || body.ingredients.length === 0) {
-      errors.push("At least one ingredient is required");
-    } else {
+    // MODIFIED: Make ingredients optional for updates
+    // Only validate ingredients if they are provided and not empty
+    if (body.ingredients && Array.isArray(body.ingredients) && body.ingredients.length > 0) {
       errors.push(
         ...validateIngredients(body.ingredients as ProductIngredient[]),
       );
     }
+    // If no ingredients provided, we'll keep existing ones or set to empty array
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -154,23 +155,32 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    const ingredients: ProductIngredient[] = (
-      body.ingredients as ProductIngredient[]
-    ).map((ing) => ({
-      inventoryItemId: ing.inventoryItemId.trim(),
-      name: ing.name.trim(),
-      quantity: Number(ing.quantity),
-      unit: ing.unit.trim(),
-    }));
+    // MODIFIED: Handle ingredients update - if provided, use them; otherwise keep existing
+    let ingredients: ProductIngredient[];
+    
+    if (body.ingredients && Array.isArray(body.ingredients)) {
+      // New ingredients provided (could be empty array)
+      ingredients = body.ingredients.length > 0
+        ? (body.ingredients as ProductIngredient[]).map((ing) => ({
+            inventoryItemId: ing.inventoryItemId.trim(),
+            name: ing.name.trim(),
+            quantity: Number(ing.quantity),
+            unit: ing.unit.trim(),
+          }))
+        : []; // Empty array if user explicitly cleared ingredients
+    } else {
+      // No ingredients field in update - keep existing ones
+      ingredients = existingProduct.ingredients || [];
+    }
 
     const updateData = {
       name: body.name!.trim(),
       price: Number(body.price),
       description: body.description?.trim() || "",
       ingredients,
-      available: body.available !== undefined ? Boolean(body.available) : true,
+      available: body.available !== undefined ? Boolean(body.available) : existingProduct.available,
       categoryId: body.categoryId!,
-      imageUrl: body.imageUrl?.trim() || "",
+      imageUrl: body.imageUrl?.trim() || existingProduct.imageUrl || "",
       updatedAt: new Date(),
     };
 

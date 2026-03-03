@@ -115,13 +115,14 @@ export async function POST(request: NextRequest) {
       if (!category) errors.push("Category not found");
     }
 
-    if (!Array.isArray(body.ingredients) || body.ingredients.length === 0) {
-      errors.push("At least one ingredient is required");
-    } else {
+    // MODIFIED: Make ingredients optional
+    // Only validate ingredients if they are provided
+    if (body.ingredients && Array.isArray(body.ingredients) && body.ingredients.length > 0) {
       errors.push(
         ...validateIngredients(body.ingredients as ProductIngredient[]),
       );
     }
+    // If no ingredients provided, just set to empty array (no validation errors)
 
     if (errors.length > 0) {
       return NextResponse.json(
@@ -130,14 +131,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ingredients: ProductIngredient[] = (
-      body.ingredients as ProductIngredient[]
-    ).map((ing) => ({
-      inventoryItemId: ing.inventoryItemId.trim(),
-      name: ing.name.trim(),
-      quantity: Number(ing.quantity),
-      unit: ing.unit.trim(),
-    }));
+    // MODIFIED: Handle empty ingredients array
+    const ingredients: ProductIngredient[] = body.ingredients && Array.isArray(body.ingredients) 
+      ? (body.ingredients as ProductIngredient[]).map((ing) => ({
+          inventoryItemId: ing.inventoryItemId.trim(),
+          name: ing.name.trim(),
+          quantity: Number(ing.quantity),
+          unit: ing.unit.trim(),
+        }))
+      : []; // Default to empty array if no ingredients
 
     const newProduct = {
       name: body.name!.trim(),

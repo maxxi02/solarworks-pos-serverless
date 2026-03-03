@@ -28,7 +28,7 @@ export function RecentReceipts({ receipts, isLoading }: RecentReceiptsProps) {
                     Recent Receipts
                 </CardTitle>
                 <Button variant="ghost" size="sm" asChild>
-                    <a href="/receipts" className="text-xs">View All</a>
+                    <a href="/sales/all-transactions" className="text-xs">View All</a>
                 </Button>
             </CardHeader>
             <CardContent>
