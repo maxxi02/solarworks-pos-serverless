@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import type { ConversationWithDetails } from "@/types/messaging.types";
-import { Search, MessageSquarePlus, Users, Loader2, X, Check } from "lucide-react";
+import { Search, Users, Loader2, X, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,7 +30,7 @@ interface UserSearchResult {
     role: string;
 }
 
-type PanelMode = "none" | "dm" | "group";
+type PanelMode = "none" | "group";
 
 export function ConversationList({
     conversations,
@@ -75,27 +75,30 @@ export function ConversationList({
         fetchUsers();
     }, []);
 
-    // Filter conversations based on search
-    const filteredConversations = conversations.filter((c) => {
+    // Filter conversations based on search (Memoized to prevent flickering)
+    const filteredConversations = useMemo(() => conversations.filter((c) => {
         const name = c.isGroup ? c.groupName : c.otherParticipant?.name;
         return name?.toLowerCase().includes(searchQuery.toLowerCase());
-    });
+    }), [conversations, searchQuery]);
 
     // Get user IDs of people we already have conversations with (to exclude from "Available Contacts")
-    const usersInConversations = new Set<string>();
-    conversations.forEach(c => {
-        if (!c.isGroup && c.otherParticipant) {
-            usersInConversations.add(c.otherParticipant.userId);
-        }
-    });
+    const usersInConversations = useMemo(() => {
+        const set = new Set<string>();
+        conversations.forEach(c => {
+            if (!c.isGroup && c.otherParticipant) {
+                set.add(c.otherParticipant.userId);
+            }
+        });
+        return set;
+    }, [conversations]);
 
     // Available contacts: users who don't have a conversation yet
-    const availableContacts = allUsers.filter(u =>
+    const availableContacts = useMemo(() => allUsers.filter(u =>
         u.id !== currentUserId &&
         !usersInConversations.has(u.id) &&
         (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    ), [allUsers, currentUserId, usersInConversations, searchQuery]);
 
     // Search logic for Group Panel ONLY
     useEffect(() => {
@@ -175,18 +178,18 @@ export function ConversationList({
 
                 {/* Group creation panel */}
                 {panelMode === "group" && (
-                    <div className="space-y-2 mb-2">
+                    <div className="space-y-2 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
                         {groupStep === "members" ? (
                             <>
                                 <p className="text-xs text-muted-foreground">Select members to add</p>
 
                                 {/* Selected members chips */}
                                 {selectedMembers.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto py-1">
                                         {selectedMembers.map((m) => (
-                                            <span key={m.id} className="flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
+                                            <span key={m.id} className="flex items-center gap-1 bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full">
                                                 {m.name}
-                                                <button onClick={() => toggleMember(m)}><X className="h-3 w-3" /></button>
+                                                <button onClick={() => toggleMember(m)}><X className="h-2 w-2" /></button>
                                             </span>
                                         ))}
                                     </div>
@@ -221,16 +224,18 @@ export function ConversationList({
                                     </div>
                                 )}
 
-                                <Button
-                                    className="w-full h-8 text-sm" size="sm"
-                                    disabled={selectedMembers.length === 0}
-                                    onClick={() => setGroupStep("name")}
-                                >
-                                    Next ({selectedMembers.length} selected)
-                                </Button>
-                                <Button variant="ghost" className="w-full h-8 text-sm" size="sm" onClick={closePanel}>
-                                    Cancel
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button variant="ghost" className="flex-1 h-8 text-sm" size="sm" onClick={closePanel}>
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        className="flex-1 h-8 text-sm" size="sm"
+                                        disabled={selectedMembers.length === 0}
+                                        onClick={() => setGroupStep("name")}
+                                    >
+                                        Next ({selectedMembers.length})
+                                    </Button>
+                                </div>
                             </>
                         ) : (
                             <>
@@ -270,7 +275,7 @@ export function ConversationList({
 
             {/* Combined list */}
             <ScrollArea className="flex-1">
-                {isLoading || (searchQuery === "" && isUsersLoading) ? (
+                {(isLoading && filteredConversations.length === 0) || (searchQuery === "" && isUsersLoading && allUsers.length === 0) ? (
                     <div className="flex flex-col gap-2 p-3">
                         {[...Array(5)].map((_, i) => (
                             <div key={`skeleton-${i}`} className="flex items-center gap-3 px-2 py-2">
@@ -284,10 +289,17 @@ export function ConversationList({
                     </div>
                 ) : (
                     <div className="py-1">
+                        {/* 0. Background loading indicator (Subtle) */}
+                        {(isLoading || isUsersLoading) && (allUsers.length > 0 || filteredConversations.length > 0) && (
+                            <div className="h-0.5 w-full bg-transparent overflow-hidden">
+                                <div className="h-full bg-primary/30 animate-pulse w-full" style={{ animationDuration: '1.5s' }} />
+                            </div>
+                        )}
+
                         {/* 1. Conversations Section */}
                         {filteredConversations.length > 0 && (
-                            <div className="space-y-1">
-                                <div className="px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Conversations</div>
+                            <div className="space-y-0.5">
+                                <div className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Conversations</div>
                                 {filteredConversations.map((conv) => (
                                     <ConversationItem
                                         key={conv._id as string}
@@ -302,13 +314,13 @@ export function ConversationList({
 
                         {/* 2. Available Contacts Section */}
                         {availableContacts.length > 0 && (
-                            <div className="mt-4 space-y-1">
-                                <div className="px-4 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Other Contacts</div>
+                            <div className={cn("space-y-0.5", filteredConversations.length > 0 && "mt-4")}>
+                                <div className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Other Contacts</div>
                                 {availableContacts.map((user) => (
                                     <button key={user.id} onClick={() => handleStartDM(user.id)}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/60 transition-colors text-left">
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/60 transition-colors text-left group">
                                         <div className="relative flex-shrink-0">
-                                            <Avatar className="h-9 w-9">
+                                            <Avatar className="h-9 w-9 ring-0 group-hover:ring-2 ring-primary/20 transition-all">
                                                 <AvatarImage src={user.image} />
                                                 <AvatarFallback className="text-sm font-medium">
                                                     {user.name.charAt(0).toUpperCase()}
@@ -322,7 +334,7 @@ export function ConversationList({
                                             <div className="flex items-center justify-between mb-0.5">
                                                 <span className="text-sm font-medium truncate">{user.name}</span>
                                             </div>
-                                            <p className="text-xs text-muted-foreground truncate capitalize">{user.role}</p>
+                                            <p className="text-[11px] text-muted-foreground truncate capitalize">{user.role}</p>
                                         </div>
                                     </button>
                                 ))}
@@ -331,9 +343,9 @@ export function ConversationList({
 
                         {filteredConversations.length === 0 && availableContacts.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                                <Search className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                                <Search className="h-8 w-8 text-muted-foreground/30 mb-2" />
                                 <p className="text-sm text-muted-foreground">
-                                    No results found for "{searchQuery}"
+                                    No results found
                                 </p>
                             </div>
                         )}
@@ -381,17 +393,17 @@ function ConversationItem({
     return (
         <button onClick={onClick}
             className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/60 transition-colors text-left",
+                "w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent/60 transition-colors text-left group",
                 isActive && "bg-accent"
             )}>
             <div className="relative flex-shrink-0">
                 {isGroup ? (
-                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
                         <Users className="h-4 w-4 text-primary" />
                     </div>
                 ) : (
                     <>
-                        <Avatar className="h-9 w-9">
+                        <Avatar className="h-9 w-9 ring-0 group-hover:ring-2 ring-primary/20 transition-all">
                             <AvatarImage src={displayImage} />
                             <AvatarFallback className="text-sm font-medium">
                                 {displayName?.charAt(0).toUpperCase()}
@@ -410,17 +422,17 @@ function ConversationItem({
                         {displayName}
                     </span>
                     {lastMessage && (
-                        <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-1">
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
                             {formatDistanceToNow(new Date(lastMessage.sentAt), { addSuffix: false })}
                         </span>
                     )}
                 </div>
                 <div className="flex items-center justify-between">
-                    <p className={cn("text-xs truncate", hasUnread ? "text-foreground" : "text-muted-foreground")}>
+                    <p className={cn("text-xs truncate", hasUnread ? "text-foreground font-medium" : "text-muted-foreground")}>
                         {lastMsgText}
                     </p>
                     {hasUnread && (
-                        <Badge className="h-4 min-w-4 px-1 text-[10px] ml-1 flex-shrink-0 bg-primary">
+                        <Badge className="h-4 min-w-4 px-1 text-[10px] ml-1 flex-shrink-0 bg-primary hover:bg-primary border-none text-white">
                             {unreadCount! > 9 ? "9+" : unreadCount}
                         </Badge>
                     )}

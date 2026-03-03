@@ -94,6 +94,12 @@ export function useMessages(
 
     console.log("✅ joining conversation:", conversationId);
     socket.emit("dm:conversation:join", { conversationId });
+
+    // Clear state for new conversation
+    setMessages([]);
+    setHasMore(false);
+    setNextCursor(undefined);
+
     fetchMessages(conversationId);
 
     return () => {

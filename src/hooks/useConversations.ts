@@ -15,26 +15,31 @@ export function useConversations(currentUserId: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchConversations = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch("/api/conversations");
-      if (!res.ok) throw new Error("Failed to fetch conversations");
-      const data = (await res.json()) as {
-        conversations: ConversationWithDetails[];
-      };
-      setConversations(data.conversations);
-    } catch (err) {
-      setError("Failed to load conversations");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const fetchConversations = useCallback(
+    async (isInitial = false) => {
+      try {
+        if (isInitial || conversations.length === 0) {
+          setIsLoading(true);
+        }
+        const res = await fetch("/api/conversations");
+        if (!res.ok) throw new Error("Failed to fetch conversations");
+        const data = (await res.json()) as {
+          conversations: ConversationWithDetails[];
+        };
+        setConversations(data.conversations);
+      } catch (err) {
+        setError("Failed to load conversations");
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [conversations.length],
+  );
 
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    fetchConversations(true);
+  }, []); // Only on mount, dependencies are inside fetchConversations but we pass isInitial=true once. Actually better to leave it empty to avoid loops.
 
   useEffect(() => {
     if (!socket) return;
