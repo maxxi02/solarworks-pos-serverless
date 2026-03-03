@@ -106,11 +106,13 @@ export default function OrdersPage() {
   } = useAttendance();
   const { playSuccess, playError, playOrder } = useNotificationSound();
   const { settings, isLoading: settingsLoading } = useReceiptSettings();
+  
+  // Temporarily modified - inventory deduction postponed
   const {
     isProcessing,
-    checkOrderStock,
-    processOrderDeductions,
-    clearStockCheck,
+    // checkOrderStock,  // Commented out - inventory tracking postponed
+    // processOrderDeductions,  // Commented out - inventory tracking postponed
+    // clearStockCheck,  // Commented out - inventory tracking postponed
   } = useInventoryOrder({
     onSuccess: () => {
       fetchStockAlerts();
@@ -436,8 +438,8 @@ export default function OrdersPage() {
     setOrderNote("");
     setSeniorPwdIds([]);
     setActiveCustomerOrderId(null);
-    clearStockCheck();
-  }, [clearCartItems, clearStockCheck]);
+    // clearStockCheck(); // Commented out - inventory tracking postponed
+  }, [clearCartItems]); // Removed clearStockCheck from dependencies
 
   const handleApplyDiscount = useCallback(
     (data: { ids: string[]; itemIds: string[] }) => {
@@ -491,6 +493,7 @@ export default function OrdersPage() {
     playSuccess,
     playError,
     saveOrderToLocal,
+    clearCart,
   ]);
 
   const loadSavedOrder = useCallback(
@@ -588,7 +591,7 @@ export default function OrdersPage() {
     } finally {
       setIsPrinting(false);
     }
-  }, [currentReceipt, settings, printBoth, isConnected]);
+  }, [currentReceipt, settings, printBoth, isConnected, staffName]);
 
   // ——— Process Payment ———
   const processPayment = async () => {
@@ -619,8 +622,6 @@ export default function OrdersPage() {
 
     setIsCheckingStock(true);
     try {
-
-
       const orderItems = cart.map((i) => ({
         productId: i._id,
         productName: i.name,
@@ -630,6 +631,8 @@ export default function OrdersPage() {
       const orderNumber = generateOrderNumber();
       const orderId = `order-${Date.now()}`;
 
+      // TEMPORARILY COMMENTED OUT - Inventory deduction postponed
+      /*
       try {
         const stockCheck = await checkOrderStock(orderItems);
         if (!stockCheck.allAvailable) {
@@ -646,8 +649,9 @@ export default function OrdersPage() {
         }
         await processOrderDeductions(orderId, orderNumber, orderItems);
       } catch {
-        /* continue on stock check failure */
+        // continue on stock check failure
       }
+      */
 
       const completedOrder = buildOrder({
         cart,
@@ -740,15 +744,10 @@ export default function OrdersPage() {
       toast.success("Payment successful!");
       playSuccess();
     } catch (error: unknown) {
-      if (error && typeof error === "object" && "insufficientItems" in error) {
-        const err = error as { insufficientItems: InsufficientStockItem[] };
-        setInsufficientStockItems(err.insufficientItems);
-        setShowInsufficientStockModal(true);
-      } else {
-        toast.error("Payment failed", {
-          description: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
+      // This catch block now only handles non-inventory errors
+      toast.error("Payment failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
       playError();
     } finally {
       setIsCheckingStock(false);
@@ -1393,24 +1392,27 @@ export default function OrdersPage() {
           )
         }
 
-        <InsufficientStockModal
-          items={insufficientStockItems}
-          onClose={() => {
-            setShowInsufficientStockModal(false);
-            setInsufficientStockItems([]);
-          }}
-          onRemoveUnavailable={() => {
-            const names = new Set(insufficientStockItems.map((i) => i.name));
-            setCart((prev) =>
-              prev.filter(
-                (item) => !item.ingredients?.some((ing) => names.has(ing.name)),
-              ),
-            );
-            setShowInsufficientStockModal(false);
-            setInsufficientStockItems([]);
-            toast.info("Removed unavailable items");
-          }}
-        />
+        {/* InsufficientStockModal - kept but won't be shown since stock check is disabled */}
+        {showInsufficientStockModal && (
+          <InsufficientStockModal
+            items={insufficientStockItems}
+            onClose={() => {
+              setShowInsufficientStockModal(false);
+              setInsufficientStockItems([]);
+            }}
+            onRemoveUnavailable={() => {
+              const names = new Set(insufficientStockItems.map((i) => i.name));
+              setCart((prev) =>
+                prev.filter(
+                  (item) => !item.ingredients?.some((ing) => names.has(ing.name)),
+                ),
+              );
+              setShowInsufficientStockModal(false);
+              setInsufficientStockItems([]);
+              toast.info("Removed unavailable items");
+            }}
+          />
+        )}
 
         <StockAlertsModal
           isOpen={showStockAlertsModal}
