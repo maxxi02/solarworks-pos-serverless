@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
+import crypto from "crypto";
 
 // GET all tables
 export async function GET() {
@@ -51,11 +52,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Count existing tables to auto-generate tableId
-    const count = await MONGODB.collection("tables").countDocuments();
-    const tableId = `table-${count + 1}`;
+    // Generate a unique tableId (e.g., TABLE-ABCD)
+    const suffix = crypto.randomBytes(2).toString("hex").toUpperCase();
+    const tableId = `TABLE-${suffix}`;
+
     const customerPortalUrl =
-      process.env.NEXT_PUBLIC_CUSTOMER_PORTAL_URL || "http://localhost:3001";
+      process.env.CUSTOMER_PORTAL_URL || "http://localhost:3001";
     const qrCodeUrl = `${customerPortalUrl}/order?table=${tableId}&type=${qrType || "dine-in"}`;
 
     const newTable = {

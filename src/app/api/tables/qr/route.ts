@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const customerPortalUrl =
-      process.env.NEXT_PUBLIC_CUSTOMER_PORTAL_URL || "http://localhost:3001";
+      process.env.CUSTOMER_PORTAL_URL || "http://localhost:3001";
     const qrCodeUrl = `${customerPortalUrl}/order?type=${qrType}`;
 
     const labelMap: Record<string, string> = {
