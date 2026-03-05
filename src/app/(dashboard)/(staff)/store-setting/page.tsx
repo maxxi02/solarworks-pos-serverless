@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Bell,
@@ -12,11 +12,16 @@ import {
   Smartphone,
   Check,
   PlayCircle,
+  Hash,
+  KeyRound,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // ─── Settings shape ────────────────────────────────────────────────────────
 
@@ -86,13 +91,100 @@ export default function StoreSettingPage() {
   const [settings, setSettings] = useState<PortalNotifSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
 
+  // ── PIN state ────────────────────────────────────────────────────────────
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
+  const [confirmDigits, setConfirmDigits] = useState(["", "", "", ""]);
+  const [pinSaving, setPinSaving] = useState(false);
+  const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const confirmRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const pinValue = pinDigits.join("");
+  const confirmValue = confirmDigits.join("");
+
   // Load from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) setSettings(JSON.parse(stored));
     } catch { /* ignore */ }
+
+    // Fetch PIN status
+    fetch("/api/user/attendance-pin")
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setHasPin(d.hasPin); })
+      .catch(() => {});
   }, []);
+
+  const handlePinDigitChange = (
+    idx: number,
+    val: string,
+    arr: string[],
+    setArr: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+  ) => {
+    if (!/^\d?$/.test(val)) return;
+    const next = [...arr];
+    next[idx] = val;
+    setArr(next);
+    if (val && idx < 3) refs.current[idx + 1]?.focus();
+  };
+
+  const handlePinDigitKeyDown = (
+    idx: number,
+    e: React.KeyboardEvent,
+    arr: string[],
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+  ) => {
+    if (e.key === "Backspace" && !arr[idx] && idx > 0) {
+      refs.current[idx - 1]?.focus();
+    }
+  };
+
+  const handleSavePin = async () => {
+    if (pinValue.length !== 4) { toast.error("PIN must be exactly 4 digits"); return; }
+    if (pinValue !== confirmValue) { toast.error("PINs do not match"); return; }
+    setPinSaving(true);
+    try {
+      const res = await fetch("/api/user/attendance-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinValue }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Attendance PIN saved!");
+        setHasPin(true);
+        setPinDigits(["", "", "", ""]);
+        setConfirmDigits(["", "", "", ""]);
+      } else {
+        toast.error(data.message || "Failed to save PIN");
+      }
+    } catch { toast.error("Network error"); }
+    finally { setPinSaving(false); }
+  };
+
+  const handleRemovePin = async () => {
+    setPinSaving(true);
+    try {
+      const res = await fetch("/api/user/attendance-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: null }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Attendance PIN removed");
+        setHasPin(false);
+        setPinDigits(["", "", "", ""]);
+        setConfirmDigits(["", "", "", ""]);
+      } else {
+        toast.error(data.message || "Failed to remove PIN");
+      }
+    } catch { toast.error("Network error"); }
+    finally { setPinSaving(false); }
+  };
+
 
   const updateSetting = <K extends keyof PortalNotifSettings>(
     key: K,
@@ -142,6 +234,107 @@ export default function StoreSettingPage() {
       </div>
 
       <Separator />
+
+      {/* ── Attendance PIN ──────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-primary/10">
+              <KeyRound className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                Attendance PIN
+                {hasPin !== null && (
+                  <Badge variant={hasPin ? "default" : "secondary"} className="text-xs">
+                    {hasPin ? "PIN Set" : "No PIN"}
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Set a 4–6 digit PIN for quick clock-in / clock-out. If no PIN is set,
+                you will need to use your account password.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5">
+          {/* New PIN */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Hash className="h-3.5 w-3.5" />
+              {hasPin ? "Change PIN" : "New PIN"} (4–6 digits)
+            </Label>
+            <div className="flex gap-2">
+              {pinDigits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { pinRefs.current[i] = el; }}
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={(e) =>
+                    handlePinDigitChange(i, e.target.value, pinDigits, setPinDigits, pinRefs)
+                  }
+                  onKeyDown={(e) => handlePinDigitKeyDown(i, e, pinDigits, pinRefs)}
+                  className="h-11 w-10 rounded-lg border bg-background text-center text-lg font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Confirm PIN */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Hash className="h-3.5 w-3.5" />
+              Confirm PIN
+            </Label>
+            <div className="flex gap-2">
+              {confirmDigits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { confirmRefs.current[i] = el; }}
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={(e) =>
+                    handlePinDigitChange(i, e.target.value, confirmDigits, setConfirmDigits, confirmRefs)
+                  }
+                  onKeyDown={(e) => handlePinDigitKeyDown(i, e, confirmDigits, confirmRefs)}
+                  className="h-11 w-10 rounded-lg border bg-background text-center text-lg font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              ))}
+            </div>
+          </div>
+
+          {pinValue && confirmValue && pinValue !== confirmValue && (
+            <p className="text-xs text-destructive">PINs do not match</p>
+          )}
+
+          <div className="flex gap-3">
+            <Button
+              onClick={handleSavePin}
+              disabled={pinSaving || pinValue.length !== 4 || pinValue !== confirmValue}
+            >
+              {pinSaving ? "Saving…" : "Save PIN"}
+            </Button>
+            {hasPin && (
+              <Button
+                variant="outline"
+                onClick={handleRemovePin}
+                disabled={pinSaving}
+                className="gap-2 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove PIN
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Customer Portal Notifications */}
       <Card>

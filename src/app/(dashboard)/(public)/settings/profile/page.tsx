@@ -19,6 +19,9 @@ import {
   ShieldCheck,
   CalendarDays,
   Clock,
+  Hash,
+  KeyRound,
+  Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import { ExtendedUser } from "@/lib/auth";
@@ -26,6 +29,9 @@ import { EditProfileDialog } from "@/components/edit-profile-dialog";
 import { SecuritySettings } from "@/components/security-settings";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Moon, Sun } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+
 
 function getUserInitials(name?: string | null): string {
   if (!name?.trim()) return "U";
@@ -41,6 +47,88 @@ function getUserInitials(name?: string | null): string {
 export default function ProfilePage() {
   const { data: session, isPending } = authClient.useSession();
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+
+  // ── Attendance PIN state (staff/manager only) ─────────────────────────────
+  const [hasPin, setHasPin] = React.useState<boolean | null>(null);
+  const [pinDigits, setPinDigits] = React.useState(["", "", "", ""]);
+  const [confirmDigits, setConfirmDigits] = React.useState(["", "", "", ""]);
+  const [pinSaving, setPinSaving] = React.useState(false);
+  const pinRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+  const confirmRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+  const pinValue = pinDigits.join("");
+  const confirmValue = confirmDigits.join("");
+
+  React.useEffect(() => {
+    if (!session?.user) return;
+    const role = (session.user as ExtendedUser).role;
+    if (role === "staff" || role === "manager") {
+      fetch("/api/user/attendance-pin")
+        .then((r) => r.json())
+        .then((d) => { if (d.success) setHasPin(d.hasPin); })
+        .catch(() => {});
+    }
+  }, [session]);
+
+  const handlePinDigit = (
+    idx: number,
+    val: string,
+    arr: string[],
+    setArr: React.Dispatch<React.SetStateAction<string[]>>,
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+  ) => {
+    if (!/^\d?$/.test(val)) return;
+    const next = [...arr]; next[idx] = val; setArr(next);
+    if (val && idx < 3) refs.current[idx + 1]?.focus();
+  };
+
+  const handlePinKeyDown = (
+    idx: number,
+    e: React.KeyboardEvent,
+    arr: string[],
+    refs: React.MutableRefObject<(HTMLInputElement | null)[]>,
+  ) => {
+    if (e.key === "Backspace" && !arr[idx] && idx > 0) refs.current[idx - 1]?.focus();
+  };
+
+  const handleSavePin = async () => {
+    if (pinValue.length !== 4) { toast.error("PIN must be exactly 4 digits"); return; }
+    if (pinValue !== confirmValue) { toast.error("PINs do not match"); return; }
+    setPinSaving(true);
+    try {
+      const res = await fetch("/api/user/attendance-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinValue }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Attendance PIN saved!");
+        setHasPin(true);
+        setPinDigits(["", "", "", ""]);
+        setConfirmDigits(["", "", "", ""]);
+      } else toast.error(data.message || "Failed to save PIN");
+    } catch { toast.error("Network error"); }
+    finally { setPinSaving(false); }
+  };
+
+  const handleRemovePin = async () => {
+    setPinSaving(true);
+    try {
+      const res = await fetch("/api/user/attendance-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: null }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Attendance PIN removed");
+        setHasPin(false);
+        setPinDigits(["", "", "", ""]);
+        setConfirmDigits(["", "", "", ""]);
+      } else toast.error(data.message || "Failed to remove PIN");
+    } catch { toast.error("Network error"); }
+    finally { setPinSaving(false); }
+  };
 
   if (isPending) {
     return (
@@ -308,8 +396,104 @@ export default function ProfilePage() {
 
           <hr className="border-border/50" />
 
+          {/* ─── Attendance PIN (staff / manager only) ────────────────── */}
+          {(user.role === "staff" || user.role === "manager") && (
+            <section className="space-y-6">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+                  <KeyRound className="h-6 w-6 text-primary" />
+                  Attendance PIN
+                  {hasPin !== null && (
+                    <Badge variant={hasPin ? "default" : "secondary"} className="text-sm">
+                      {hasPin ? "PIN Set" : "No PIN"}
+                    </Badge>
+                  )}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Set a 4–6 digit PIN for quick clock-in / clock-out on the Attendance page.
+                  If no PIN is set, your account password will be used instead.
+                </p>
+              </div>
+
+              <div className="rounded-xl border bg-muted/40 p-6 space-y-6">
+                {/* New PIN */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm">
+                    <Hash className="h-3.5 w-3.5" />
+                    {hasPin ? "Change PIN" : "New PIN"} (4 digits)
+                  </Label>
+                  <div className="flex gap-2">
+                    {pinDigits.map((d, i) => (
+                      <input
+                        key={i}
+                        ref={(el) => { pinRefs.current[i] = el; }}
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={d}
+                        onChange={(e) => handlePinDigit(i, e.target.value, pinDigits, setPinDigits, pinRefs)}
+                        onKeyDown={(e) => handlePinKeyDown(i, e, pinDigits, pinRefs)}
+                        className="h-12 w-11 rounded-lg border bg-background text-center text-xl font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Confirm PIN */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm">
+                    <Hash className="h-3.5 w-3.5" />
+                    Confirm PIN
+                  </Label>
+                  <div className="flex gap-2">
+                    {confirmDigits.map((d, i) => (
+                      <input
+                        key={i}
+                        ref={(el) => { confirmRefs.current[i] = el; }}
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={d}
+                        onChange={(e) => handlePinDigit(i, e.target.value, confirmDigits, setConfirmDigits, confirmRefs)}
+                        onKeyDown={(e) => handlePinKeyDown(i, e, confirmDigits, confirmRefs)}
+                        className="h-12 w-11 rounded-lg border bg-background text-center text-xl font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {pinValue && confirmValue && pinValue !== confirmValue && (
+                  <p className="text-xs text-destructive">PINs do not match</p>
+                )}
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleSavePin}
+                    disabled={pinSaving || pinValue.length < 4 || pinValue !== confirmValue}
+                  >
+                    {pinSaving ? "Saving…" : "Save PIN"}
+                  </Button>
+                  {hasPin && (
+                    <Button
+                      variant="outline"
+                      onClick={handleRemovePin}
+                      disabled={pinSaving}
+                      className="gap-2 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove PIN
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          <hr className="border-border/50" />
+
           {/* ─── Security Settings ───────────────────────────────────── */}
           <SecuritySettings user={user} />
+
         </div>
       </div>
 

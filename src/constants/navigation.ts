@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  ClipboardCheck,
   LayoutDashboard,
   LucideIcon,
   MessageSquare,
@@ -61,6 +62,7 @@ export const PATHS = {
     INVENTORY_STOCK_LEVELS: "/inventory/stock",
 
     SETTINGS_PROFILE: "/settings/profile",
+    ATTENDANCE: "/attendance",
   },
 } as const;
 
@@ -177,6 +179,11 @@ export const staffNavigation: NavItem[] = [
       { title: "View Products", url: PATHS.STAFF_NAV.INVENTORY_VIEW_PRODUCTS },
       { title: "Stock Levels", url: PATHS.STAFF_NAV.INVENTORY_STOCK_LEVELS },
     ],
+  },
+  {
+    title: "Attendance",
+    url: PATHS.STAFF_NAV.ATTENDANCE,
+    icon: ClipboardCheck,
   },
   {
     title: "Settings",
