@@ -41,6 +41,7 @@ export async function GET(request: Request) {
     const matchStage = {
       $match: {
         createdAt: { $gte: startDate },
+        status: "completed",
         ...(staffId && { cashierId: staffId }),
       },
     };

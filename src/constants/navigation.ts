@@ -26,7 +26,7 @@ export const PATHS = {
     SALES_ALL_TRANSACTIONS: "/sales/all-transactions",
     SALES_ANALYTICS: "/sales/sales-analytics",
     SALES_REFUND_RETURN: "/sales/refund-and-return",
-    SALES_CLOSE_REGISTER: "/sales/close-register-history",
+    SALES_VOID_REPORTS: "/sales/void-reports",
 
     INVENTORY_CATEGORIES: "/inventory/categories",
     INVENTORY_STOCK_ALERT: "/inventory/stockalert",
@@ -88,12 +88,9 @@ export const adminNavigation: NavItem[] = [
     icon: ShoppingCart,
     items: [
       { title: "All Transactions", url: PATHS.ADMIN.SALES_ALL_TRANSACTIONS },
-      {
-        title: "Close Register History",
-        url: PATHS.ADMIN.SALES_CLOSE_REGISTER,
-      },
       { title: "Sales Analytics", url: PATHS.ADMIN.SALES_ANALYTICS },
       { title: "Refunds & Returns", url: PATHS.ADMIN.SALES_REFUND_RETURN },
+      { title: "Void Reports", url: PATHS.ADMIN.SALES_VOID_REPORTS },
     ],
   },
   {

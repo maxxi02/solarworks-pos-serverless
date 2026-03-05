@@ -30,7 +30,6 @@ interface PortalNotifSettings {
   vibration: boolean;
 }
 
-const STORAGE_KEY = "portalNotifSettings";
 
 const DEFAULT_SETTINGS: PortalNotifSettings = {
   sound: true,
@@ -90,6 +89,7 @@ function previewSound() {
 export default function StoreSettingPage() {
   const [settings, setSettings] = useState<PortalNotifSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
 
   // ── PIN state ────────────────────────────────────────────────────────────
   const [hasPin, setHasPin] = useState<boolean | null>(null);
@@ -102,18 +102,15 @@ export default function StoreSettingPage() {
   const pinValue = pinDigits.join("");
   const confirmValue = confirmDigits.join("");
 
-  // Load from localStorage on mount
+  // Load from DB on mount — both requests fire in parallel
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setSettings(JSON.parse(stored));
-    } catch { /* ignore */ }
-
-    // Fetch PIN status
-    fetch("/api/user/attendance-pin")
-      .then((r) => r.json())
-      .then((d) => { if (d.success) setHasPin(d.hasPin); })
-      .catch(() => {});
+    Promise.all([
+      fetch("/api/user/notif-settings").then((r) => r.json()).catch(() => null),
+      fetch("/api/user/attendance-pin").then((r) => r.json()).catch(() => null),
+    ]).then(([notif, pin]) => {
+      if (notif?.success) setSettings(notif.settings);
+      if (pin?.success) setHasPin(pin.hasPin);
+    }).finally(() => setSettingsLoading(false));
   }, []);
 
   const handlePinDigitChange = (
@@ -194,12 +191,21 @@ export default function StoreSettingPage() {
     setSaved(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-      setSaved(true);
-      toast.success("Settings saved!");
-      setTimeout(() => setSaved(false), 2000);
+      const res = await fetch("/api/user/notif-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSaved(true);
+        toast.success("Settings saved!");
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        toast.error("Failed to save settings");
+      }
     } catch {
       toast.error("Failed to save settings");
     }
@@ -234,107 +240,6 @@ export default function StoreSettingPage() {
       </div>
 
       <Separator />
-
-      {/* ── Attendance PIN ──────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <KeyRound className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                Attendance PIN
-                {hasPin !== null && (
-                  <Badge variant={hasPin ? "default" : "secondary"} className="text-xs">
-                    {hasPin ? "PIN Set" : "No PIN"}
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Set a 4–6 digit PIN for quick clock-in / clock-out. If no PIN is set,
-                you will need to use your account password.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-5">
-          {/* New PIN */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Hash className="h-3.5 w-3.5" />
-              {hasPin ? "Change PIN" : "New PIN"} (4–6 digits)
-            </Label>
-            <div className="flex gap-2">
-              {pinDigits.map((d, i) => (
-                <input
-                  key={i}
-                  ref={(el) => { pinRefs.current[i] = el; }}
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={d}
-                  onChange={(e) =>
-                    handlePinDigitChange(i, e.target.value, pinDigits, setPinDigits, pinRefs)
-                  }
-                  onKeyDown={(e) => handlePinDigitKeyDown(i, e, pinDigits, pinRefs)}
-                  className="h-11 w-10 rounded-lg border bg-background text-center text-lg font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Confirm PIN */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Hash className="h-3.5 w-3.5" />
-              Confirm PIN
-            </Label>
-            <div className="flex gap-2">
-              {confirmDigits.map((d, i) => (
-                <input
-                  key={i}
-                  ref={(el) => { confirmRefs.current[i] = el; }}
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={d}
-                  onChange={(e) =>
-                    handlePinDigitChange(i, e.target.value, confirmDigits, setConfirmDigits, confirmRefs)
-                  }
-                  onKeyDown={(e) => handlePinDigitKeyDown(i, e, confirmDigits, confirmRefs)}
-                  className="h-11 w-10 rounded-lg border bg-background text-center text-lg font-bold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              ))}
-            </div>
-          </div>
-
-          {pinValue && confirmValue && pinValue !== confirmValue && (
-            <p className="text-xs text-destructive">PINs do not match</p>
-          )}
-
-          <div className="flex gap-3">
-            <Button
-              onClick={handleSavePin}
-              disabled={pinSaving || pinValue.length !== 4 || pinValue !== confirmValue}
-            >
-              {pinSaving ? "Saving…" : "Save PIN"}
-            </Button>
-            {hasPin && (
-              <Button
-                variant="outline"
-                onClick={handleRemovePin}
-                disabled={pinSaving}
-                className="gap-2 text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove PIN
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Customer Portal Notifications */}
       <Card>
@@ -412,7 +317,7 @@ export default function StoreSettingPage() {
             <Bell className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-blue-300">
               These settings are stored on the browser. Customers must visit the waiting page on the device where settings are applied.
-              For cross-device settings, settings are stored per-device in localStorage.
+              Settings are saved to your account and sync across devices.
             </p>
           </div>
         </CardContent>

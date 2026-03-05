@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       // Password mode: use better-auth scrypt verifier
       const accountsCol = MONGODB.collection("account");
       const account = await accountsCol.findOne({
-        userId: targetUser._id.toString(),
+        userId: targetUser._id,
         providerId: "credential",
       });
       if (!account?.password) {

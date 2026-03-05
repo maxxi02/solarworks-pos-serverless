@@ -5,7 +5,9 @@ import {
   Clock, Search, Printer, RefreshCw, ArrowUpDown,
   CheckCircle2, XCircle, AlertCircle, DollarSign, Smartphone, Receipt,
   TrendingUp, FileText, ArrowLeft, ArrowRight, X, CreditCard, WifiOff,
+  Ban,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface TransactionItem {
   name: string
@@ -27,7 +29,7 @@ interface Transaction {
   splitPayment?: { cash: number; gcash: number }
   amountPaid?: number
   change?: number
-  status: 'completed' | 'cancelled' | 'refunded'
+  status: 'completed' | 'cancelled' | 'refunded' | 'voided'
   cashier: string
   timestamp: Date
   orderType: 'dine-in' | 'takeaway'
@@ -54,6 +56,10 @@ const History = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [showDetailsModal, setShowDetailsModal]       = useState(false)
   const [isPrinting, setIsPrinting]       = useState(false)
+  const [isVoiding, setIsVoiding]         = useState(false)
+  const [showVoidConfirm, setShowVoidConfirm] = useState(false)
+  const [voidReason, setVoidReason]       = useState('')
+  const [adminPin, setAdminPin]           = useState('')
   const [currentPage, setCurrentPage]     = useState(1)
   const [itemsPerPage]                    = useState(10)
   const [totalCount, setTotalCount]       = useState(0)
@@ -291,6 +297,11 @@ const History = () => {
         <XCircle className="w-3 h-3 mr-1" />Cancelled
       </span>
     )
+    if (status === 'voided') return (
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100/80 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+        <Ban className="w-3 h-3 mr-1" />Voided
+      </span>
+    )
     return (
       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100/80 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
         <AlertCircle className="w-3 h-3 mr-1" />Refunded
@@ -410,6 +421,7 @@ const History = () => {
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
               <option value="refunded">Refunded</option>
+              <option value="voided">Voided</option>
             </select>
 
             <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
@@ -665,6 +677,17 @@ const History = () => {
                 </div>
 
                 <div className="mt-6 flex gap-3">
+                  {/* Void button — only for completed transactions */}
+                  {selectedTransaction.status === 'completed' && (
+                    <button
+                      onClick={() => { setShowVoidConfirm(true); setVoidReason('') }}
+                      disabled={isVoiding}
+                      className="px-4 py-3 border-2 border-orange-400 text-orange-600 dark:text-orange-400 rounded-xl text-base font-semibold hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2 disabled:opacity-50 transition-colors"
+                    >
+                      <Ban className="w-5 h-5" />
+                      Void
+                    </button>
+                  )}
                   <button
                     onClick={() => handlePrint(selectedTransaction)}
                     disabled={isPrinting}
@@ -675,11 +698,122 @@ const History = () => {
                   </button>
                   <button
                     onClick={() => setShowDetailsModal(false)}
-                    className="flex-1 px-6 py-3 border-2 border-border rounded-xl text-base font-semibold hover:bg-muted/50 active:bg-background transition-colors"
+                    className="px-6 py-3 border-2 border-border rounded-xl text-base font-semibold hover:bg-muted/50 active:bg-background transition-colors"
                   >
                     Close
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Void Confirm Modal */}
+        {showVoidConfirm && selectedTransaction && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-card rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-orange-100 dark:bg-orange-900/30">
+                  <Ban className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Void Transaction</h3>
+                  <p className="text-sm text-muted-foreground">{selectedTransaction.orderNumber}</p>
+                </div>
+              </div>
+
+              <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg p-3 text-sm text-orange-700 dark:text-orange-300">
+                This will void <strong>₱{selectedTransaction.total.toFixed(2)}</strong> and deduct it from sales. The admin will be notified. This cannot be undone.
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Reason for voiding</label>
+                <textarea
+                  value={voidReason}
+                  onChange={e => setVoidReason(e.target.value)}
+                  placeholder="e.g. Customer changed mind, wrong order..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5 relative">
+                <label className="text-sm font-medium">Admin Authorization PIN</label>
+                <div className="relative">
+                  <div className="flex justify-between gap-2 pointer-events-none">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className={`w-full h-12 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all ${
+                          adminPin[i] ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/20"
+                        }`}
+                      >
+                        {adminPin[i] ? "•" : ""}
+                      </div>
+                    ))}
+                  </div>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    autoFocus
+                    maxLength={4}
+                    value={adminPin}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      setAdminPin(val);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">An administrator must enter their PIN to authorize this void.</p>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={async () => {
+                    if (!adminPin || adminPin.length < 4) {
+                      toast.error('Please enter the 4-digit Admin PIN')
+                      return
+                    }
+                    setIsVoiding(true)
+                    try {
+                      const res = await fetch('/api/payments/void', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          transactionId: selectedTransaction.id,
+                          reason: voidReason,
+                          adminPin: adminPin,
+                        }),
+                      })
+                      const data = await res.json()
+                      if (data.success) {
+                        toast.success(data.message)
+                        setShowVoidConfirm(false)
+                        setShowDetailsModal(false)
+                        setAdminPin('')
+                        fetchTransactions()
+                        fetchTodayStats()
+                      } else {
+                        toast.error(data.message || 'Failed to void transaction')
+                      }
+                    } catch {
+                      toast.error('Network error — please try again')
+                    } finally {
+                      setIsVoiding(false)
+                    }
+                  }}
+                  disabled={isVoiding}
+                  className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors"
+                >
+                  {isVoiding ? 'Voiding...' : 'Confirm Void'}
+                </button>
+                <button
+                  onClick={() => { setShowVoidConfirm(false); setAdminPin(''); }}
+                  className="flex-1 py-2.5 border border-border rounded-lg font-semibold text-sm hover:bg-muted/50 transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>

@@ -61,7 +61,7 @@ export default function ProfilePage() {
   React.useEffect(() => {
     if (!session?.user) return;
     const role = (session.user as ExtendedUser).role;
-    if (role === "staff" || role === "manager") {
+    if (role === "staff" || role === "manager" || role === "admin") {
       fetch("/api/user/attendance-pin")
         .then((r) => r.json())
         .then((d) => { if (d.success) setHasPin(d.hasPin); })
@@ -102,7 +102,7 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("Attendance PIN saved!");
+        toast.success("PIN saved successfully!");
         setHasPin(true);
         setPinDigits(["", "", "", ""]);
         setConfirmDigits(["", "", "", ""]);
@@ -396,13 +396,13 @@ export default function ProfilePage() {
 
           <hr className="border-border/50" />
 
-          {/* ─── Attendance PIN (staff / manager only) ────────────────── */}
-          {(user.role === "staff" || user.role === "manager") && (
+          {/* ─── Attendance & Admin PIN (staff / manager / admin) ────────── */}
+          {(user.role === "staff" || user.role === "manager" || user.role === "admin") && (
             <section className="space-y-6">
               <div className="space-y-1">
                 <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
                   <KeyRound className="h-6 w-6 text-primary" />
-                  Attendance PIN
+                  Attendance & Admin PIN
                   {hasPin !== null && (
                     <Badge variant={hasPin ? "default" : "secondary"} className="text-sm">
                       {hasPin ? "PIN Set" : "No PIN"}
@@ -411,7 +411,10 @@ export default function ProfilePage() {
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   Set a 4–6 digit PIN for quick clock-in / clock-out on the Attendance page.
-                  If no PIN is set, your account password will be used instead.
+                  {user.role === "admin" && (
+                    <> For <strong>Administrators</strong>, this PIN is also required to authorize <strong>transaction voids</strong>.</>
+                  )}
+                  {" "}If no PIN is set, your account password will be used instead.
                 </p>
               </div>
 

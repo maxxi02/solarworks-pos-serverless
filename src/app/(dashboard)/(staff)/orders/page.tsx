@@ -508,7 +508,7 @@ export default function OrdersPage() {
     (order: SavedOrder) => {
       setCurrentReceipt({
         ...order,
-        cashier: "Cashier",
+        cashier: order.cashier || staffName,
         seniorPwdIds: order.seniorPwdIds || seniorPwdIds,
         isReprint: true,
       });
@@ -658,6 +658,8 @@ export default function OrdersPage() {
         orderNote,
         seniorPwdCount,
         seniorPwdIds,
+        cashier: staffName,
+        cashierId: session?.user?.id,
       });
 
       await saveOrderToDatabase(completedOrder);
@@ -713,7 +715,6 @@ export default function OrdersPage() {
 
       setCurrentReceipt({
         ...completedOrder,
-        cashier: "Cashier",
         seniorPwdIds: seniorPwdIds.length ? seniorPwdIds : undefined,
       });
       setShowReceipt(true);

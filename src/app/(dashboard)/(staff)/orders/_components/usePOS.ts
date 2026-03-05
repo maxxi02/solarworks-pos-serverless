@@ -160,6 +160,8 @@ export const buildOrder = ({
   orderNote,
   seniorPwdCount,
   seniorPwdIds,
+  cashier,
+  cashierId,
 }: {
   cart: CartItem[];
   customerName: string;
@@ -174,6 +176,8 @@ export const buildOrder = ({
   orderNote: string;
   seniorPwdCount: number;
   seniorPwdIds: string[];
+  cashier?: string;
+  cashierId?: string;
 }): SavedOrder => {
   const orderId = `order-${Date.now()}`;
   return {
@@ -194,8 +198,8 @@ export const buildOrder = ({
     status: "completed",
     seniorPwdCount,
     orderNote: orderNote || undefined,
-    cashier: "Cashier",
-    cashierId: "current-user-id",
+    cashier: cashier || "Cashier",
+    cashierId: cashierId || "unknown",
     seniorPwdIds,
   };
 };
