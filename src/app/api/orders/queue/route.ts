@@ -3,6 +3,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MONGODB } from "@/config/db";
 
+const VALID_STATUSES = [
+  "pending_payment",
+  "queueing",
+  "serving",
+  "done",
+  "cancelled",
+];
+
+const TIMESTAMP_MAP: Record<string, string> = {
+  queueing: "queueingAt",
+  serving: "servingAt",
+  done: "doneAt",
+  cancelled: "cancelledAt",
+};
+
 // GET orders by queue status
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +25,7 @@ export async function GET(request: NextRequest) {
     const statusesParam = searchParams.get("statuses");
     const statuses = statusesParam
       ? statusesParam.split(",")
-      : ["paid", "preparing", "ready", "served"];
+      : ["queueing", "serving"];
 
     const orders = await MONGODB.collection("orders")
       .find({ queueStatus: { $in: statuses } })
@@ -48,46 +63,23 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const validStatuses = [
-      "pending_payment",
-      "paid",
-      "preparing",
-      "ready",
-      "served",
-      "completed",
-      "cancelled",
-    ];
-
-    if (!validStatuses.includes(queueStatus)) {
+    if (!VALID_STATUSES.includes(queueStatus)) {
       return NextResponse.json(
         {
-          error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+          error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}`,
         },
         { status: 400 },
       );
     }
-
-    const timestampMap: Record<string, string> = {
-      paid: "paidAt",
-      preparing: "preparingAt",
-      ready: "readyAt",
-      served: "servedAt",
-      completed: "completedAt",
-      cancelled: "cancelledAt",
-    };
 
     const updateData: Record<string, unknown> = {
       queueStatus,
       updatedAt: new Date(),
     };
 
-    const timestampField = timestampMap[queueStatus];
+    const timestampField = TIMESTAMP_MAP[queueStatus];
     if (timestampField) {
       updateData[timestampField] = new Date();
-    }
-
-    if (queueStatus === "paid") {
-      updateData.paymentStatus = "paid";
     }
 
     const result = await MONGODB.collection("orders").findOneAndUpdate(
@@ -100,22 +92,83 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    // ── When marked "done", auto-save into the payments (transaction history) collection ──
+    if (queueStatus === "done") {
+      try {
+        const paymentsCollection = MONGODB.collection("payments");
+
+        // Avoid duplicate entries
+        const existing = await paymentsCollection.findOne({
+          orderId: result.orderId,
+        });
+        if (!existing) {
+          await paymentsCollection.insertOne({
+            orderId: result.orderId,
+            orderNumber: result.orderNumber,
+            customerName: result.customerName,
+            cashier: "QR Order", // GCash QR orders have no cashier
+            items: result.items || [],
+            subtotal: result.subtotal || result.total,
+            discount: 0,
+            discountTotal: 0,
+            total: result.total,
+            paymentMethod: "gcash",
+            paymentReference: result.paymentReference || null,
+            amountPaid: result.total,
+            change: 0,
+            status: "completed",
+            orderType: result.orderType || "dine-in",
+            tableNumber: result.tableNumber || null,
+            timestamp: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            source: "qr_order", // marks it as a QR/online order
+          });
+          console.log(
+            `✅ Payment record created for QR order: ${result.orderId}`,
+          );
+        }
+
+        // Notify socket server to refresh sales dashboard
+        try {
+          await fetch(
+            `${process.env.NEXT_PUBLIC_SOCKET_URL}/internal/sales-updated`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-internal-secret": process.env.INTERNAL_SECRET || "",
+              },
+            },
+          );
+        } catch {
+          /* non-critical */
+        }
+      } catch (payErr) {
+        console.error("⚠️ Failed to save payment record:", payErr);
+        // Don't fail the status update just because payment save failed
+      }
+    }
+
     // Notify socket server to update the customer's waiting page
     try {
       if (result.sessionId) {
-        await fetch(`${process.env.SOCKET_URL}/internal/order-status-changed`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-internal-secret": process.env.BETTER_AUTH_SECRET || "",
+        await fetch(
+          `${process.env.NEXT_PUBLIC_SOCKET_URL}/internal/order-status-changed`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-internal-secret": process.env.INTERNAL_SECRET || "",
+            },
+            body: JSON.stringify({
+              orderId: result.orderId,
+              orderNumber: result.orderNumber,
+              queueStatus: result.queueStatus,
+              sessionId: result.sessionId,
+            }),
           },
-          body: JSON.stringify({
-            orderId: result.orderId,
-            orderNumber: result.orderNumber,
-            queueStatus: result.queueStatus,
-            sessionId: result.sessionId,
-          }),
-        });
+        );
       }
     } catch (err) {
       console.warn(

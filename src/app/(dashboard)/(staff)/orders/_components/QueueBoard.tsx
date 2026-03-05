@@ -26,27 +26,22 @@ function formatTime(d: Date | string | undefined) {
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string }> = {
     pending_payment: {
-        label: "New Order",
+        label: "Awaiting Payment",
+        dot: "bg-yellow-400 animate-pulse",
+        badge: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
+    },
+    queueing: {
+        label: "Queueing",
         dot: "bg-sky-500 animate-pulse",
         badge: "bg-sky-500/10 text-sky-400 border border-sky-500/20",
-    },
-    paid: {
-        label: "Paid",
-        dot: "bg-blue-500",
-        badge: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
-    },
-    preparing: {
-        label: "Preparing",
-        dot: "bg-amber-500",
-        badge: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
     },
     serving: {
         label: "Serving",
         dot: "bg-emerald-500",
         badge: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
     },
-    served: {
-        label: "Served",
+    done: {
+        label: "Done",
         dot: "bg-purple-400",
         badge: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
     },
@@ -70,7 +65,7 @@ interface QueueBoardProps {
     onOpenChat?: (order: CustomerOrder) => void;
 }
 
-type FilterType = "all" | "new" | "preparing" | "serving";
+type FilterType = "all" | "queueing" | "serving";
 
 export function QueueBoard({ onOpenChat }: QueueBoardProps) {
     const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
@@ -86,7 +81,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
         try {
             setIsLoading(true);
             // Include pending_payment so customer orders show immediately
-            const res = await fetch("/api/orders/queue?statuses=pending_payment,paid,preparing,serving,served");
+            const res = await fetch("/api/orders/queue?statuses=pending_payment,queueing,serving");
             if (!res.ok) throw new Error("Failed to fetch");
             const data = await res.json();
             setOrders(data);
@@ -159,18 +154,16 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
     };
 
     // ─── Filtered rows ───────────────────────────────────────────────
-    const ACTIVE_STATUSES = ["pending_payment", "paid", "preparing", "serving"];
+    const ACTIVE_STATUSES = ["pending_payment", "queueing", "serving"];
 
     const visibleOrders = orders.filter((o) => {
         if (filter === "all") return ACTIVE_STATUSES.includes(o.queueStatus || "");
-        if (filter === "new") return ["pending_payment", "paid"].includes(o.queueStatus || "");
         return o.queueStatus === filter;
     });
 
     const counts = {
         all: orders.filter((o) => ACTIVE_STATUSES.includes(o.queueStatus || "")).length,
-        new: orders.filter((o) => ["pending_payment", "paid"].includes(o.queueStatus || "")).length,
-        preparing: orders.filter((o) => o.queueStatus === "preparing").length,
+        queueing: orders.filter((o) => o.queueStatus === "queueing").length,
         serving: orders.filter((o) => o.queueStatus === "serving").length,
     };
 
@@ -212,7 +205,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
 
             {/* Filter tabs */}
             <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit">
-                {(["all", "new", "preparing", "serving"] as const).map((f) => (
+                {(["all", "queueing", "serving"] as const).map((f) => (
                     <button
                         key={f}
                         onClick={() => setFilter(f)}
@@ -221,16 +214,15 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                             : "text-muted-foreground hover:text-foreground"
                             }`}
                     >
-                        {f === "preparing" && <ChefHat className="w-3.5 h-3.5" />}
                         {f === "serving" && <UtensilsCrossed className="w-3.5 h-3.5" />}
                         {f === "all" && <Filter className="w-3.5 h-3.5" />}
-                        {f === "new" && <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />}
-                        {f === "all" ? "All Active" : f === "new" ? "Incoming" : f.charAt(0).toUpperCase() + f.slice(1)}
-                        <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${f === "new" && counts.new > 0
+                        {f === "queueing" && <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />}
+                        {f === "all" ? "All Active" : f.charAt(0).toUpperCase() + f.slice(1)}
+                        <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${f === "queueing" && (counts.queueing ?? 0) > 0
                             ? "bg-sky-500/20 text-sky-400"
                             : "bg-muted text-muted-foreground"
                             }`}>
-                            {counts[f]}
+                            {counts[f] ?? counts.all}
                         </span>
                     </button>
                 ))}
@@ -276,9 +268,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                                     const stateTimestamp =
                                         order.queueStatus === "serving"
                                             ? order.servingAt
-                                            : order.queueStatus === "preparing"
-                                                ? order.preparingAt
-                                                : order.paidAt;
+                                            : order.queueingAt ?? order.paidAt;
 
                                     return (
                                         <tr
@@ -355,39 +345,27 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                                                     className="flex items-center justify-end gap-2"
                                                     onClick={(e) => e.stopPropagation()}
                                                 >
-                                                    {(order.queueStatus === "pending_payment" || order.queueStatus === "paid") && (
-                                                        <button
-                                                            onClick={(e) => updateStatus(e, order.orderId, "preparing")}
-                                                            disabled={isUpdating}
-                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold border border-amber-500/20 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <ChefHat className="w-3 h-3" />
-                                                            {isUpdating ? "..." : "Start Preparing"}
-                                                        </button>
-                                                    )}
-                                                    {order.queueStatus === "preparing" && (
+                                                    {(order.queueStatus === "pending_payment" || order.queueStatus === "queueing") && (
                                                         <button
                                                             onClick={(e) => updateStatus(e, order.orderId, "serving")}
                                                             disabled={isUpdating}
                                                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 transition-colors disabled:opacity-50"
                                                         >
                                                             <UtensilsCrossed className="w-3 h-3" />
-                                                            {isUpdating ? "..." : "Mark Serving"}
+                                                            {isUpdating ? "..." : "Start Serving"}
                                                         </button>
                                                     )}
                                                     {order.queueStatus === "serving" && (
                                                         <button
-                                                            onClick={(e) => updateStatus(e, order.orderId, "served")}
+                                                            onClick={(e) => updateStatus(e, order.orderId, "done")}
                                                             disabled={isUpdating}
                                                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 text-xs font-semibold border border-purple-500/20 transition-colors disabled:opacity-50"
                                                         >
-                                                            ✓ {isUpdating ? "..." : "Mark Served"}
+                                                            ✓ {isUpdating ? "..." : "Mark Done"}
                                                         </button>
                                                     )}
-                                                    {order.queueStatus === "served" && (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            ✓ Done
-                                                        </span>
+                                                    {order.queueStatus === "done" && (
+                                                        <span className="text-xs text-muted-foreground">✓ Done</span>
                                                     )}
                                                 </div>
                                             </td>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useState } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { X, Download, Printer, Smartphone, CheckCircle } from "lucide-react";
 import QRCode from "react-qr-code";
 import { useSocket } from "@/hooks/useSocket";
@@ -14,8 +14,18 @@ interface QRPreviewModalProps {
 
 export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
     const qrRef = useRef<HTMLDivElement>(null);
-    const { socket, isConnected } = useSocket();
+    const { socket, isConnected, printerStatus } = useSocket();
     const [isPrinting, setIsPrinting] = useState(false);
+    const [hasPrinted, setHasPrinted] = useState(false);
+    const [printTarget, setPrintTarget] = useState<'receipt' | 'kitchen'>('receipt');
+
+    useEffect(() => {
+        if (printerStatus.bt && !printerStatus.usb) {
+            setPrintTarget('kitchen');
+        } else if (printerStatus.usb && !printerStatus.bt) {
+            setPrintTarget('receipt');
+        }
+    }, [printerStatus.usb, printerStatus.bt]);
 
     const handleDownload = useCallback(() => {
         if (!qrRef.current) return;
@@ -70,55 +80,35 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
         img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
     }, [label, url]);
 
-    const handlePrint = useCallback(() => {
-        const printWindow = window.open("", "_blank");
-        if (!printWindow || !qrRef.current) return;
-
-        const svg = qrRef.current.querySelector("svg");
-        if (!svg) return;
-
-        const svgData = new XMLSerializer().serializeToString(svg);
-
-        printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${label} - QR Code</title>
-          <style>
-            body {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              font-family: sans-serif;
-              margin: 0;
-              padding: 20px;
-            }
-            .qr-container { margin-bottom: 24px; }
-            h1 { font-size: 28px; margin: 0 0 8px; }
-            p { color: #666; font-size: 16px; margin: 0; }
-            .url { font-family: monospace; font-size: 11px; color: #999; margin-top: 16px; word-break: break-all; max-width: 300px; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <div class="qr-container">${svgData}</div>
-          <h1>${label}</h1>
-          <p>Scan to order</p>
-          <p class="url">${url}</p>
-          <script>window.onload = () => { window.print(); window.close(); }</script>
-        </body>
-      </html>
-    `);
-        printWindow.document.close();
-    }, [label, url]);
 
     const handlePrintViaCompanion = useCallback(async () => {
         if (!socket || !isConnected) {
-            toast.error("Companion not connected", {
-                description: "Make sure the companion app is running and connected.",
+            toast.error("Companion connection unavailable", {
+                description: "The POS is not connected to the server. Check your connection.",
             });
             return;
+        }
+
+        if (!printerStatus.usb && !printerStatus.bt) {
+            toast.error("No printers detected", {
+                description: "Connect a USB or Bluetooth printer in the companion app.",
+            });
+            return;
+        }
+
+        const targetOnline = printTarget === 'receipt' ? printerStatus.usb : printerStatus.bt;
+        if (!targetOnline) {
+            const fallbackTarget = printTarget === 'receipt' ? 'kitchen' : 'receipt';
+            const fallbackOnline = fallbackTarget === 'receipt' ? printerStatus.usb : printerStatus.bt;
+
+            if (fallbackOnline) {
+                setPrintTarget(fallbackTarget);
+            } else {
+                toast.error("Selected printer is offline", {
+                    description: "Check your printer connection in the companion app.",
+                });
+                return;
+            }
         }
 
         setIsPrinting(true);
@@ -131,7 +121,8 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
             socket.off("print:job:result", handleResult);
             setIsPrinting(false);
             if (result.success) {
-                toast.success("QR Code printed!", { description: `${label} sent to companion printer.` });
+                setHasPrinted(true);
+                toast.success("QR Code printed!", { description: `${label} sent to ${printTarget === 'receipt' ? 'receipt' : 'kitchen'} printer.` });
             } else {
                 toast.error("Print failed", { description: result.error || "Unknown error" });
             }
@@ -139,8 +130,8 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
 
         socket.on("print:job:result", handleResult);
 
-        // Emit the QR print job
-        socket.emit("print:qr", { url, label, jobId });
+        // Emit the QR print job with target
+        socket.emit("print:qr", { url, label, jobId, target: printTarget });
 
         // Timeout fallback
         setTimeout(() => {
@@ -150,12 +141,12 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
                 toast("QR sent to companion", { description: "No acknowledgment received but job was dispatched." });
             }
         }, 6000);
-    }, [socket, isConnected, url, label, isPrinting]);
+    }, [socket, isConnected, url, label, isPrinting, printTarget, printerStatus.usb, printerStatus.bt]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-bold text-foreground">{label}</h2>
@@ -170,15 +161,16 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
                 {/* QR Code */}
                 <div
                     ref={qrRef}
-                    className="flex items-center justify-center bg-white rounded-xl p-8 mb-4"
+                    className="flex items-center justify-center bg-white rounded-xl p-8 mb-4 shadow-inner"
                 >
-                    <QRCode value={url} size={256} level="H" />
+                    <QRCode value={url} size={320} level="H" />
                 </div>
 
                 {/* URL */}
                 <p className="text-xs text-muted-foreground font-mono text-center break-all mb-4">
                     {url}
                 </p>
+
 
                 {/* Companion status indicator */}
                 <div className="flex items-center justify-center gap-1.5 mb-5">
@@ -189,7 +181,7 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
                 </div>
 
                 {/* Actions */}
-                <div className="grid grid-cols-2 gap-2 mb-2">
+                <div className="grid grid-cols-1 gap-2 mb-2">
                     <button
                         onClick={handleDownload}
                         className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
@@ -197,32 +189,25 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
                         <Download className="w-4 h-4" />
                         Download
                     </button>
-                    <button
-                        onClick={handlePrint}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-border text-foreground text-sm font-semibold hover:bg-accent transition-colors"
-                    >
-                        <Printer className="w-4 h-4" />
-                        Print
-                    </button>
                 </div>
                 <button
                     onClick={handlePrintViaCompanion}
-                    disabled={!isConnected || isPrinting}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isPrinting}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isPrinting ? (
                         <>
                             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Sending...
+                            Printing...
                         </>
                     ) : (
                         <>
-                            <Smartphone className="w-4 h-4" />
-                            Print via Companion
+                            <Printer className="w-4 h-4" />
+                            {hasPrinted ? "Reprint" : "Print"}
                         </>
                     )}
                 </button>
             </div>
-        </div>
+        </div >
     );
 }

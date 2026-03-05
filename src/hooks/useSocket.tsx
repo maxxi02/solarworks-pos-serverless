@@ -71,6 +71,9 @@ interface SocketContextValue {
     emitChatTypingUpdate: (conversationId: string, isTyping: boolean) => void;
     emitChatMessagesRead: (conversationId: string) => void;
 
+    // ─── Printer Status ──────────────────────────────────────────
+    printerStatus: { usb: boolean; bt: boolean };
+
     // ─── Status listeners ─────────────────────────────────────────
     onStatusChanged: (cb: (data: UserStatusUpdate) => void) => void;
     offStatusChanged: (cb?: (data: UserStatusUpdate) => void) => void;
@@ -90,6 +93,7 @@ const SocketContext = createContext<SocketContextValue>({
     socket: null,
     isConnected: false,
     isActive: true,
+    printerStatus: { usb: false, bt: false },
     emitOnline: () => { },
     emitActivity: () => { },
     emitChatConversationsLoad: () => { },
@@ -128,6 +132,7 @@ export function SocketProvider({
     const socketRef = useRef<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [isActive, setIsActive] = useState(true);
+    const [printerStatus, setPrinterStatus] = useState({ usb: false, bt: false });
 
     const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
     const activityDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -151,15 +156,22 @@ export function SocketProvider({
         socket.on("connect", () => {
             setIsConnected(true);
             socket.emit("user:online");
+            socket.emit("pos:join");
             console.log("✅ Connected to Socket.IO server:", socket.id);
         });
 
         socket.on("disconnect", (reason) => {
             setIsConnected(false);
+            setPrinterStatus({ usb: false, bt: false });
             console.log("🔌 Disconnected:", reason);
             if (reason === "io server disconnect") {
                 socket.connect();
             }
+        });
+
+        socket.on("companion:printer:status", (status: { usb: boolean; bt: boolean }) => {
+            console.log("🖨️ Printer status updated:", status);
+            setPrinterStatus(status);
         });
 
         socket.on("reconnect", (attemptNumber) => {
@@ -297,6 +309,7 @@ export function SocketProvider({
                 socket: socketRef.current,
                 isConnected,
                 isActive,
+                printerStatus,
                 emitOnline,
                 emitActivity,
                 emitChatConversationsLoad,

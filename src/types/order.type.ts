@@ -4,12 +4,9 @@ export type QrType = "dine-in" | "walk-in" | "drive-thru";
 
 export type QueueStatus =
   | "pending_payment"
-  | "paid"
-  | "preparing"
+  | "queueing"
   | "serving"
-  | "ready"
-  | "served"
-  | "completed"
+  | "done"
   | "cancelled";
 
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
@@ -53,10 +50,8 @@ export interface CustomerOrder {
   // Timestamps
   createdAt?: Date;
   paidAt?: Date;
-  preparingAt?: Date;
+  queueingAt?: Date;
   servingAt?: Date;
-  readyAt?: Date;
-  servedAt?: Date;
-  completedAt?: Date;
+  doneAt?: Date;
   cancelledAt?: Date;
 }
