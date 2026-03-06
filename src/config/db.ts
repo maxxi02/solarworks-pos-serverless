@@ -46,25 +46,36 @@ export const MONGODB: Db = client.db();
  * Initialize database indexes for performance
  */
 export async function initIndexes() {
+  const db = MONGODB;
+  
+  const createIdx = async (col: string, spec: any, options?: any) => {
+    try {
+      await db.collection(col).createIndex(spec, options);
+    } catch (err: any) {
+      // Ignore IndexKeySpecsConflict or identical index already exists
+      if (err.code !== 86 && err.code !== 85) {
+        console.warn(`⚠️ Could not create index on ${col}:`, err.message);
+      }
+    }
+  };
+
   try {
-    const db = MONGODB;
+    // Payments
+    await createIdx('payments', { createdAt: -1 });
+    await createIdx('payments', { status: 1 });
+    await createIdx('payments', { orderNumber: 1 });
+    await createIdx('payments', { timestamp: -1 });
     
-    // Payments collection indexes
-    await db.collection('payments').createIndex({ createdAt: -1 });
-    await db.collection('payments').createIndex({ status: 1 });
-    await db.collection('payments').createIndex({ orderNumber: 1 });
-    await db.collection('payments').createIndex({ timestamp: -1 });
+    // Inventory
+    await createIdx('inventory', { name: 1 });
+    await createIdx('inventory', { status: 1 });
+    await createIdx('inventory', { category: 1 });
     
-    // Inventory collection indexes
-    await db.collection('inventory').createIndex({ name: 1 });
-    await db.collection('inventory').createIndex({ status: 1 });
-    await db.collection('inventory').createIndex({ category: 1 });
+    // Stock adjustments
+    await createIdx('stockAdjustments', { itemId: 1, createdAt: -1 });
+    await createIdx('stockAdjustments', { transactionId: 1 });
     
-    // Stock adjustments indexes
-    await db.collection('stockAdjustments').createIndex({ itemId: 1, createdAt: -1 });
-    await db.collection('stockAdjustments').createIndex({ transactionId: 1 });
-    
-    console.log('✅ Database indexes initialized');
+    console.log('✅ Database indexes checked/initialized');
   } catch (error) {
     console.warn('⚠️ Failed to initialize indexes:', error);
   }

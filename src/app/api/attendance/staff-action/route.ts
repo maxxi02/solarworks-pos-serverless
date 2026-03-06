@@ -46,16 +46,11 @@ export async function POST(req: NextRequest) {
     };
 
     const { staffId, pin, password, action } = body;
+    console.log(`[staff-action] Action: ${action}, StaffId: ${staffId}, Method: ${pin ? 'PIN' : 'Password'}`);
 
     if (!staffId || !action || (!pin && !password)) {
       return NextResponse.json(
         { success: false, message: "staffId, action, and pin or password are required" },
-        { status: 400 },
-      );
-    }
-    if (action !== "clock-in" && action !== "clock-out") {
-      return NextResponse.json(
-        { success: false, message: "action must be 'clock-in' or 'clock-out'" },
         { status: 400 },
       );
     }
@@ -65,12 +60,16 @@ export async function POST(req: NextRequest) {
     try { objId = new ObjectId(staffId); } catch { }
 
     const usersCol = MONGODB.collection("user");
-    const targetUser = await usersCol.findOne(
-      { _id: { $in: objId ? [staffId, objId] : [staffId] } },
-      { projection: { _id: 1, name: 1, email: 1, role: 1, attendancePin: 1 } },
-    );
+    // Check both string ID and ObjectId
+    const ids: any[] = [staffId];
+    if (objId) ids.push(objId);
+
+    const targetUser = await usersCol.findOne({
+      _id: { $in: ids }
+    });
 
     if (!targetUser) {
+      console.error(`[staff-action] Staff not found: ${staffId}`);
       return NextResponse.json(
         { success: false, message: "Staff not found" },
         { status: 404 },
@@ -81,39 +80,35 @@ export async function POST(req: NextRequest) {
     let verified = false;
 
     if (pin) {
-      // PIN mode: compare directly (stored as plain string)
       if (!targetUser.attendancePin) {
         return NextResponse.json(
           { success: false, message: "This staff has no PIN set. Please use password instead." },
           { status: 400 },
         );
       }
-      verified = targetUser.attendancePin === pin;
+      verified = String(targetUser.attendancePin) === String(pin);
     } else if (password) {
-      // Password mode: use better-auth scrypt verifier
       const accountsCol = MONGODB.collection("account");
       const account = await accountsCol.findOne({
-        userId: { $in: [targetUser._id, targetUser._id.toString()] },
+        userId: { $in: [targetUser._id.toString(), targetUser._id] },
         providerId: "credential",
       });
+      
       if (!account?.password) {
-        console.log("staff-action: No password account found for this staff", staffId);
+        console.error(`[staff-action] No password account found for staff: ${staffId}`);
         return NextResponse.json(
-          { success: false, message: `No password account found for staffId=${staffId}, user._id=${targetUser._id}` },
+          { success: false, message: "No password found for this account. Please set a PIN in settings." },
           { status: 401 },
         );
       }
-      try {
-        verified = await verifyPassword(account.password, password);
-      } catch (err: any) {
-        return NextResponse.json({ success: false, message: "verify error: " + err.message }, { status: 500 });
-      }
+      
+      verified = await verifyPassword(account.password, password);
     }
 
     if (!verified) {
-      console.log("staff-action: Incorrect PIN or password for staff", staffId);
+      console.warn(`[staff-action] Verification failed for staff: ${staffId}`);
       return NextResponse.json(
-        { success: false, message: "The password provided does not match the database." },
+        { success: false, message: "Invalid PIN or password" },
         { status: 401 },
       );
     }
@@ -131,6 +126,7 @@ export async function POST(req: NextRequest) {
           alreadyClockedIn: true,
         });
       }
+      console.log(`[staff-action] ${userName} clocked in`);
       return NextResponse.json({
         success: true,
         message: `${userName} clocked in successfully`,
@@ -145,6 +141,7 @@ export async function POST(req: NextRequest) {
           message: "Not clocked in or already clocked out",
         });
       }
+      console.log(`[staff-action] ${userName} clocked out`);
       return NextResponse.json({
         success: true,
         message: `${userName} clocked out. Hours worked: ${attendance.hoursWorked?.toFixed(2)}h`,
@@ -154,8 +151,11 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Staff-action error:", error);
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
+    console.error("[staff-action] Critical error:", error);
+    return NextResponse.json({ 
+      success: false, 
+      message: error instanceof Error ? error.message : "Internal server error" 
+    }, { status: 500 });
   }
 }
 
@@ -176,8 +176,11 @@ export async function GET(req: NextRequest) {
     try { objId = new ObjectId(staffId); } catch { }
 
     const usersCol = MONGODB.collection("user");
+    const ids: any[] = [staffId];
+    if (objId) ids.push(objId);
+
     const targetUser = await usersCol.findOne(
-      { _id: { $in: objId ? [staffId, objId] : [staffId] } },
+      { _id: { $in: ids } },
       { projection: { _id: 1, name: 1, attendancePin: 1 } },
     );
 
