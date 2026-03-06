@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     const customerPortalUrl =
       process.env.CUSTOMER_PORTAL_URL || "http://localhost:3001";
-    const qrCodeUrl = `${customerPortalUrl}/order?type=${qrType}`;
+    const qrCodeUrl = `${customerPortalUrl}/menu?type=${qrType}`;
 
     const labelMap: Record<string, string> = {
       "walk-in": "Walk-In Order",

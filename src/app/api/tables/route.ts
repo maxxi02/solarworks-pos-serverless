@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const customerPortalUrl =
       process.env.CUSTOMER_PORTAL_URL || "http://localhost:3001";
-    const qrCodeUrl = `${customerPortalUrl}/order?table=${tableId}&type=${qrType || "dine-in"}`;
+    const qrCodeUrl = `${customerPortalUrl}/menu?table=${tableId}&type=${qrType || "dine-in"}`;
 
     const newTable = {
       tableId,

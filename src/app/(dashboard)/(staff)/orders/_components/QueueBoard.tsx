@@ -80,8 +80,9 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
     const fetchOrders = useCallback(async () => {
         try {
             setIsLoading(true);
-            // Include pending_payment so customer orders show immediately
-            const res = await fetch("/api/orders/queue?statuses=pending_payment,queueing,serving");
+            // Only fetch paid/active orders — pending_payment orders are hidden
+            // until GCash payment is confirmed by the webhook.
+            const res = await fetch("/api/orders/queue?statuses=queueing,serving");
             if (!res.ok) throw new Error("Failed to fetch");
             const data = await res.json();
             setOrders(data);
@@ -99,16 +100,23 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
     // ─── Real-time updates via Socket.IO ─────────────────────────────
     useEffect(() => {
         const handleQueueUpdate = (data: { orderId: string; queueStatus: string; order: CustomerOrder }) => {
+            // Ignore pending_payment — only show orders that have been paid
+            if (data.queueStatus === "pending_payment") return;
+
             setOrders((prev) => {
                 const exists = prev.find((o) => o.orderId === data.orderId);
                 if (exists) {
+                    // If the order moved to "done" or "cancelled", remove it from the board
+                    if (data.queueStatus === "done" || data.queueStatus === "cancelled") {
+                        return prev.filter((o) => o.orderId !== data.orderId);
+                    }
                     return prev.map((o) =>
                         o.orderId === data.orderId
                             ? { ...o, ...data.order, queueStatus: data.queueStatus as QueueStatus }
                             : o
                     );
                 }
-                // New order arrived
+                // New paid order arrived (queueing) — add to top of list
                 return [data.order, ...prev];
             });
         };
@@ -154,7 +162,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
     };
 
     // ─── Filtered rows ───────────────────────────────────────────────
-    const ACTIVE_STATUSES = ["pending_payment", "queueing", "serving"];
+    const ACTIVE_STATUSES = ["queueing", "serving"];
 
     const visibleOrders = orders.filter((o) => {
         if (filter === "all") return ACTIVE_STATUSES.includes(o.queueStatus || "");
