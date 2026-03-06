@@ -6,15 +6,21 @@ import { AttendanceModel } from "@/models/attendance.model";
 import { ObjectId } from "mongodb";
 import { scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import bcrypt from "bcryptjs";
 
 const scryptAsync = promisify(scrypt);
 
-// Verifies a better-auth scrypt password hash (format: "salt:hexKey")
+// Verifies a better-auth password hash (bcrypt or scrypt)
 async function verifyPassword(hash: string, password: string): Promise<boolean> {
   try {
+    if (hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$")) {
+      return await bcrypt.compare(password, hash);
+    }
     const [salt, key] = hash.split(":");
+    if (!salt || !key) return false;
     const keyBuffer = Buffer.from(key, "hex");
-    const derived = (await scryptAsync(password, salt, 64)) as Buffer;
+    const keyLen = keyBuffer.length; // Either 32 or 64
+    const derived = (await scryptAsync(password, salt, keyLen)) as Buffer;
     return timingSafeEqual(keyBuffer, derived);
   } catch {
     return false;
@@ -55,9 +61,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Find the staff member by ID
+    let objId = null;
+    try { objId = new ObjectId(staffId); } catch { }
+
     const usersCol = MONGODB.collection("user");
     const targetUser = await usersCol.findOne(
-      { _id: new ObjectId(staffId) },
+      { _id: { $in: objId ? [staffId, objId] : [staffId] } },
       { projection: { _id: 1, name: 1, email: 1, role: 1, attendancePin: 1 } },
     );
 
@@ -84,21 +93,27 @@ export async function POST(req: NextRequest) {
       // Password mode: use better-auth scrypt verifier
       const accountsCol = MONGODB.collection("account");
       const account = await accountsCol.findOne({
-        userId: targetUser._id,
+        userId: { $in: [targetUser._id, targetUser._id.toString()] },
         providerId: "credential",
       });
       if (!account?.password) {
+        console.log("staff-action: No password account found for this staff", staffId);
         return NextResponse.json(
-          { success: false, message: "No password account found for this staff" },
+          { success: false, message: `No password account found for staffId=${staffId}, user._id=${targetUser._id}` },
           { status: 401 },
         );
       }
-      verified = await verifyPassword(account.password, password);
+      try {
+        verified = await verifyPassword(account.password, password);
+      } catch (err: any) {
+        return NextResponse.json({ success: false, message: "verify error: " + err.message }, { status: 500 });
+      }
     }
 
     if (!verified) {
+      console.log("staff-action: Incorrect PIN or password for staff", staffId);
       return NextResponse.json(
-        { success: false, message: "Incorrect PIN or password" },
+        { success: false, message: "The password provided does not match the database." },
         { status: 401 },
       );
     }
@@ -157,9 +172,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: "staffId is required" }, { status: 400 });
     }
 
+    let objId = null;
+    try { objId = new ObjectId(staffId); } catch { }
+
     const usersCol = MONGODB.collection("user");
     const targetUser = await usersCol.findOne(
-      { _id: new ObjectId(staffId) },
+      { _id: { $in: objId ? [staffId, objId] : [staffId] } },
       { projection: { _id: 1, name: 1, attendancePin: 1 } },
     );
 
