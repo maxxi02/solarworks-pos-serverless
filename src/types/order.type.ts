@@ -5,6 +5,7 @@ export type QrType = "dine-in" | "walk-in" | "drive-thru";
 export type QueueStatus =
   | "pending_payment"
   | "queueing"
+  | "preparing"
   | "serving"
   | "done"
   | "cancelled";
@@ -51,6 +52,7 @@ export interface CustomerOrder {
   createdAt?: Date;
   paidAt?: Date;
   queueingAt?: Date;
+  preparingAt?: Date;
   servingAt?: Date;
   doneAt?: Date;
   cancelledAt?: Date;

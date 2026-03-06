@@ -21,9 +21,13 @@ export default function StaffTablesPage() {
   ) => {
     try {
       const newStatus =
-        currentStatus === "unavailable" ? "available" : "unavailable";
+        currentStatus === "available" ? "unavailable" : "available";
       await updateTable(tableId, { status: newStatus });
-      toast.success(`Table is now ${newStatus}`);
+      toast.success(
+        newStatus === "available"
+          ? "Table is now available"
+          : "Table marked as unavailable",
+      );
     } catch {
       toast.error("Failed to update table status");
     }

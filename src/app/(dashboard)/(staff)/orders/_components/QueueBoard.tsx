@@ -47,6 +47,11 @@ const STATUS_CONFIG: Record<
     dot: "bg-sky-500 animate-pulse",
     badge: "bg-sky-500/10 text-sky-400 border border-sky-500/20",
   },
+  preparing: {
+    label: "Preparing",
+    dot: "bg-orange-500 animate-pulse",
+    badge: "bg-orange-500/10 text-orange-400 border border-orange-500/20",
+  },
   serving: {
     label: "Serving",
     dot: "bg-emerald-500",
@@ -83,7 +88,7 @@ interface QueueBoardProps {
   onOpenChat?: (order: CustomerOrder) => void;
 }
 
-type FilterType = "all" | "queueing" | "serving";
+type FilterType = "all" | "queueing" | "preparing" | "serving";
 
 export function QueueBoard({ onOpenChat }: QueueBoardProps) {
   const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
@@ -100,9 +105,9 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
   const fetchOrders = useCallback(async () => {
     try {
       setIsLoading(true);
-      // Only fetch paid/active orders — pending_payment orders are hidden
-      // until GCash payment is confirmed by the webhook.
-      const res = await fetch("/api/orders/queue?statuses=queueing,serving");
+      const res = await fetch(
+        "/api/orders/queue?statuses=queueing,preparing,serving",
+      );
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setOrders(data);
@@ -198,7 +203,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
   };
 
   // ─── Filtered rows ───────────────────────────────────────────────
-  const ACTIVE_STATUSES = ["queueing", "serving"];
+  const ACTIVE_STATUSES = ["queueing", "preparing", "serving"];
 
   const visibleOrders = orders.filter((o) => {
     if (filter === "all") return ACTIVE_STATUSES.includes(o.queueStatus || "");
@@ -209,6 +214,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
     all: orders.filter((o) => ACTIVE_STATUSES.includes(o.queueStatus || ""))
       .length,
     queueing: orders.filter((o) => o.queueStatus === "queueing").length,
+    preparing: orders.filter((o) => o.queueStatus === "preparing").length,
     serving: orders.filter((o) => o.queueStatus === "serving").length,
   };
 
@@ -255,7 +261,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
       {/* Filter tabs */}
       <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
         <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit min-w-full sm:min-w-0">
-          {(["all", "queueing", "serving"] as const).map((f) => (
+          {(["all", "queueing", "preparing", "serving"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -331,7 +337,9 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                   const stateTimestamp =
                     order.queueStatus === "serving"
                       ? order.servingAt
-                      : (order.queueingAt ?? order.paidAt);
+                      : order.queueStatus === "preparing"
+                        ? order.preparingAt
+                        : (order.queueingAt ?? order.paidAt);
 
                   return (
                     <tr
@@ -405,6 +413,18 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                             order.queueStatus === "queueing") && (
                             <button
                               onClick={(e) =>
+                                updateStatus(e, order.orderId, "preparing")
+                              }
+                              disabled={isUpdating}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/20 transition-colors disabled:opacity-50"
+                            >
+                              <ChefHat className="w-3 h-3" />
+                              {isUpdating ? "..." : "Start Prep"}
+                            </button>
+                          )}
+                          {order.queueStatus === "preparing" && (
+                            <button
+                              onClick={(e) =>
                                 updateStatus(e, order.orderId, "serving")
                               }
                               disabled={isUpdating}
@@ -473,7 +493,9 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
             const stateTimestamp =
               order.queueStatus === "serving"
                 ? order.servingAt
-                : (order.queueingAt ?? order.paidAt);
+                : order.queueStatus === "preparing"
+                  ? order.preparingAt
+                  : (order.queueingAt ?? order.paidAt);
 
             return (
               <div
@@ -539,6 +561,18 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                   <div onClick={(e) => e.stopPropagation()}>
                     {(order.queueStatus === "pending_payment" ||
                       order.queueStatus === "queueing") && (
+                      <button
+                        onClick={(e) =>
+                          updateStatus(e, order.orderId, "preparing")
+                        }
+                        disabled={isUpdating}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-bold border border-orange-500/20 transition-colors disabled:opacity-50"
+                      >
+                        <ChefHat className="w-3.5 h-3.5" />
+                        {isUpdating ? "..." : "Prep"}
+                      </button>
+                    )}
+                    {order.queueStatus === "preparing" && (
                       <button
                         onClick={(e) =>
                           updateStatus(e, order.orderId, "serving")

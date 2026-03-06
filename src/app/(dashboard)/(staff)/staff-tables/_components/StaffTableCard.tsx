@@ -78,12 +78,11 @@ export function StaffTableCard({
       <div className="flex flex-col gap-2">
         <button
           onClick={() => onToggleAvailability(table.tableId, table.status)}
-          disabled={table.status === "occupied" || table.status === "reserved"}
           className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all ${
             isUnavailable
               ? "bg-emerald-500 text-white hover:bg-emerald-600"
               : table.status === "occupied" || table.status === "reserved"
-                ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                ? "bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-500/20"
                 : "bg-red-500 text-white hover:bg-red-600"
           }`}
         >
@@ -91,6 +90,11 @@ export function StaffTableCard({
             <>
               <Power className="w-4 h-4" />
               Make Available
+            </>
+          ) : table.status === "occupied" || table.status === "reserved" ? (
+            <>
+              <Power className="w-4 h-4" />
+              Clear Table
             </>
           ) : (
             <>
@@ -108,12 +112,6 @@ export function StaffTableCard({
           View QR Code
         </button>
       </div>
-
-      {(table.status === "occupied" || table.status === "reserved") && (
-        <p className="text-[10px] text-center text-muted-foreground italic">
-          Cannot change status while {table.status}
-        </p>
-      )}
     </div>
   );
 }

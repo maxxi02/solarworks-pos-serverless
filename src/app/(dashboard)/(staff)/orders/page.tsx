@@ -88,8 +88,8 @@ import { CustomerOrder } from "@/types/order.type";
 export default function OrdersPage() {
   const {
     emitPosJoin,
-    onNewCustomerOrder,
-    offNewCustomerOrder,
+    onQueueUpdated,
+    offQueueUpdated,
     printBoth,
     isConnected,
   } = useSocket();
@@ -188,6 +188,8 @@ export default function OrdersPage() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [showSavedOrders, setShowSavedOrders] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [activeTab, setActiveTab] = useState<"pos" | "queue">("pos");
+  const [unreadQueueCount, setUnreadQueueCount] = useState(0);
   // const [showStockAlerts, setShowStockAlerts] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptOrder | null>(
@@ -206,7 +208,6 @@ export default function OrdersPage() {
   const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
-
 
   //ORDER STATES
   // pendingWebOrders removed — orders go directly into Queue Board via socket now
@@ -274,19 +275,29 @@ export default function OrdersPage() {
     // Re-join room on every connect/reconnect
     emitPosJoin();
 
-    const handleNewOrder = (order: CustomerOrder) => {
-      // Don't show a modal - order goes directly into Queue Board via order:queue:updated
-      // Just play a sound and show a brief toast
-      playOrder();
-      toast.info(`New order from ${order.customerName}!`, {
-        description: `${order.items.length} item(s) · ${formatCurrency(order.total)} · Check Queue Board`,
-        duration: 6000,
-      });
+    const handleQueueUpdate = (data: {
+      orderId: string;
+      queueStatus: string;
+      order: CustomerOrder;
+    }) => {
+      if (data.queueStatus === "queueing") {
+        if (activeTab !== "queue") {
+          setUnreadQueueCount((prev) => prev + 1);
+        }
+        playOrder();
+        toast.info(
+          `New portal order from ${data.order?.customerName || "Customer"}!`,
+          {
+            description: `${data.order?.items?.length || 0} item(s) · ${formatCurrency(data.order?.total || 0)} · Check Queue Board`,
+            duration: 6000,
+          },
+        );
+      }
     };
 
-    onNewCustomerOrder(handleNewOrder);
-    return () => offNewCustomerOrder(handleNewOrder);
-  }, [isConnected]); // Re-runs every time socket connects/reconnects
+    onQueueUpdated(handleQueueUpdate);
+    return () => offQueueUpdated(handleQueueUpdate);
+  }, [isConnected, activeTab, onQueueUpdated, offQueueUpdated, playOrder]);
 
   // Fetch missed pending customer orders on load (already in Queue Board's own fetch)
   // Removed the pendingWebOrders fetch — Queue Board fetches pending_payment directly
@@ -439,7 +450,6 @@ export default function OrdersPage() {
     setActiveCustomerOrderId(null);
     // clearStockCheck(); // Commented out - inventory tracking postponed
   }, [clearCartItems]); // Removed clearStockCheck from dependencies
-
 
   const handleUpdateQuantity = useCallback(
     (id: string, delta: number) => {
@@ -968,7 +978,11 @@ export default function OrdersPage() {
 
       <>
         <Tabs
-          defaultValue="pos"
+          value={activeTab}
+          onValueChange={(val) => {
+            setActiveTab(val as "pos" | "queue");
+            if (val === "queue") setUnreadQueueCount(0);
+          }}
           className="w-full max-w-[1600px] mx-auto px-10 md:px-6"
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between mt-4 md:mt-2 mb-4 md:mb-6 gap-4">
@@ -979,6 +993,11 @@ export default function OrdersPage() {
               </TabsTrigger>
               <TabsTrigger value="queue" className="text-xs md:text-sm">
                 Queue Board
+                {unreadQueueCount > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                    {unreadQueueCount}
+                  </span>
+                )}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -987,7 +1006,7 @@ export default function OrdersPage() {
             {/* Main Layout */}
             <div className="flex flex-col lg:flex-row gap-5">
               {/* Left — Products */}
-              <div className="md:w-[65%] lg:w-[70%] flex flex-col w-full min-w-0">
+              <div className="md:w-[65%] lg:w-[70%] flex flex-col w-full min-w-0 h-full">
                 {/* Menu Type Filter */}
                 <div className="grid grid-cols-3 gap-1.5 xs:gap-2 md:gap-3 mb-4 md:mb-5">
                   {(["all", "food", "drink"] as const).map((type) => (
@@ -1031,8 +1050,11 @@ export default function OrdersPage() {
                 {/* Products Grid - Scrollable Area */}
                 <div
                   ref={productsContainerRef}
-                  className="overflow-y-auto pr-2 max-h-[600px] scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400"
-                  style={{ maxHeight: "calc(140vh - 320px)" }}
+                  className="overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1"
+                  style={{
+                    minHeight: "400px",
+                    maxHeight: "calc(100vh - 280px)",
+                  }}
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center h-64">
@@ -1050,7 +1072,6 @@ export default function OrdersPage() {
                           key={product._id}
                           product={product}
                           onAddToCart={addToCart}
-                          // Removed isDragged and all drag-related props
                         />
                       ))}
                     </div>
@@ -1453,7 +1474,6 @@ export default function OrdersPage() {
             onClose={() => setActiveChat(null)}
           />
         )}
-
       </>
     </div>
   );
