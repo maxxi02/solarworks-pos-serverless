@@ -56,9 +56,9 @@ const History = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [showDetailsModal, setShowDetailsModal]       = useState(false)
   const [isPrinting, setIsPrinting]       = useState(false)
-  const [isVoiding, setIsVoiding]         = useState(false)
-  const [showVoidConfirm, setShowVoidConfirm] = useState(false)
-  const [voidReason, setVoidReason]       = useState('')
+  const [isRefunding, setIsRefunding]     = useState(false)
+  const [showRefundConfirm, setShowRefundConfirm] = useState(false)
+  const [refundReason, setRefundReason]       = useState('')
   const [adminPin, setAdminPin]           = useState('')
   const [currentPage, setCurrentPage]     = useState(1)
   const [itemsPerPage]                    = useState(10)
@@ -297,9 +297,9 @@ const History = () => {
         <XCircle className="w-3 h-3 mr-1" />Cancelled
       </span>
     )
-    if (status === 'voided') return (
+    if (status === 'refunded') return (
       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100/80 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-        <Ban className="w-3 h-3 mr-1" />Voided
+        <AlertCircle className="w-3 h-3 mr-1" />Refunded
       </span>
     )
     return (
@@ -421,7 +421,6 @@ const History = () => {
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
               <option value="refunded">Refunded</option>
-              <option value="voided">Voided</option>
             </select>
 
             <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
@@ -676,18 +675,18 @@ const History = () => {
                   </div>
                 </div>
 
-                <div className="mt-6 flex gap-3">
-                  {/* Void button — only for completed transactions */}
-                  {selectedTransaction.status === 'completed' && (
-                    <button
-                      onClick={() => { setShowVoidConfirm(true); setVoidReason('') }}
-                      disabled={isVoiding}
-                      className="px-4 py-3 border-2 border-orange-400 text-orange-600 dark:text-orange-400 rounded-xl text-base font-semibold hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2 disabled:opacity-50 transition-colors"
-                    >
-                      <Ban className="w-5 h-5" />
-                      Void
-                    </button>
-                  )}
+                  <div className="flex gap-3">
+                    {/* Refund button — only for completed transactions */}
+                    {selectedTransaction.status === 'completed' && (
+                      <button
+                        onClick={() => { setShowRefundConfirm(true); setRefundReason('') }}
+                        disabled={isRefunding}
+                        className="px-4 py-3 border-2 border-orange-400 text-orange-600 dark:text-orange-400 rounded-xl text-base font-semibold hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2 disabled:opacity-50 transition-colors"
+                      >
+                        <AlertCircle className="w-5 h-5" />
+                        Refund
+                      </button>
+                    )}
                   <button
                     onClick={() => handlePrint(selectedTransaction)}
                     disabled={isPrinting}
@@ -708,29 +707,29 @@ const History = () => {
           </div>
         )}
 
-        {/* Void Confirm Modal */}
-        {showVoidConfirm && selectedTransaction && (
+        {/* Refund Confirm Modal */}
+        {showRefundConfirm && selectedTransaction && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]">
             <div className="bg-card rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                  <Ban className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                  <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg">Void Transaction</h3>
+                  <h3 className="font-semibold text-lg">Refund Transaction</h3>
                   <p className="text-sm text-muted-foreground">{selectedTransaction.orderNumber}</p>
                 </div>
               </div>
 
               <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg p-3 text-sm text-orange-700 dark:text-orange-300">
-                This will void <strong>₱{selectedTransaction.total.toFixed(2)}</strong> and deduct it from sales. The admin will be notified. This cannot be undone.
+                This will refund <strong>₱{selectedTransaction.total.toFixed(2)}</strong> and deduct it from sales. The admin will be notified. This cannot be undone.
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Reason for voiding</label>
+                <label className="text-sm font-medium">Reason for refunding</label>
                 <textarea
-                  value={voidReason}
-                  onChange={e => setVoidReason(e.target.value)}
+                  value={refundReason}
+                  onChange={e => setRefundReason(e.target.value)}
                   placeholder="e.g. Customer changed mind, wrong order..."
                   rows={3}
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
@@ -765,7 +764,7 @@ const History = () => {
                     className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground italic">An administrator must enter their PIN to authorize this void.</p>
+                <p className="text-[10px] text-muted-foreground italic">An administrator must enter their PIN to authorize this refund.</p>
               </div>
 
               <div className="flex gap-3 pt-1">
@@ -775,41 +774,41 @@ const History = () => {
                       toast.error('Please enter the 4-digit Admin PIN')
                       return
                     }
-                    setIsVoiding(true)
+                    setIsRefunding(true)
                     try {
-                      const res = await fetch('/api/payments/void', {
+                      const res = await fetch('/api/payments/refund', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           transactionId: selectedTransaction.id,
-                          reason: voidReason,
+                          reason: refundReason,
                           adminPin: adminPin,
                         }),
                       })
                       const data = await res.json()
                       if (data.success) {
                         toast.success(data.message)
-                        setShowVoidConfirm(false)
+                        setShowRefundConfirm(false)
                         setShowDetailsModal(false)
                         setAdminPin('')
                         fetchTransactions()
                         fetchTodayStats()
                       } else {
-                        toast.error(data.message || 'Failed to void transaction')
+                        toast.error(data.message || 'Failed to refund transaction')
                       }
                     } catch {
                       toast.error('Network error — please try again')
                     } finally {
-                      setIsVoiding(false)
+                      setIsRefunding(false)
                     }
                   }}
-                  disabled={isVoiding}
+                  disabled={isRefunding}
                   className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors"
                 >
-                  {isVoiding ? 'Voiding...' : 'Confirm Void'}
+                  {isRefunding ? 'Refunding...' : 'Confirm Refund'}
                 </button>
                 <button
-                  onClick={() => { setShowVoidConfirm(false); setAdminPin(''); }}
+                  onClick={() => { setShowRefundConfirm(false); setAdminPin(''); }}
                   className="flex-1 py-2.5 border border-border rounded-lg font-semibold text-sm hover:bg-muted/50 transition-colors"
                 >
                   Cancel

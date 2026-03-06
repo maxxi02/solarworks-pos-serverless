@@ -1,8 +1,4 @@
-// Singleton MongoDB client with connection caching for Next.js serverless.
-// Stores the client promise on globalThis so it survives hot-reloads in dev
-// and is shared across invocations in the same serverless instance.
-import dns from "node:dns";
-dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
+// src/config/db.ts
 import { Db, MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI!;
@@ -13,39 +9,35 @@ if (!uri) {
 
 declare global {
   // eslint-disable-next-line no-var
-  var _mongoClientPromise: Promise<MongoClient> | undefined;
+  var _mongoClient: MongoClient | undefined;
 }
 
-let clientPromise: Promise<MongoClient>;
+let client: MongoClient;
 
 if (process.env.NODE_ENV === "development") {
-  // In dev, reuse the same promise across hot-reloads
-  if (!globalThis._mongoClientPromise) {
-    globalThis._mongoClientPromise = new MongoClient(uri).connect();
+  // In dev, reuse the same client across hot-reloads
+  if (!globalThis._mongoClient) {
+    globalThis._mongoClient = new MongoClient(uri);
+    globalThis._mongoClient.connect();
   }
-  clientPromise = globalThis._mongoClientPromise;
+  client = globalThis._mongoClient;
 } else {
-  // In production, always create a new promise (each instance is isolated)
-  clientPromise = new MongoClient(uri).connect();
+  // In production, create a new client
+  client = new MongoClient(uri);
+  client.connect();
 }
 
-// Returns the connected Db — call this in every API route
+/**
+ * Returns the connected Db instance.
+ * Call this in API routes to ensure connection is shared.
+ */
 export async function getDb(): Promise<Db> {
-  const client = await clientPromise;
+  // MongoClient auto-connects if explicitly told to, or on first op.
+  // We ensure it's connected here.
   return client.db();
 }
 
-// Legacy synchronous export kept for backwards compatibility.
-// Routes that import MONGODB directly will still work because MongoClient
-// auto-connects lazily on first operation when a connection is cached in the pool.
-const legacyClient = new MongoClient(uri, {
-  maxPoolSize: 10,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 10000,
-});
-legacyClient.connect().catch(() => {
-  /* handled per-request */
-});
-
-export const MONGODB: Db = legacyClient.db();
+// Legacy synchronous export kept for compatibility.
+// MongoClient handles internal connection pooling.
+export const MONGODB: Db = client.db();
 export default MONGODB;

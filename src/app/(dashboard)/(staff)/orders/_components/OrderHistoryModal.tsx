@@ -81,7 +81,7 @@ export const OrderHistoryModal = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {['all', 'completed', 'pending', 'cancelled'].map(s => (
+                {['all', 'completed', 'pending', 'cancelled', 'refunded'].map(s => (
                   <SelectItem key={s} value={s} className="text-base capitalize">{s === 'all' ? 'All Status' : s}</SelectItem>
                 ))}
               </SelectContent>
@@ -120,8 +120,13 @@ export const OrderHistoryModal = ({
                         <div className="flex items-center gap-3">
                           <span className="font-mono font-medium text-base">{order.orderNumber}</span>
                           <Badge
-                            variant={order.status === 'completed' ? 'default' : order.status === 'pending' ? 'secondary' : 'destructive'}
-                            className="text-xs px-2 py-1"
+                            variant={
+                              order.status === 'completed' ? 'default' : 
+                              order.status === 'pending' ? 'secondary' : 
+                              order.status === 'refunded' ? 'outline' :
+                              'destructive'
+                            }
+                            className={`text-xs px-2 py-1 ${order.status === 'refunded' ? 'border-orange-500 text-orange-600' : ''}`}
                           >
                             {order.status}
                           </Badge>

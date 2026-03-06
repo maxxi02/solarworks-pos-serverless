@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, TrendingUp, Clock, Calendar, RefreshCw, Wallet, CreditCard, Ban, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, TrendingUp, Clock, Calendar, RefreshCw, Wallet, CreditCard, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { io as socketIO, Socket } from 'socket.io-client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,9 @@ interface Transaction {
   orderType?: string;
   cashierId?: string;
   status?: string;
-  voidedAt?: string;
-  voidedBy?: string;
-  voidReason?: string;
+  refundedAt?: string;
+  refundedBy?: string;
+  refundReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -154,10 +154,10 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   
-  // Voided transactions
-  const [voidedTransactions, setVoidedTransactions] = useState<Transaction[]>([]);
-  const [showVoidedTable, setShowVoidedTable] = useState(false);
-  const [voidedLoading, setVoidedLoading] = useState(false);
+  // Refunded transactions
+  const [refundedTransactions, setRefundedTransactions] = useState<Transaction[]>([]);
+  const [showRefundedTable, setShowRefundedTable] = useState(false);
+  const [refundedLoading, setRefundedLoading] = useState(false);
 
   // Socket connection
   const [isLive, setIsLive] = useState(false);
@@ -231,16 +231,16 @@ export default function TransactionsPage() {
     }
   };
 
-  const fetchVoided = async () => {
-    setVoidedLoading(true);
+  const fetchRefunded = async () => {
+    setRefundedLoading(true);
     try {
-      const res = await fetch(`/api/payments?status=voided&limit=100&page=1`);
+      const res = await fetch(`/api/payments?status=refunded&limit=100&page=1`);
       const json = await res.json();
-      if (json.success) setVoidedTransactions(json.data?.payments ?? []);
+      if (json.success) setRefundedTransactions(json.data?.payments ?? []);
     } catch {
       // ignore
     } finally {
-      setVoidedLoading(false);
+      setRefundedLoading(false);
     }
   };
 
@@ -301,7 +301,7 @@ export default function TransactionsPage() {
     setCurrentPage(1);
     fetchTransactions(1, false);
     fetchSummary();
-    fetchVoided();
+    fetchRefunded();
   }, []); // Only run once on mount
 
   // Refetch when period changes for summary
@@ -378,7 +378,7 @@ export default function TransactionsPage() {
     setCurrentPage(1);
     fetchTransactions(1, false);
     fetchSummary();
-    fetchVoided();
+    fetchRefunded();
   };
 
   // ============ Render ============
@@ -516,50 +516,50 @@ export default function TransactionsPage() {
           </Card>
         </div>
 
-        {/* Voided Transactions */}
-        {(voidedTransactions.length > 0 || voidedLoading) && (
+        {/* Refunded Transactions */}
+        {(refundedTransactions.length > 0 || refundedLoading) && (
           <div className="mb-6 border border-orange-300 dark:border-orange-700 rounded-xl overflow-hidden">
             <button
-              onClick={() => setShowVoidedTable(v => !v)}
+              onClick={() => setShowRefundedTable(v => !v)}
               className="w-full flex items-center justify-between px-5 py-4 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className="p-1.5 rounded-full bg-orange-200 dark:bg-orange-800">
-                  <Ban className="h-4 w-4 text-orange-700 dark:text-orange-300" />
+                  <AlertCircle className="h-4 w-4 text-orange-700 dark:text-orange-300" />
                 </div>
                 <div className="text-left">
                   <p className="font-semibold text-orange-800 dark:text-orange-200">
-                    {voidedLoading ? 'Loading...' : `${voidedTransactions.length} Voided Transaction${voidedTransactions.length !== 1 ? 's' : ''}`}
+                    {refundedLoading ? 'Loading...' : `${refundedTransactions.length} Refunded Transaction${refundedTransactions.length !== 1 ? 's' : ''}`}
                   </p>
                   <p className="text-sm text-orange-600 dark:text-orange-400">
-                    Total voided: {formatCurrency(voidedTransactions.reduce((s, t) => s + (t.total || 0), 0))}
+                    Total refunded: {formatCurrency(refundedTransactions.reduce((s, t) => s + (t.total || 0), 0))}
                   </p>
                 </div>
               </div>
-              {showVoidedTable
+              {showRefundedTable
                 ? <ChevronUp className="h-4 w-4 text-orange-600" />
                 : <ChevronDown className="h-4 w-4 text-orange-600" />}
             </button>
 
-            {showVoidedTable && (
+            {showRefundedTable && (
               <div className="overflow-x-auto bg-background border-t border-orange-200 dark:border-orange-800">
                 <table className="w-full text-sm">
                   <thead className="bg-orange-50/60 dark:bg-orange-900/10">
                     <tr className="border-b border-orange-200 dark:border-orange-800">
-                      {['Order #', 'Customer', 'Amount', 'Voided By', 'Voided At', 'Reason'].map(h => (
+                      {['Order #', 'Customer', 'Amount', 'Refunded By', 'Refunded At', 'Reason'].map(h => (
                         <th key={h} className="text-left px-4 py-2.5 font-medium text-orange-800 dark:text-orange-300">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {voidedTransactions.map(t => (
+                    {refundedTransactions.map(t => (
                       <tr key={t._id} className="border-b border-border hover:bg-muted/40">
                         <td className="px-4 py-3 font-mono text-xs font-medium">{t.orderNumber}</td>
                         <td className="px-4 py-3">{t.customerName || 'Walk-in'}</td>
                         <td className="px-4 py-3 font-semibold text-orange-700 dark:text-orange-400">{formatCurrency(t.total)}</td>
-                        <td className="px-4 py-3">{t.voidedBy || '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{t.voidedAt ? formatDateTime(t.voidedAt) : '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate" title={t.voidReason}>{t.voidReason || '—'}</td>
+                        <td className="px-4 py-3">{t.refundedBy || '—'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{t.refundedAt ? formatDateTime(t.refundedAt) : '—'}</td>
+                        <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate" title={t.refundReason}>{t.refundReason || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

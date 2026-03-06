@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Ban,
+  AlertCircle,
   RefreshCw,
   Search,
   ChevronDown,
@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-interface VoidedTransaction {
+interface RefundedTransaction {
   _id: string;
   orderNumber: string;
   customerName?: string;
@@ -26,9 +26,9 @@ interface VoidedTransaction {
   subtotal?: number;
   paymentMethod: string;
   cashier?: string;
-  voidedAt?: string;
-  voidedBy?: string;
-  voidReason?: string;
+  refundedAt?: string;
+  refundedBy?: string;
+  refundReason?: string;
   timestamp?: string;
   createdAt: string;
 }
@@ -46,17 +46,17 @@ const fmtDate = (d?: string) => {
   });
 };
 
-export default function VoidReportsPage() {
-  const [transactions, setTransactions] = useState<VoidedTransaction[]>([]);
+export default function RefundReportsPage() {
+  const [transactions, setTransactions] = useState<RefundedTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchVoided = useCallback(async () => {
+  const fetchRefunded = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/payments?status=voided&limit=500&page=1');
+      const res = await fetch('/api/payments?status=refunded&limit=500&page=1');
       const json = await res.json();
       if (json.success) setTransactions(json.data?.payments ?? []);
     } catch {
@@ -66,11 +66,11 @@ export default function VoidReportsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchVoided(); }, [fetchVoided]);
+  useEffect(() => { fetchRefunded(); }, [fetchRefunded]);
 
   // ── Filter by date ──────────────────────────────────────────────────────────
   const filtered = transactions.filter(t => {
-    const date = new Date(t.voidedAt || t.createdAt);
+    const date = new Date(t.refundedAt || t.createdAt);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -83,16 +83,16 @@ export default function VoidReportsPage() {
     const matchesSearch = !q ||
       t.orderNumber?.toLowerCase().includes(q) ||
       t.customerName?.toLowerCase().includes(q) ||
-      t.voidedBy?.toLowerCase().includes(q) ||
+      t.refundedBy?.toLowerCase().includes(q) ||
       t.cashier?.toLowerCase().includes(q) ||
-      t.voidReason?.toLowerCase().includes(q);
+      t.refundReason?.toLowerCase().includes(q);
 
     return inRange && matchesSearch;
   });
 
-  const totalVoided = filtered.reduce((s, t) => s + (t.total || 0), 0);
+  const totalRefunded = filtered.reduce((s, t) => s + (t.total || 0), 0);
   const byStaff = filtered.reduce<Record<string, { count: number; amount: number }>>((acc, t) => {
-    const name = t.voidedBy || t.cashier || 'Unknown';
+    const name = t.refundedBy || t.cashier || 'Unknown';
     if (!acc[name]) acc[name] = { count: 0, amount: 0 };
     acc[name].count++;
     acc[name].amount += t.total || 0;
@@ -101,23 +101,23 @@ export default function VoidReportsPage() {
 
   // ── CSV export ──────────────────────────────────────────────────────────────
   const handleExport = () => {
-    const header = ['Order #', 'Customer', 'Amount', 'Payment', 'Cashier', 'Voided By', 'Voided At', 'Reason'];
+    const header = ['Order #', 'Customer', 'Amount', 'Payment', 'Cashier', 'Refunded By', 'Refunded At', 'Reason'];
     const rows = filtered.map(t => [
       t.orderNumber,
       t.customerName || 'Walk-in',
       t.total.toFixed(2),
       t.paymentMethod,
       t.cashier || '—',
-      t.voidedBy || '—',
-      t.voidedAt ? new Date(t.voidedAt).toLocaleString('en-PH') : '—',
-      `"${(t.voidReason || '—').replace(/"/g, '""')}"`,
+      t.refundedBy || '—',
+      t.refundedAt ? new Date(t.refundedAt).toLocaleString('en-PH') : '—',
+      `"${(t.refundReason || '—').replace(/"/g, '""')}"`,
     ]);
     const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `void-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `refund-report-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -130,15 +130,15 @@ export default function VoidReportsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-              <Ban className="h-7 w-7 text-orange-500" />
-              Void Reports
+              <AlertCircle className="h-7 w-7 text-orange-500" />
+              Refund Reports
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              All voided transactions — track who voided, when, and why.
+              All refunded transactions — track who refunded, when, and why.
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={fetchVoided} disabled={loading} className="gap-2">
+            <Button variant="outline" onClick={fetchRefunded} disabled={loading} className="gap-2">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               {loading ? 'Loading...' : 'Refresh'}
             </Button>
@@ -155,8 +155,8 @@ export default function VoidReportsPage() {
             <CardContent className="pt-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Voided ({dateFilter === 'all' ? 'All Time' : dateFilter === 'today' ? 'Today' : dateFilter === 'week' ? 'Last 7 Days' : 'Last 30 Days'})</p>
-                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{fmt(totalVoided)}</p>
+                  <p className="text-sm text-muted-foreground">Total Refunded ({dateFilter === 'all' ? 'All Time' : dateFilter === 'today' ? 'Today' : dateFilter === 'week' ? 'Last 7 Days' : 'Last 30 Days'})</p>
+                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{fmt(totalRefunded)}</p>
                   <p className="text-xs text-muted-foreground mt-1">{filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</p>
                 </div>
                 <TrendingDown className="h-8 w-8 text-orange-400" />
@@ -168,7 +168,7 @@ export default function VoidReportsPage() {
             <CardContent className="pt-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Unique Staff Who Voided</p>
+                  <p className="text-sm text-muted-foreground">Unique Staff Who Refunded</p>
                   <p className="text-2xl font-bold">{Object.keys(byStaff).length}</p>
                   <p className="text-xs text-muted-foreground mt-1">staff members</p>
                 </div>
@@ -181,9 +181,9 @@ export default function VoidReportsPage() {
             <CardContent className="pt-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avg Voided Amount</p>
+                  <p className="text-sm text-muted-foreground">Avg Refunded Amount</p>
                   <p className="text-2xl font-bold">
-                    {filtered.length ? fmt(totalVoided / filtered.length) : '₱0.00'}
+                    {filtered.length ? fmt(totalRefunded / filtered.length) : '₱0.00'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">per transaction</p>
                 </div>
@@ -198,7 +198,7 @@ export default function VoidReportsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <User className="h-4 w-4" /> Voids by Staff
+                <User className="h-4 w-4" /> Refunds by Staff
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -212,7 +212,7 @@ export default function VoidReportsPage() {
                       </div>
                       <div>
                         <p className="font-medium">{name}</p>
-                        <p className="text-xs text-muted-foreground">{data.count} void{data.count !== 1 ? 's' : ''} · {fmt(data.amount)}</p>
+                        <p className="text-xs text-muted-foreground">{data.count} refund{data.count !== 1 ? 's' : ''} · {fmt(data.amount)}</p>
                       </div>
                     </div>
                   ))}
@@ -258,10 +258,10 @@ export default function VoidReportsPage() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
-                <Ban className="h-12 w-12 mx-auto mb-3 opacity-30 text-orange-400" />
-                <p className="font-medium">No voided transactions</p>
+                <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-30 text-orange-400" />
+                <p className="font-medium">No refunded transactions</p>
                 <p className="text-sm mt-1">
-                  {search || dateFilter !== 'all' ? 'Try adjusting your filters' : 'No transactions have been voided yet'}
+                  {search || dateFilter !== 'all' ? 'Try adjusting your filters' : 'No transactions have been refunded yet'}
                 </p>
               </div>
             ) : (
@@ -274,8 +274,8 @@ export default function VoidReportsPage() {
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Customer</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Amount</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Payment</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Voided By</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Voided At</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Refunded By</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Refunded At</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Reason</th>
                     </tr>
                   </thead>
@@ -304,15 +304,15 @@ export default function VoidReportsPage() {
                               {t.paymentMethod}
                             </span>
                           </td>
-                          <td className="px-4 py-3 font-medium">{t.voidedBy || t.cashier || '—'}</td>
+                          <td className="px-4 py-3 font-medium">{t.refundedBy || t.cashier || '—'}</td>
                           <td className="px-4 py-3 text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               <Calendar className="h-3.5 w-3.5 shrink-0" />
-                              {fmtDate(t.voidedAt)}
+                              {fmtDate(t.refundedAt)}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={t.voidReason}>
-                            {t.voidReason || '—'}
+                          <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={t.refundReason}>
+                            {t.refundReason || '—'}
                           </td>
                         </tr>
 
@@ -351,7 +351,7 @@ export default function VoidReportsPage() {
                 </table>
 
                 <div className="px-4 py-3 border-t text-sm text-muted-foreground">
-                  Showing {filtered.length} of {transactions.length} voided transactions
+                  Showing {filtered.length} of {transactions.length} refunded transactions
                 </div>
               </div>
             )}

@@ -1,6 +1,6 @@
 // app/api/receipts/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/config/db-Connect';
+import { MONGODB } from "@/config/db";
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { ObjectId } from 'mongodb';
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     console.log('✅ Session found:', session.user?.email);
 
     // Connect to database
-    const db = await connectToDatabase();
+    const db = MONGODB;
     console.log('✅ Database connected');
     
     const data = await request.json();
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Connect to database
-    const db = await connectToDatabase();
+    const db = MONGODB;
     console.log('✅ Database connected');
     
     const searchParams = request.nextUrl.searchParams;

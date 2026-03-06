@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/config/db-Connect';
+import { MONGODB } from "@/config/db";
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 
@@ -52,7 +52,7 @@ const DEFAULT_SETTINGS = {
 
 export async function GET() {
   try {
-    const db = await connectToDatabase();
+    const db = MONGODB;
     const collection = db.collection(COLLECTION);
 
     let settings = await collection.findOne({});
@@ -80,7 +80,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const [db, data] = await Promise.all([
-      connectToDatabase(),
+      MONGODB,
       request.json(),
     ]);
 

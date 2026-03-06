@@ -37,7 +37,7 @@ export interface SavedOrder {
   orderType: "dine-in" | "takeaway";
   tableNumber?: string;
   timestamp: Date;
-  status: "pending" | "completed" | "cancelled";
+  status: "pending" | "completed" | "cancelled" | "refunded" | "voided";
   seniorPwdCount?: number;
   orderNote?: string;
   cashier?: string;

@@ -1,12 +1,12 @@
-// POST /api/payments/void
-// Staff voids a completed transaction.
-// - Sets status = "voided", stores voidedAt, voidedBy, voidReason
+// POST /api/payments/refund
+// Staff refunds a completed transaction.
+// - Sets status = "refunded", stores refundedAt, refundedBy, refundReason
 // - Stats already exclude non-completed records so earnings are auto-deducted
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import MONGODB from "@/config/db";
+import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
 
 const notifySalesUpdate = async () => {
@@ -52,24 +52,24 @@ export async function POST(req: NextRequest) {
 
     if (!adminWithPin) {
       return NextResponse.json(
-        { success: false, message: "Invalid Admin PIN. Only administrators can authorize voids." },
+        { success: false, message: "Invalid Admin PIN. Only administrators can authorize refunds." },
         { status: 403 },
       );
     }
 
     const col = MONGODB.collection("payments");
 
-    // Only allow voiding completed transactions
+    // Only allow refunding completed transactions
     const existing = await col.findOne({ _id: new ObjectId(transactionId) });
     if (!existing) {
       return NextResponse.json({ success: false, message: "Transaction not found" }, { status: 404 });
     }
-    if (existing.status === "voided") {
-      return NextResponse.json({ success: false, message: "Transaction is already voided" }, { status: 400 });
+    if (existing.status === "refunded") {
+      return NextResponse.json({ success: false, message: "Transaction is already refunded" }, { status: 400 });
     }
     if (existing.status !== "completed") {
       return NextResponse.json(
-        { success: false, message: "Only completed transactions can be voided" },
+        { success: false, message: "Only completed transactions can be refunded" },
         { status: 400 },
       );
     }
@@ -78,11 +78,11 @@ export async function POST(req: NextRequest) {
       { _id: new ObjectId(transactionId) },
       {
         $set: {
-          status: "voided",
-          voidedAt: new Date(),
-          voidedBy: session.user.name || session.user.email,
-          voidedById: session.user.id,
-          voidReason: reason?.trim() || "No reason provided",
+          status: "refunded",
+          refundedAt: new Date(),
+          refundedBy: session.user.name || session.user.email,
+          refundedById: session.user.id,
+          refundReason: reason?.trim() || "No reason provided",
           updatedAt: new Date(),
         },
       },
@@ -92,12 +92,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Transaction ${existing.orderNumber} has been voided`,
+      message: `Transaction ${existing.orderNumber} has been refunded`,
       orderNumber: existing.orderNumber,
       amount: existing.total,
     });
   } catch (error) {
-    console.error("Void transaction error:", error);
+    console.error("Refund transaction error:", error);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }

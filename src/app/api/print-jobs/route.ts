@@ -1,11 +1,11 @@
 // app/api/print-jobs/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDatabase } from "@/config/db-Connect"; // ← your existing helper
+import { MONGODB } from "@/config/db"; 
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const db = await connectToDatabase();
+    const db = MONGODB;
 
     const doc = {
       content: body.content ?? "",
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    const db = await connectToDatabase();
+    const db = MONGODB;
     const jobs = await db
       .collection("print_jobs")
       .find({})

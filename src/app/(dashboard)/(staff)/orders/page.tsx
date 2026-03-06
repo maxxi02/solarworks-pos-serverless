@@ -64,6 +64,7 @@ import { ChatDrawer } from "./_components/ChatDrawer";
 import { AttendanceBar } from "./_components/AttendanceBar";
 import { ProductCard } from "./_components/ProductCard";
 import { CartItem } from "./_components/CartItem";
+import { AdminPinModal } from "./_components/AdminPinModal";
 import { useCart, useSavedOrders, buildOrder } from "./_components/usePOS";
 import {
   Product,
@@ -204,6 +205,14 @@ export default function OrdersPage() {
   const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+
+  // Admin PIN states
+  const [showAdminPinModal, setShowAdminPinModal] = useState(false);
+  const [adminPinAction, setAdminPinAction] = useState<{
+    callback: () => void;
+    title?: string;
+    description?: string;
+  } | null>(null);
 
   //ORDER STATES
   // pendingWebOrders removed — orders go directly into Queue Board via socket now
@@ -436,6 +445,40 @@ export default function OrdersPage() {
     setActiveCustomerOrderId(null);
     // clearStockCheck(); // Commented out - inventory tracking postponed
   }, [clearCartItems]); // Removed clearStockCheck from dependencies
+
+  const executeWithAdminAuth = useCallback(
+    (action: () => void, title?: string, description?: string) => {
+      setAdminPinAction({ callback: action, title, description });
+      setShowAdminPinModal(true);
+    },
+    [],
+  );
+
+  const handleUpdateQuantity = useCallback(
+    (id: string, delta: number) => {
+      if (delta < 0) {
+        executeWithAdminAuth(
+          () => updateQuantity(id, delta),
+          "Authorize Quantity Reduction",
+          "An administrator must authorize reducing the quantity of this item.",
+        );
+      } else {
+        updateQuantity(id, delta);
+      }
+    },
+    [updateQuantity, executeWithAdminAuth],
+  );
+
+  const handleRemoveFromCart = useCallback(
+    (id: string) => {
+      executeWithAdminAuth(
+        () => removeFromCart(id),
+        "Authorize Item Removal",
+        "An administrator must authorize removing this item from the cart.",
+      );
+    },
+    [removeFromCart, executeWithAdminAuth],
+  );
 
   const handleApplyDiscount = useCallback(
     (data: { ids: string[]; itemIds: string[] }) => {
@@ -1102,7 +1145,13 @@ export default function OrdersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={clearCart}
+                            onClick={() => {
+                              executeWithAdminAuth(
+                                clearCart,
+                                "Authorize Clear Cart",
+                                "An administrator must authorize clearing the entire cart.",
+                              );
+                            }}
                             disabled={!cart.length || isDisabled}
                             className="h-8 w-8 md:h-9 md:w-9 p-0"
                           >
@@ -1163,9 +1212,9 @@ export default function OrdersPage() {
                               key={item._id}
                               item={item}
                               isDisabled={isDisabled}
-                              onUpdateQuantity={updateQuantity}
+                              onUpdateQuantity={handleUpdateQuantity}
                               onRemoveDiscount={removeDiscount}
-                              onRemoveFromCart={removeFromCart}
+                              onRemoveFromCart={handleRemoveFromCart}
                             />
                           ))}
                         </div>
@@ -1375,8 +1424,20 @@ export default function OrdersPage() {
                 onClose={() => setShowSavedOrders(false)}
                 onLoad={loadSavedOrder}
                 onReprint={handleReprintReceipt}
-                onDelete={deleteOrder}
-                onClearAll={clearAllSavedOrders}
+                onDelete={(id) => {
+                  executeWithAdminAuth(
+                    () => deleteOrder(id),
+                    "Authorize Order Deletion",
+                    "An administrator must authorize deleting this saved order.",
+                  );
+                }}
+                onClearAll={() => {
+                  executeWithAdminAuth(
+                    clearAllSavedOrders,
+                    "Authorize Clear All",
+                    "An administrator must authorize clearing all saved orders.",
+                  );
+                }}
               />
             </ScrollArea>
           </DialogContent>
@@ -1457,6 +1518,19 @@ export default function OrdersPage() {
             onClose={() => setActiveChat(null)}
           />
         )}
+
+        <AdminPinModal
+          open={showAdminPinModal}
+          onOpenChange={setShowAdminPinModal}
+          onSuccess={() => {
+            if (adminPinAction) {
+              adminPinAction.callback();
+              setAdminPinAction(null);
+            }
+          }}
+          title={adminPinAction?.title}
+          description={adminPinAction?.description}
+        />
       </>
     </div>
   );
