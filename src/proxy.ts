@@ -17,6 +17,7 @@ export const config = {
     "/reports/:path*",
     "/settings/:path*",
     "/pos",
+    "/staff-tables",
     "/my-sales/:path*",
     // Add any other protected root paths here
   ],
@@ -42,6 +43,7 @@ export async function proxy(request: NextRequest) {
     "/reports",
     "/settings",
     "/pos",
+    "/staff-tables",
     "/my-sales",
   ];
 
@@ -87,9 +89,13 @@ export async function proxy(request: NextRequest) {
     ];
 
     if (
-      forbiddenForStaff.some((p) => pathname.startsWith(p) || pathname === p)
+      forbiddenForStaff.some(
+        (p) => pathname === p || pathname.startsWith(p + "/"),
+      )
     ) {
-      return NextResponse.redirect(new URL("/pos", request.url));
+      if (pathname !== "/staff-tables") {
+        return NextResponse.redirect(new URL("/orders", request.url));
+      }
     }
   }
 

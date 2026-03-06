@@ -83,7 +83,6 @@ import {
 import { useSocket } from "@/provider/socket-provider";
 import { CustomerOrder } from "@/types/order.type";
 
-
 // ============ Main Component ===========
 export default function OrdersPage() {
   const {
@@ -208,11 +207,17 @@ export default function OrdersPage() {
 
   //ORDER STATES
   // pendingWebOrders removed — orders go directly into Queue Board via socket now
-  const [activeCustomerOrderId, setActiveCustomerOrderId] = useState<string | null>(null);
-  const [activeChat, setActiveChat] = useState<{ sessionId?: string; tableId?: string } | null>(null);
+  const [activeCustomerOrderId, setActiveCustomerOrderId] = useState<
+    string | null
+  >(null);
+  const [activeChat, setActiveChat] = useState<{
+    sessionId?: string;
+    tableId?: string;
+  } | null>(null);
 
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const cartDropZoneRef = useRef<HTMLDivElement>(null);
+  const productsContainerRef = useRef<HTMLDivElement>(null);
 
   // ——— Computed ———
   const isDisabled = isProcessing || isCheckingStock || isPrinting;
@@ -445,7 +450,6 @@ export default function OrdersPage() {
       toast.error("Cart is empty");
       playError();
       return;
-
     }
     const order: SavedOrder = {
       id: `save-${Date.now()}`,
@@ -525,7 +529,8 @@ export default function OrdersPage() {
 
     if (!isConnected) {
       toast.warning("Companion App not connected", {
-        description: "Open the Companion App on your phone/tablet to enable printing.",
+        description:
+          "Open the Companion App on your phone/tablet to enable printing.",
         duration: 5000,
       });
       return;
@@ -665,7 +670,10 @@ export default function OrdersPage() {
       await saveOrderToDatabase(completedOrder);
       saveOrderToLocal(completedOrder);
 
-      if ((settings?.printReceipt || settings?.kitchenPrinter?.enabled) && isConnected) {
+      if (
+        (settings?.printReceipt || settings?.kitchenPrinter?.enabled) &&
+        isConnected
+      ) {
         const receiptInput = {
           orderNumber,
           customerName: customerName || "Walk-in Customer",
@@ -699,8 +707,12 @@ export default function OrdersPage() {
         setIsPrinting(true);
         try {
           const results = await printBoth(receiptInput); // from useSocket
-          if (results.receipt) { /* toast.success("Receipt printed"); */ }
-          if (results.kitchen) { /* toast.success("Kitchen order printed"); */ }
+          if (results.receipt) {
+            /* toast.success("Receipt printed"); */
+          }
+          if (results.kitchen) {
+            /* toast.success("Kitchen order printed"); */
+          }
           if (!results.receipt && !results.kitchen) {
             toast.warning(
               "Printers not connected — use browser fallback in printer settings",
@@ -725,7 +737,10 @@ export default function OrdersPage() {
           await fetch("/api/orders/queue", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderId: activeCustomerOrderId, queueStatus: "paid" }),
+            body: JSON.stringify({
+              orderId: activeCustomerOrderId,
+              queueStatus: "paid",
+            }),
           });
         } catch (e) {
           console.error("Failed to update active customer order to paid", e);
@@ -884,7 +899,7 @@ export default function OrdersPage() {
   // ——— Guards ———
   if (attendanceLoading || (isLoading && !products.length) || settingsLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background overflow-x-hidden">
         <div className="container max-w-7xl mx-auto p-6">
           <div className="animate-pulse space-y-6">
             <div className="h-10 w-56 bg-muted rounded" />
@@ -930,7 +945,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <AttendanceBar
         attendance={attendance}
         attendanceLoading={attendanceLoading}
@@ -956,34 +971,47 @@ export default function OrdersPage() {
       />
 
       <>
-        <Tabs defaultValue="pos" className="w-full max-w-[1600px] mx-auto px-6">
-          <div className="flex items-center justify-between mt-2 mb-6">
+        <Tabs
+          defaultValue="pos"
+          className="w-full max-w-[1600px] mx-auto px-10 md:px-6"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between mt-4 md:mt-2 mb-4 md:mb-6 gap-4">
             <h1 className="text-2xl font-bold">Orders</h1>
-            <TabsList>
-              <TabsTrigger value="pos">Point of Sale</TabsTrigger>
-              <TabsTrigger value="queue">Queue Board</TabsTrigger>
+            <TabsList className="w-full md:w-auto grid grid-cols-2 h-11 md:h-10">
+              <TabsTrigger value="pos" className="text-xs md:text-sm">
+                Point of Sale
+              </TabsTrigger>
+              <TabsTrigger value="queue" className="text-xs md:text-sm">
+                Queue Board
+              </TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent value="pos" className="m-0">
             {/* Main Layout */}
-            <div className="flex flex-col lg:flex-row gap-5 pb-10">
+            <div className="flex flex-col lg:flex-row gap-5">
               {/* Left — Products */}
-              <div className="lg:w-[62%] flex flex-col">
+              <div className="md:w-[65%] lg:w-[70%] flex flex-col w-full min-w-0">
                 {/* Menu Type Filter */}
-                <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="grid grid-cols-3 gap-1.5 xs:gap-2 md:gap-3 mb-4 md:mb-5">
                   {(["all", "food", "drink"] as const).map((type) => (
                     <Button
                       key={type}
-                      variant={selectedMenuType === type ? "default" : "outline"}
+                      variant={
+                        selectedMenuType === type ? "default" : "outline"
+                      }
                       onClick={() => {
                         setSelectedMenuType(type);
                         setSelectedCategory("All");
                       }}
-                      className="h-11 text-base"
+                      className="h-9 md:h-11 text-[10px] xs:text-xs md:text-base capitalize px-1 md:px-4"
                     >
-                      {type === "food" && <Utensils className="w-4 h-4 mr-2" />}
-                      {type === "drink" && <Coffee className="w-4 h-4 mr-2" />}
+                      {type === "food" && (
+                        <Utensils className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                      )}
+                      {type === "drink" && (
+                        <Coffee className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+                      )}
                       {type === "all" ? "All" : type}
                     </Button>
                   ))}
@@ -1004,10 +1032,14 @@ export default function OrdersPage() {
                   onMouseLeave={() => setIsDraggingCategory(false)}
                 />
 
-                {/* Products Grid */}
-                <div className="pr-1">
+                {/* Products Grid - Scrollable Area */}
+                <div
+                  ref={productsContainerRef}
+                  className="overflow-y-auto pr-2 max-h-[600px] scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400"
+                  style={{ maxHeight: "calc(140vh - 320px)" }}
+                >
                   {isLoading ? (
-                    <div className="flex items-center justify-center h-full">
+                    <div className="flex items-center justify-center h-64">
                       <Loader2 className="w-8 h-8 animate-spin mr-3" />
                       Loading...
                     </div>
@@ -1016,18 +1048,13 @@ export default function OrdersPage() {
                       No products found
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                       {filteredProducts.map((product) => (
                         <ProductCard
                           key={product._id}
                           product={product}
-                          isDragged={draggedItem?._id === product._id}
                           onAddToCart={addToCart}
-                          onDragStart={handleDragStart}
-                          onDragEnd={() => setDraggedItem(null)}
-                          onTouchStart={handleTouchStart}
-                          onTouchMove={handleTouchMove}
-                          onTouchEnd={handleTouchEnd}
+                          // Removed isDragged and all drag-related props
                         />
                       ))}
                     </div>
@@ -1035,57 +1062,57 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* Right — Cart */}
-              <div className="lg:w-[38%]">
+              {/* Right — Cart - Fully visible, no scroll */}
+              <div className="lg:w-[30%] min-w-[320px]">
                 <div
                   ref={cartDropZoneRef}
-                  className="flex-1 transition-all"
+                  className="transition-all"
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
                   <Card className="flex flex-col border shadow-sm">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <ShoppingCart className="w-5 h-5" />
+                    <CardHeader className="p-4 md:p-6 pb-3">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                          <ShoppingCart className="w-4 h-4 md:w-5 md:h-5" />
                           Current Order ({cart.length})
                         </CardTitle>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             variant="outline"
-                            size="default"
+                            size="sm"
                             onClick={() => setShowDiscountModal(true)}
                             disabled={!cart.length || isDisabled}
-                            className="h-9 text-sm px-3"
+                            className="h-8 md:h-9 text-xs md:text-sm px-2 md:px-3 flex-1 sm:flex-none"
                           >
-                            <Percent className="w-4 h-4 mr-2" />
+                            <Percent className="w-3.5 h-3.5 mr-1.5 md:mr-2" />
                             Discount
                           </Button>
                           <Button
                             variant="outline"
-                            size="default"
+                            size="sm"
                             onClick={saveCurrentOrder}
                             disabled={!cart.length || isDisabled}
-                            className="h-9 w-9 p-0"
+                            className="h-8 w-8 md:h-9 md:w-9 p-0"
                             title="Save Order"
                           >
-                            <Save className="w-4 h-4" />
+                            <Save className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </Button>
                           <Button
                             variant="outline"
-                            size="default"
+                            size="sm"
                             onClick={clearCart}
                             disabled={!cart.length || isDisabled}
-                            className="h-9 w-9 p-0"
+                            className="h-8 w-8 md:h-9 md:w-9 p-0"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </Button>
                         </div>
                       </div>
                       {!cart.length && (
                         <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30">
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs md:text-sm text-muted-foreground">
                             ↓ Drop products here ↓
                           </p>
                         </div>
@@ -1112,7 +1139,9 @@ export default function OrdersPage() {
                           {(["dine-in", "takeaway"] as const).map((type) => (
                             <Button
                               key={type}
-                              variant={orderType === type ? "default" : "outline"}
+                              variant={
+                                orderType === type ? "default" : "outline"
+                              }
                               onClick={() => setOrderType(type)}
                               className="flex-1 h-9 text-sm"
                               disabled={isDisabled}
@@ -1169,34 +1198,36 @@ export default function OrdersPage() {
 
                       {/* Payment Method */}
                       <div>
-                        <Label className="text-sm">Payment</Label>
-                        <div className="grid grid-cols-3 gap-2 mt-2">
-                          {(["cash", "gcash", "split"] as const).map((method) => (
-                            <Button
-                              key={method}
-                              variant={
-                                paymentMethod === method ? "default" : "outline"
-                              }
-                              onClick={() => setPaymentMethod(method)}
-                              className="h-9 text-sm"
-                              disabled={isDisabled}
-                            >
-                              {method === "cash" && (
-                                <DollarSign className="w-4 h-4 mr-2" />
-                              )}
-                              {method === "gcash" && (
-                                <Smartphone className="w-4 h-4 mr-2" />
-                              )}
-                              {method === "split" && (
-                                <Receipt className="w-4 h-4 mr-2" />
-                              )}
-                              {method === "cash"
-                                ? "Cash"
-                                : method === "gcash"
-                                  ? "GCash"
-                                  : "Split"}
-                            </Button>
-                          ))}
+                        <Label className="text-xs md:text-sm text-muted-foreground/80">
+                          Payment Method
+                        </Label>
+                        <div className="grid grid-cols-3 gap-1.5 xs:gap-2 mt-2">
+                          {(["cash", "gcash", "split"] as const).map(
+                            (method) => (
+                              <Button
+                                key={method}
+                                variant={
+                                  paymentMethod === method
+                                    ? "default"
+                                    : "outline"
+                                }
+                                onClick={() => setPaymentMethod(method)}
+                                className="h-9 md:h-10 text-[10px] xs:text-xs md:text-sm capitalize px-1 md:px-4"
+                                disabled={isDisabled}
+                              >
+                                {method === "cash" && (
+                                  <DollarSign className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" />
+                                )}
+                                {method === "gcash" && (
+                                  <Smartphone className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" />
+                                )}
+                                {method === "split" && (
+                                  <Receipt className="w-3 h-3 md:w-3.5 md:h-3.5 mr-1 md:mr-1.5" />
+                                )}
+                                {method}
+                              </Button>
+                            ),
+                          )}
                         </div>
                       </div>
 
@@ -1282,7 +1313,8 @@ export default function OrdersPage() {
                             {paymentMethod === "cash" && amountPaid >= total
                               ? `Pay & Change: ₱${(amountPaid - total).toFixed(2)}`
                               : paymentMethod === "split" &&
-                                splitPayment.cash + splitPayment.gcash >= total
+                                  splitPayment.cash + splitPayment.gcash >=
+                                    total
                                 ? "Pay (Split)"
                                 : `Pay ${formatCurrency(total)}`}
                           </>
@@ -1316,12 +1348,14 @@ export default function OrdersPage() {
           </TabsContent>
 
           <TabsContent value="queue" className="m-0 pb-10">
-            <QueueBoard onOpenChat={
-              (order) => setActiveChat({
-                sessionId: order.sessionId,
-                tableId: order.tableNumber
-              })
-            } />
+            <QueueBoard
+              onOpenChat={(order) =>
+                setActiveChat({
+                  sessionId: order.sessionId,
+                  tableId: order.tableNumber,
+                })
+              }
+            />
           </TabsContent>
         </Tabs>
 
@@ -1372,17 +1406,15 @@ export default function OrdersPage() {
           }}
         />
 
-        {
-          showReceipt && settings && (
-            <ReceiptModal
-              receipt={currentReceipt}
-              settings={settings}
-              onClose={() => setShowReceipt(false)}
-              onPrint={handlePrintReceipt}
-              isPrinting={isPrinting}
-            />
-          )
-        }
+        {showReceipt && settings && (
+          <ReceiptModal
+            receipt={currentReceipt}
+            settings={settings}
+            onClose={() => setShowReceipt(false)}
+            onPrint={handlePrintReceipt}
+            isPrinting={isPrinting}
+          />
+        )}
 
         {/* InsufficientStockModal - kept but won't be shown since stock check is disabled */}
         {showInsufficientStockModal && (
@@ -1396,7 +1428,8 @@ export default function OrdersPage() {
               const names = new Set(insufficientStockItems.map((i) => i.name));
               setCart((prev) =>
                 prev.filter(
-                  (item) => !item.ingredients?.some((ing) => names.has(ing.name)),
+                  (item) =>
+                    !item.ingredients?.some((ing) => names.has(ing.name)),
                 ),
               );
               setShowInsufficientStockModal(false);

@@ -8,7 +8,7 @@ export interface Table {
   label: string;
   qrCodeUrl: string;
   qrType: "dine-in" | "walk-in" | "drive-thru" | "take-away";
-  status: "available" | "occupied" | "reserved";
+  status: "available" | "occupied" | "reserved" | "unavailable";
   currentSessionId: string | null;
   createdBy: string;
   createdAt: string;

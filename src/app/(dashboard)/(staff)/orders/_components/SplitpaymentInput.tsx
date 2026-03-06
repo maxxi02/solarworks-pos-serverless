@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { formatCurrency } from './pos.utils';
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { formatCurrency } from "./pos.utils";
 
 interface SplitPaymentInputProps {
   total: number;
@@ -19,12 +19,16 @@ export const SplitPaymentInput = ({
   setSplitPayment,
   disabled,
 }: SplitPaymentInputProps) => {
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const totalPaid = splitPayment.cash + splitPayment.gcash;
   const change = totalPaid - total;
 
   const validate = (cash: number, gcash: number) => {
-    setError(Math.abs(cash + gcash - total) > 0.01 ? 'Split amounts must equal total' : '');
+    setError(
+      Math.abs(cash + gcash - total) > 0.01
+        ? "Split amounts must equal total"
+        : "",
+    );
   };
 
   const handleCashChange = (value: string) => {
@@ -44,15 +48,19 @@ export const SplitPaymentInput = ({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label className="text-sm flex items-center justify-between">
+        <Label className="text-xs md:text-sm flex flex-col xs:flex-row xs:items-center justify-between gap-1">
           <span>Cash Amount</span>
-          <span className="text-muted-foreground">Remaining: {formatCurrency(total - splitPayment.gcash)}</span>
+          <span className="text-muted-foreground font-normal">
+            Remaining: {formatCurrency(total - splitPayment.gcash)}
+          </span>
         </Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            ₱
+          </span>
           <Input
             type="number"
-            value={splitPayment.cash || ''}
+            value={splitPayment.cash || ""}
             onChange={(e) => handleCashChange(e.target.value)}
             placeholder="0.00"
             className="pl-7 h-10 text-base"
@@ -65,15 +73,19 @@ export const SplitPaymentInput = ({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-sm flex items-center justify-between">
+        <Label className="text-xs md:text-sm flex flex-col xs:flex-row xs:items-center justify-between gap-1">
           <span>GCash Amount</span>
-          <span className="text-muted-foreground">Remaining: {formatCurrency(total - splitPayment.cash)}</span>
+          <span className="text-muted-foreground font-normal">
+            Remaining: {formatCurrency(total - splitPayment.cash)}
+          </span>
         </Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            ₱
+          </span>
           <Input
             type="number"
-            value={splitPayment.gcash || ''}
+            value={splitPayment.gcash || ""}
             onChange={(e) => handleGcashChange(e.target.value)}
             placeholder="0.00"
             className="pl-7 h-10 text-base"
@@ -86,18 +98,28 @@ export const SplitPaymentInput = ({
       </div>
 
       {/* Quick Split Buttons */}
-      <div className="grid grid-cols-3 gap-2 pt-2">
+      <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 pt-2">
         {[
-          { label: '50/50', action: () => setSplitPayment({ cash: total / 2, gcash: total / 2 }) },
-          { label: 'All Cash', action: () => setSplitPayment({ cash: total, gcash: 0 }) },
-          { label: 'All GCash', action: () => setSplitPayment({ cash: 0, gcash: total }) },
+          {
+            label: "50/50",
+            action: () =>
+              setSplitPayment({ cash: total / 2, gcash: total / 2 }),
+          },
+          {
+            label: "All Cash",
+            action: () => setSplitPayment({ cash: total, gcash: 0 }),
+          },
+          {
+            label: "All GCash",
+            action: () => setSplitPayment({ cash: 0, gcash: total }),
+          },
         ].map(({ label, action }) => (
           <Button
             key={label}
-            size="default"
+            size="sm"
             variant="outline"
             onClick={action}
-            className="h-9 text-sm"
+            className="h-9 text-xs md:text-sm"
             disabled={disabled}
           >
             {label}
@@ -106,35 +128,51 @@ export const SplitPaymentInput = ({
       </div>
 
       {/* Receipt-style Summary */}
-      <div className={`rounded-lg p-4 space-y-1 mt-3 font-mono border ${totalPaid >= total ? 'bg-primary/5 border-primary/20' : 'bg-destructive/5 border-destructive/20'}`}>
+      <div
+        className={`rounded-lg p-4 space-y-1 mt-3 font-mono border ${totalPaid >= total ? "bg-primary/5 border-primary/20" : "bg-destructive/5 border-destructive/20"}`}
+      >
         <div className="space-y-1">
           <div className="flex justify-between text-sm">
             <span>Cash:</span>
-            <span className="font-medium">{formatCurrency(splitPayment.cash)}</span>
+            <span className="font-medium">
+              {formatCurrency(splitPayment.cash)}
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span>GCash:</span>
-            <span className="font-medium">{formatCurrency(splitPayment.gcash)}</span>
+            <span className="font-medium">
+              {formatCurrency(splitPayment.gcash)}
+            </span>
           </div>
         </div>
 
         <div className="border-t border-dashed border-gray-300 my-2" />
-        <div className="text-right text-lg font-bold">{formatCurrency(totalPaid)}</div>
-        <div className="text-right text-lg font-bold text-muted-foreground">-{formatCurrency(total)}</div>
+        <div className="text-right text-lg font-bold">
+          {formatCurrency(totalPaid)}
+        </div>
+        <div className="text-right text-lg font-bold text-muted-foreground">
+          -{formatCurrency(total)}
+        </div>
         <div className="border-t border-dashed border-gray-300 my-2" />
 
         {totalPaid > total ? (
           <div className="flex justify-between text-lg font-bold">
             <span className="text-muted-foreground">CHANGE:</span>
-            <span className="text-primary">{formatCurrency(totalPaid - total)}</span>
+            <span className="text-primary">
+              {formatCurrency(totalPaid - total)}
+            </span>
           </div>
         ) : totalPaid < total ? (
           <div className="flex justify-between text-lg font-bold">
             <span className="text-gray-600">NEED:</span>
-            <span className="text-red-600">{formatCurrency(total - totalPaid)}</span>
+            <span className="text-red-600">
+              {formatCurrency(total - totalPaid)}
+            </span>
           </div>
         ) : (
-          <div className="text-center text-primary font-bold text-lg">EXACT AMOUNT</div>
+          <div className="text-center text-primary font-bold text-lg">
+            EXACT AMOUNT
+          </div>
         )}
 
         {error && <p className="text-xs text-red-500 mt-2">{error}</p>}

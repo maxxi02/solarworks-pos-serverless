@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -49,7 +50,12 @@ const getUserRole = (user: ExtendedUser | null | undefined): UserRole => {
 
 const getUserInitials = (name?: string | null): string => {
   if (!name) return "U";
-  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 };
 
 // ─── Online Status Indicator ─────────────────────────────────────
@@ -86,7 +92,7 @@ const OnlineStatusIndicator = () => {
 const UserProfileContent = ({
   user,
   isLoggingOut,
-  onLogout
+  onLogout,
 }: {
   user: ExtendedUser;
   isLoggingOut: boolean;
@@ -156,9 +162,9 @@ const UserProfileContent = ({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { }}>
-                Cancel
-              </Button>
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
               <Button
                 variant="destructive"
                 onClick={onLogout}
@@ -233,7 +239,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     // Wrap the profile content with SocketProvider
     return (
-
       <UserProfileContent
         user={user}
         isLoggingOut={isLoggingOut}

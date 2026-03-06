@@ -63,6 +63,7 @@ export const PATHS = {
 
     SETTINGS_PROFILE: "/settings/profile",
     ATTENDANCE: "/attendance",
+    TABLES: "/staff-tables",
   },
 } as const;
 
@@ -157,6 +158,11 @@ export const staffNavigation: NavItem[] = [
   },
   { title: "Messages", url: PATHS.MESSAGES, icon: MessageSquare },
   { title: "Orders", url: PATHS.STAFF_NAV.ORDERS, icon: ShoppingCart },
+  {
+    title: "Tables",
+    url: PATHS.STAFF_NAV.TABLES,
+    icon: LayoutDashboard,
+  },
   {
     title: "My Sales",
     url: PATHS.STAFF_NAV.MY_SALES,

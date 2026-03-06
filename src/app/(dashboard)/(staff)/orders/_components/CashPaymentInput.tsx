@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { formatCurrency } from './pos.utils';
-import { Separator } from '@/components/ui/separator';
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { formatCurrency } from "./pos.utils";
+import { Separator } from "@/components/ui/separator";
 
 interface CashPaymentInputProps {
   total: number;
@@ -21,7 +21,7 @@ export const CashPaymentInput = ({
   setAmountPaid,
   disabled,
 }: CashPaymentInputProps) => {
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const change = amountPaid - total;
   const isInsufficient = amountPaid > 0 && change < 0;
@@ -29,25 +29,33 @@ export const CashPaymentInput = ({
   const handleAmountChange = (value: string) => {
     const paid = parseFloat(value) || 0;
     setAmountPaid(paid);
-    setError(paid > 0 && paid < total ? `Need ${formatCurrency(total - paid)} more` : '');
+    setError(
+      paid > 0 && paid < total
+        ? `Need ${formatCurrency(total - paid)} more`
+        : "",
+    );
   };
 
   return (
     // Updated CashPaymentInput
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label className="text-sm flex items-center justify-between">
+        <Label className="text-xs md:text-sm flex flex-col xs:flex-row xs:items-center justify-between gap-1">
           <span>Amount Received</span>
-          <span className="text-muted-foreground">Total: {formatCurrency(total)}</span>
+          <span className="text-muted-foreground font-normal">
+            Total: {formatCurrency(total)}
+          </span>
         </Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₱</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            ₱
+          </span>
           <Input
             type="number"
-            value={amountPaid || ''}
+            value={amountPaid || ""}
             onChange={(e) => handleAmountChange(e.target.value)}
             placeholder="0.00"
-            className={`pl-7 h-10 text-base border border-input bg-background focus:border-primary focus:ring-1 focus:ring-primary/50 ${isInsufficient ? 'border-destructive focus:border-destructive focus:ring-destructive/50' : ''}`}
+            className={`pl-7 h-10 text-base border border-input bg-background focus:border-primary focus:ring-1 focus:ring-primary/50 ${isInsufficient ? "border-destructive focus:border-destructive focus:ring-destructive/50" : ""}`}
             step="0.01"
             min="0"
             disabled={disabled}
@@ -56,7 +64,9 @@ export const CashPaymentInput = ({
       </div>
 
       {amountPaid > 0 && (
-        <div className={`rounded-lg p-4 space-y-2 border ${change >= 0 ? 'bg-primary/5 border-primary/30' : 'bg-destructive/10 border-destructive/30'}`}>
+        <div
+          className={`rounded-lg p-4 space-y-2 border ${change >= 0 ? "bg-primary/5 border-primary/30" : "bg-destructive/10 border-destructive/30"}`}
+        >
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Paid:</span>
             <span>{formatCurrency(amountPaid)}</span>

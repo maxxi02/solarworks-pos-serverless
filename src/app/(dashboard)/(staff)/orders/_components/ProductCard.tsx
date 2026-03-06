@@ -8,81 +8,73 @@ import { Product } from "./pos.types";
 import { formatCurrency } from "./pos.utils";
 
 interface ProductCardProps {
-    product: Product;
-    isDragged: boolean;
-    onAddToCart: (product: Product) => void;
-    onDragStart: (e: React.DragEvent, product: Product) => void;
-    onDragEnd: () => void;
-    onTouchStart: (e: React.TouchEvent, product: Product) => void;
-    onTouchMove: (e: React.TouchEvent) => void;
-    onTouchEnd: (e: React.TouchEvent) => void;
+  product: Product;
+  onAddToCart: (product: Product) => void;
 }
 
-export const ProductCard = memo(({
-    product,
-    isDragged,
-    onAddToCart,
-    onDragStart,
-    onDragEnd,
-    onTouchStart,
-    onTouchMove,
-    onTouchEnd,
-}: ProductCardProps) => {
+export const ProductCard = memo(
+  ({ product, onAddToCart }: ProductCardProps) => {
     return (
-        <Card
-            className={`hover:shadow-md transition-all active:scale-95 border cursor-grab active:cursor-grabbing touch-none overflow-hidden p-0 ${isDragged ? "opacity-50 scale-95" : ""
-                }`}
-            draggable
-            onDragStart={(e) => onDragStart(e, product)}
-            onDragEnd={onDragEnd}
-            onTouchStart={(e) => onTouchStart(e, product)}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-        >
-            <CardContent className="p-0">
-                {/* Image */}
-                {product.imageUrl ? (
-                    <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-36 object-cover"
-                        draggable={false}
-                    />
+      <Card
+        className="hover:shadow-xl transition-all hover:scale-[1.02] active:scale-95 cursor-pointer overflow-hidden p-0 border hover:border-primary/50 group"
+        onClick={() => onAddToCart(product)}
+      >
+        <CardContent className="p-0">
+          {/* Image with fixed aspect ratio */}
+          <div className="relative w-full pt-[75%] bg-gradient-to-br from-muted to-muted/50">
+            {product.imageUrl ? (
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+                loading="lazy"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                {product.menuType === "drink" ? (
+                  <Coffee className="w-12 h-12 text-muted-foreground/40" />
                 ) : (
-                    <div className="w-full h-36 bg-muted flex items-center justify-center text-4xl">
-                        {product.menuType === "drink" ? "☕" : "🍽️"}
-                    </div>
+                  <Utensils className="w-12 h-12 text-muted-foreground/40" />
                 )}
+              </div>
+            )}
+          </div>
 
-                {/* Content */}
-                <div className="p-3">
-                    <h3 className="font-bold text-sm line-clamp-2">
-                        {product.name}
-                    </h3>
-                    {product.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {product.description}
-                        </p>
-                    )}
-                    <div className="flex items-center justify-between mt-3">
-                        <span className="font-bold text-sm text-primary">
-                            {formatCurrency(product.price)}
-                        </span>
-                        <Button
-                            size="sm"
-                            className="h-8 w-8 p-0 rounded-full"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onAddToCart(product);
-                            }}
-                        >
-                            <Plus className="w-4 h-4" />
-                        </Button>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+          {/* Content - Compact but readable */}
+          <div className="p-2.5">
+            <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5rem]">
+              {product.name}
+            </h3>
+
+            {/* Price and Add Button - Always visible */}
+            <div className="flex items-center justify-between mt-2">
+              <span className="font-bold text-base text-primary">
+                {formatCurrency(product.price)}
+              </span>
+              <Button
+                size="sm"
+                className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-all bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddToCart(product);
+                }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+
+            {/* Optional: Show description only if available and compact */}
+            {product.description && (
+              <p className="text-[10px] text-muted-foreground/70 mt-1 line-clamp-1">
+                {product.description}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     );
-});
+  },
+);
 
 ProductCard.displayName = "ProductCard";

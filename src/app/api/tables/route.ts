@@ -2,7 +2,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { MONGODB } from "@/config/db";
-import { ObjectId } from "mongodb";
 import crypto from "crypto";
 
 // GET all tables
@@ -149,9 +148,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
+    // Some versions return { value: doc }, others return the doc itself.
+    const table = "value" in result ? (result.value as any) : result;
+
+    if (!table) {
+      return NextResponse.json({ error: "Table not found" }, { status: 404 });
+    }
+
     return NextResponse.json({
-      ...result,
-      _id: result._id.toString(),
+      ...table,
+      _id: table._id.toString(),
     });
   } catch (error: unknown) {
     console.error("❌ PATCH Table Error:", error);

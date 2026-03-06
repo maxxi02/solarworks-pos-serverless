@@ -1,7 +1,8 @@
 // Singleton MongoDB client with connection caching for Next.js serverless.
 // Stores the client promise on globalThis so it survives hot-reloads in dev
 // and is shared across invocations in the same serverless instance.
-
+import dns from "node:dns";
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 import { Db, MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI!;
@@ -42,7 +43,9 @@ const legacyClient = new MongoClient(uri, {
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 10000,
 });
-legacyClient.connect().catch(() => {/* handled per-request */});
+legacyClient.connect().catch(() => {
+  /* handled per-request */
+});
 
 export const MONGODB: Db = legacyClient.db();
 export default MONGODB;
