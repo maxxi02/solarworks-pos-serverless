@@ -62,7 +62,7 @@ export const PATHS = {
     INVENTORY_STOCK_LEVELS: "/inventory/stock",
 
     SETTINGS_PROFILE: "/settings/profile",
-    ATTENDANCE: "/staff/attendance",
+    ATTENDANCE: "/attendance",
   },
 } as const;
 

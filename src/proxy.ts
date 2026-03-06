@@ -16,7 +16,7 @@ export const config = {
     "/staff-management/:path*",
     "/reports/:path*",
     "/settings/:path*",
-    "/pos",
+    "/attendance",
     "/my-sales/:path*",
     // Add any other protected root paths here
   ],
