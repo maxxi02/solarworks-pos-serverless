@@ -203,11 +203,10 @@ const AttendancePage = () => {
         {/* Last action result */}
         {lastAction && (
           <div
-            className={`flex items-start gap-3 rounded-xl border p-4 ${
-              lastAction.type === "clock-in"
+            className={`flex items-start gap-3 rounded-xl border p-4 ${lastAction.type === "clock-in"
                 ? "border-green-500/30 bg-green-500/10"
                 : "border-rose-500/30 bg-rose-500/10"
-            }`}
+              }`}
           >
             {lastAction.type === "clock-in" ? (
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
@@ -263,9 +262,8 @@ const AttendancePage = () => {
                   )}
                   {/* Online dot */}
                   <span
-                    className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background ${
-                      s.isClockedIn ? "bg-green-500" : "bg-gray-400"
-                    }`}
+                    className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background ${s.isClockedIn ? "bg-green-500" : "bg-gray-400"
+                      }`}
                   />
                 </div>
 
@@ -278,9 +276,8 @@ const AttendancePage = () => {
                 {/* Status badge */}
                 <Badge
                   variant={s.isClockedIn ? "default" : "secondary"}
-                  className={`text-xs ${
-                    s.isClockedIn ? "bg-green-600 hover:bg-green-600" : ""
-                  }`}
+                  className={`text-xs ${s.isClockedIn ? "bg-green-600 hover:bg-green-600" : ""
+                    }`}
                 >
                   {s.isClockedIn
                     ? `In ${s.clockInTime ? formatTime(s.clockInTime) : ""}`
@@ -413,11 +410,10 @@ const AttendancePage = () => {
 
             {/* Action info */}
             <div
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                isClockingOut
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${isClockingOut
                   ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
                   : "bg-green-500/10 text-green-700 dark:text-green-400"
-              }`}
+                }`}
             >
               {isClockingOut ? (
                 <>
