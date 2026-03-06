@@ -170,6 +170,7 @@ interface SocketContextValue {
     // printBoth       → emits print:request, waits up to 10 s for print:job:result
     companionStatus: CompanionPrinterStatus;
     printBoth: (input: ReceiptBuildInput) => Promise<{ receipt: boolean; kitchen: boolean }>;
+    emitPrintZReport: (data: any) => void;
 }
 
 const defaultContext: SocketContextValue = {
@@ -197,6 +198,7 @@ const defaultContext: SocketContextValue = {
     printKitchenOrder: async () => false,
     companionStatus: { usb: false, bt: false },
     printBoth: async () => ({ receipt: false, kitchen: false }),
+    emitPrintZReport: () => { },
 };
 
 const SocketContext = createContext<SocketContextValue>(defaultContext);
@@ -375,6 +377,10 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
     const emitCustomerOrder = (order: CustomerOrder) => socketRef.current?.emit('order:submit', order);
     const emitOrderQueueUpdate = (orderId: string, queueStatus: string) =>
         socketRef.current?.emit('order:queue:update', { orderId, queueStatus, updatedBy: 'staff' });
+    const emitPrintZReport = (data: any) => {
+        if (!socketRef.current?.connected) return;
+        socketRef.current.emit("print:zreport", { jobId: generateJobId(), data });
+    };
 
     // ─── Listeners ────────────────────────────────────────────────────────────
     const onStatusChanged = (cb: (d: UserStatusUpdate) => void) => socketRef.current?.on("user:status:changed", cb);
@@ -469,6 +475,7 @@ export function SocketProvider({ children, userId, userName, userAvatar }: Socke
             printReceipt, printKitchenOrder,
             companionStatus,
             printBoth,
+            emitPrintZReport,
         }}>
             {children}
         </SocketContext.Provider>

@@ -101,6 +101,16 @@ export const useCart = (
 };
 
 // ——— Saved Orders ———
+const slimOrder = (order: SavedOrder): SavedOrder => ({
+  ...order,
+  items: order.items.map((item) => ({
+    ...item,
+    description: undefined,
+    ingredients: [],
+    imageUrl: undefined,
+  })),
+});
+
 export const useSavedOrders = () => {
   const [savedOrders, setSavedOrders] = useState<SavedOrder[]>(() => {
     try {
@@ -115,32 +125,54 @@ export const useSavedOrders = () => {
     return [];
   });
 
-  const persist = (orders: SavedOrder[]) => {
-    setSavedOrders(orders);
-    localStorage.setItem("pos_saved_orders", JSON.stringify(orders));
-  };
-
-  const saveOrder = useCallback((order: SavedOrder) => {
-    setSavedOrders((prev) => {
-      const updated = [order, ...prev].slice(0, 50);
-      localStorage.setItem("pos_saved_orders", JSON.stringify(updated));
-      return updated;
-    });
+  const persist = useCallback((orders: SavedOrder[]) => {
+    const slimmed = orders.map(slimOrder);
+    try {
+      localStorage.setItem("pos_saved_orders", JSON.stringify(slimmed));
+    } catch (e) {
+      console.error("LocalStorage save failed:", e);
+      if (e instanceof Error && e.name === "QuotaExceededError") {
+        // Fallback: Prune aggressively (keep only last 10)
+        try {
+          const restricted = slimmed.slice(0, 10);
+          localStorage.setItem("pos_saved_orders", JSON.stringify(restricted));
+          toast.warning("Storage full: kept only last 10 orders");
+        } catch {
+          localStorage.removeItem("pos_saved_orders");
+          toast.error("Storage critical: cleared saved orders");
+        }
+      }
+    }
   }, []);
 
-  const deleteOrder = useCallback((orderId: string) => {
-    setSavedOrders((prev) => {
-      const updated = prev.filter((o) => o.id !== orderId);
-      localStorage.setItem("pos_saved_orders", JSON.stringify(updated));
-      toast.success("Order deleted");
-      return updated;
-    });
-  }, []);
+  const saveOrder = useCallback(
+    (order: SavedOrder) => {
+      setSavedOrders((prev) => {
+        const updated = [order, ...prev].slice(0, 50);
+        persist(updated);
+        return updated;
+      });
+    },
+    [persist],
+  );
+
+  const deleteOrder = useCallback(
+    (orderId: string) => {
+      setSavedOrders((prev) => {
+        const updated = prev.filter((o) => o.id !== orderId);
+        persist(updated);
+        toast.success("Order deleted");
+        return updated;
+      });
+    },
+    [persist],
+  );
 
   const clearAll = useCallback(() => {
+    setSavedOrders([]);
     persist([]);
     toast.success("All saved orders cleared");
-  }, []);
+  }, [persist]);
 
   return { savedOrders, saveOrder, deleteOrder, clearAll };
 };

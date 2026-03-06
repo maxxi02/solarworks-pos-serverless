@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import {
+  Printer,
   RefreshCw,
   ChefHat,
   UtensilsCrossed,
@@ -13,6 +14,7 @@ import { CustomerOrder, QueueStatus } from "@/types/order.type";
 import { OrderDetailModal } from "./OrderDetailModal";
 import { useSocket } from "@/provider/socket-provider";
 import { Badge } from "@/components/ui/badge";
+import { SavedOrder, CartItem } from "./pos.types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -81,11 +83,12 @@ function Th({
 
 interface QueueBoardProps {
   onOpenChat?: (order: CustomerOrder) => void;
+  onReprintReceipt?: (order: SavedOrder) => void;
 }
 
 type FilterType = "all" | "queueing" | "serving";
 
-export function QueueBoard({ onOpenChat }: QueueBoardProps) {
+export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
   const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
 
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -137,10 +140,10 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
           return prev.map((o) =>
             o.orderId === data.orderId
               ? {
-                  ...o,
-                  ...data.order,
-                  queueStatus: data.queueStatus as QueueStatus,
-                }
+                ...o,
+                ...data.order,
+                queueStatus: data.queueStatus as QueueStatus,
+              }
               : o,
           );
         }
@@ -194,6 +197,41 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
         next.delete(orderId);
         return next;
       });
+    }
+  };
+
+  // ─── Map to SavedOrder for printing ─────────────────────────────
+  const mapToSavedOrder = (order: CustomerOrder): SavedOrder => {
+    return {
+      id: order.orderId,
+      orderNumber: order.orderNumber || order.orderId.slice(-6).toUpperCase(),
+      customerName: order.customerName,
+      items: order.items.map((item) => ({
+        _id: item._id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        menuType: item.menuType,
+        ingredients: item.ingredients || [],
+        available: true,
+      })) as CartItem[],
+      subtotal: order.subtotal,
+      discountTotal: 0,
+      total: order.total,
+      paymentMethod: "gcash", // Default for web orders
+      orderType: order.orderType || "takeaway",
+      tableNumber: order.tableNumber,
+      timestamp: order.timestamp ? new Date(order.timestamp) : new Date(),
+      status: "completed",
+      orderNote: order.orderNote,
+      cashier: "Web Order",
+    };
+  };
+
+  const handlePrint = (e: React.MouseEvent, order: CustomerOrder) => {
+    e.stopPropagation();
+    if (onReprintReceipt) {
+      onReprintReceipt(mapToSavedOrder(order));
     }
   };
 
@@ -259,11 +297,10 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                filter === f
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filter === f
+                ? "bg-card text-foreground shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               {f === "serving" && <UtensilsCrossed className="w-3.5 h-3.5" />}
               {f === "all" && <Filter className="w-3.5 h-3.5" />}
@@ -274,11 +311,10 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                 ? "All Active"
                 : f.charAt(0).toUpperCase() + f.slice(1)}
               <span
-                className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
-                  f === "queueing" && (counts.queueing ?? 0) > 0
-                    ? "bg-sky-500/20 text-sky-400"
-                    : "bg-muted text-muted-foreground"
-                }`}
+                className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${f === "queueing" && (counts.queueing ?? 0) > 0
+                  ? "bg-sky-500/20 text-sky-400"
+                  : "bg-muted text-muted-foreground"
+                  }`}
               >
                 {counts[f] ?? counts.all}
               </span>
@@ -401,19 +437,28 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                           className="flex items-center justify-end gap-2"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {(order.queueStatus === "pending_payment" ||
-                            order.queueStatus === "queueing") && (
+                          {onReprintReceipt && (
                             <button
-                              onClick={(e) =>
-                                updateStatus(e, order.orderId, "serving")
-                              }
-                              disabled={isUpdating}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 transition-colors disabled:opacity-50"
+                              onClick={(e) => handlePrint(e, order)}
+                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-accent transition-colors"
+                              title="Print Receipt"
                             >
-                              <UtensilsCrossed className="w-3 h-3" />
-                              {isUpdating ? "..." : "Start Serving"}
+                              <Printer className="w-3.5 h-3.5" />
                             </button>
                           )}
+                          {(order.queueStatus === "pending_payment" ||
+                            order.queueStatus === "queueing") && (
+                              <button
+                                onClick={(e) =>
+                                  updateStatus(e, order.orderId, "serving")
+                                }
+                                disabled={isUpdating}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/20 transition-colors disabled:opacity-50"
+                              >
+                                <UtensilsCrossed className="w-3 h-3" />
+                                {isUpdating ? "..." : "Start Serving"}
+                              </button>
+                            )}
                           {order.queueStatus === "serving" && (
                             <button
                               onClick={(e) =>
@@ -536,20 +581,28 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                     )}
                   </div>
 
-                  <div onClick={(e) => e.stopPropagation()}>
-                    {(order.queueStatus === "pending_payment" ||
-                      order.queueStatus === "queueing") && (
+                  <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+                    {onReprintReceipt && (
                       <button
-                        onClick={(e) =>
-                          updateStatus(e, order.orderId, "serving")
-                        }
-                        disabled={isUpdating}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/20 transition-colors disabled:opacity-50"
+                        onClick={(e) => handlePrint(e, order)}
+                        className="p-2 rounded-lg border border-border text-muted-foreground hover:bg-accent transition-colors"
                       >
-                        <UtensilsCrossed className="w-3.5 h-3.5" />
-                        {isUpdating ? "..." : "Serve"}
+                        <Printer className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    {(order.queueStatus === "pending_payment" ||
+                      order.queueStatus === "queueing") && (
+                        <button
+                          onClick={(e) =>
+                            updateStatus(e, order.orderId, "serving")
+                          }
+                          disabled={isUpdating}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/20 transition-colors disabled:opacity-50"
+                        >
+                          <UtensilsCrossed className="w-3.5 h-3.5" />
+                          {isUpdating ? "..." : "Serve"}
+                        </button>
+                      )}
                     {order.queueStatus === "serving" && (
                       <button
                         onClick={(e) => updateStatus(e, order.orderId, "done")}
@@ -591,6 +644,7 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
       <OrderDetailModal
         order={selectedOrder}
         onClose={() => setSelectedOrder(null)}
+        onPrint={() => selectedOrder && onReprintReceipt && onReprintReceipt(mapToSavedOrder(selectedOrder))}
       />
     </div>
   );
