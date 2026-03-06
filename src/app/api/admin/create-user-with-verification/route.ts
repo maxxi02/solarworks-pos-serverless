@@ -4,6 +4,7 @@ import { sendVerificationEmail } from "@/lib/email";
 import { headers } from "next/headers";
 import crypto from "crypto";
 import { MONGODB } from "@/config/db";
+import { ObjectId } from "mongodb";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     // Update user role and mark as verified
     await MONGODB.collection("user").updateOne(
-      { id: newUserId },
+      { _id: { $in: [new ObjectId(newUserId), newUserId] } },
       {
         $set: {
           role: role || "staff",
