@@ -50,7 +50,14 @@ export async function POST(request: NextRequest) {
 
     // Update user role and mark as verified
     await MONGODB.collection("user").updateOne(
-      { _id: { $in: [new ObjectId(newUserId), newUserId] } },
+      {
+        _id: {
+          $in: [
+            ObjectId.isValid(newUserId) ? new ObjectId(newUserId) : newUserId,
+            newUserId,
+          ],
+        } as any,
+      },
       {
         $set: {
           role: role || "staff",
