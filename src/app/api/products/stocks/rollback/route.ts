@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '@/config/db-Connect';
+import { CLIENT, MONGODB } from '@/config/db';
 import { 
   INVENTORY_COLLECTION, 
   Inventory,
@@ -12,19 +12,22 @@ import {
 import { ObjectId } from 'mongodb';
 
 export async function POST(req: NextRequest) {
-  return withTransaction(async (session) => {
-    try {
+  const session = CLIENT.startSession();
+  try {
+    let response: NextResponse = NextResponse.json({ error: 'Failed to process rollback' }, { status: 500 });
+    
+    await session.withTransaction(async () => {
       const body = await req.json();
       const { transactionId, adjustments } = body;
       
       if (!transactionId || !adjustments || !Array.isArray(adjustments)) {
-        return NextResponse.json(
+        response = NextResponse.json(
           { error: 'Invalid request: transactionId and adjustments array are required' },
           { status: 400 }
         );
+        return;
       }
 
-      const db = session.client.db();
       const rolledBackItems = [];
       const failedRollbacks = [];
 
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
           }
 
           // Get inventory item
-          const inventoryItem = await db
+          const inventoryItem = await MONGODB
             .collection(INVENTORY_COLLECTION)
             .findOne(
               { _id: new ObjectId(adj.itemId) },
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
           const updatedData = updateInventoryItem(inventoryItem, updates);
 
           // Update inventory
-          await db.collection(INVENTORY_COLLECTION).updateOne(
+          await MONGODB.collection(INVENTORY_COLLECTION).updateOne(
             { _id: new ObjectId(adj.itemId) },
             { $set: updatedData },
             { session }
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
             performedBy: 'system'
           });
 
-          await db
+          await MONGODB
             .collection(STOCK_ADJUSTMENT_COLLECTION)
             .insertOne(rollbackAdjustment, { session });
 
@@ -138,7 +141,7 @@ export async function POST(req: NextRequest) {
         }));
       }
 
-      return NextResponse.json({
+      response = NextResponse.json({
         success: failedRollbacks.length === 0,
         message: `Rollback completed. ${rolledBackItems.length} items restored, ${failedRollbacks.length} failed.`,
         rolledBackItems,
@@ -146,38 +149,42 @@ export async function POST(req: NextRequest) {
         transactionId,
         timestamp: new Date()
       });
+    });
 
-    } catch (error) {
-      console.error('Error in rollback:', error);
-      
-      // Check if this is our custom error
-      if (error instanceof Error && error.message.includes('All rollback operations failed')) {
-        try {
-          const errorData = JSON.parse(error.message);
-          return NextResponse.json({
-            success: false,
-            message: errorData.message,
-            rolledBackItems: [],
-            failedRollbacks: errorData.failedRollbacks,
-            transactionId: errorData.transactionId,
-            timestamp: new Date()
-          }, { status: 500 });
-        } catch (parseError) {
-          // If JSON parse fails, return generic error
-          return NextResponse.json(
-            { error: 'Rollback operation failed' },
-            { status: 500 }
-          );
-        }
+    return response;
+
+  } catch (error) {
+    console.error('Error in rollback:', error);
+    
+    // Check if this is our custom error
+    if (error instanceof Error && error.message.includes('All rollback operations failed')) {
+      try {
+        const errorData = JSON.parse(error.message);
+        return NextResponse.json({
+          success: false,
+          message: errorData.message,
+          rolledBackItems: [],
+          failedRollbacks: errorData.failedRollbacks,
+          transactionId: errorData.transactionId,
+          timestamp: new Date()
+        }, { status: 500 });
+      } catch (parseError) {
+        // If JSON parse fails, return generic error
+        return NextResponse.json(
+          { error: 'Rollback operation failed' },
+          { status: 500 }
+        );
       }
-      
-      return NextResponse.json(
-        { 
-          error: 'Failed to rollback transaction',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 500 }
-      );
     }
-  });
+    
+    return NextResponse.json(
+      { 
+        error: 'Failed to rollback transaction',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  } finally {
+    await session.endSession();
+  }
 }

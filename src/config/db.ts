@@ -39,5 +39,38 @@ export async function getDb(): Promise<Db> {
 
 // Legacy synchronous export kept for compatibility.
 // MongoClient handles internal connection pooling.
+export const CLIENT: MongoClient = client;
 export const MONGODB: Db = client.db();
+
+/**
+ * Initialize database indexes for performance
+ */
+export async function initIndexes() {
+  try {
+    const db = MONGODB;
+    
+    // Payments collection indexes
+    await db.collection('payments').createIndex({ createdAt: -1 });
+    await db.collection('payments').createIndex({ status: 1 });
+    await db.collection('payments').createIndex({ orderNumber: 1 });
+    await db.collection('payments').createIndex({ timestamp: -1 });
+    
+    // Inventory collection indexes
+    await db.collection('inventory').createIndex({ name: 1 });
+    await db.collection('inventory').createIndex({ status: 1 });
+    await db.collection('inventory').createIndex({ category: 1 });
+    
+    // Stock adjustments indexes
+    await db.collection('stockAdjustments').createIndex({ itemId: 1, createdAt: -1 });
+    await db.collection('stockAdjustments').createIndex({ transactionId: 1 });
+    
+    console.log('✅ Database indexes initialized');
+  } catch (error) {
+    console.warn('⚠️ Failed to initialize indexes:', error);
+  }
+}
+
+// Initialize indexes
+initIndexes().catch(console.error);
+
 export default MONGODB;

@@ -132,21 +132,42 @@ export async function GET(request: Request) {
 
     // ── Stats (completed only, within same date/search filter) ───────────────
     const statsFilter = { ...filter, status: "completed" };
-    // Remove status override so we apply the completed filter correctly
-    const allCompleted = await collection.find(statsFilter).toArray();
+    
+    const statsResult = await collection.aggregate([
+      { $match: statsFilter },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$total" },
+          totalTransactions: { $sum: 1 },
+          cashSales: {
+            $sum: { $cond: [{ $eq: ["$paymentMethod", "cash"] }, "$total", 0] }
+          },
+          gcashSales: {
+            $sum: { $cond: [{ $eq: ["$paymentMethod", "gcash"] }, "$total", 0] }
+          },
+          splitSales: {
+            $sum: { $cond: [{ $eq: ["$paymentMethod", "split"] }, "$total", 0] }
+          }
+        }
+      }
+    ]).toArray();
 
-    const totalSales = allCompleted.reduce((s, t) => s + (t.total || 0), 0);
-    const cashSales  = allCompleted.filter(t => t.paymentMethod === "cash") .reduce((s, t) => s + (t.total || 0), 0);
-    const gcashSales = allCompleted.filter(t => t.paymentMethod === "gcash").reduce((s, t) => s + (t.total || 0), 0);
-    const splitSales = allCompleted.filter(t => t.paymentMethod === "split").reduce((s, t) => s + (t.total || 0), 0);
+    const summary = statsResult[0] || {
+      totalSales: 0,
+      totalTransactions: 0,
+      cashSales: 0,
+      gcashSales: 0,
+      splitSales: 0
+    };
 
     const stats = {
-      totalSales,
-      totalTransactions: allCompleted.length,
-      averageTransaction: allCompleted.length ? totalSales / allCompleted.length : 0,
-      cashSales,
-      gcashSales,
-      splitSales,
+      totalSales: summary.totalSales,
+      totalTransactions: summary.totalTransactions,
+      averageTransaction: summary.totalTransactions ? summary.totalSales / summary.totalTransactions : 0,
+      cashSales: summary.cashSales,
+      gcashSales: summary.gcashSales,
+      splitSales: summary.splitSales,
     };
 
     return NextResponse.json({

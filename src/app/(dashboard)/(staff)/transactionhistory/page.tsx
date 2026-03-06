@@ -29,7 +29,7 @@ interface Transaction {
   splitPayment?: { cash: number; gcash: number }
   amountPaid?: number
   change?: number
-  status: 'completed' | 'cancelled' | 'refunded' | 'voided'
+  status: 'completed' | 'cancelled' | 'refunded'
   cashier: string
   timestamp: Date
   orderType: 'dine-in' | 'takeaway'
@@ -303,8 +303,8 @@ const History = () => {
       </span>
     )
     return (
-      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100/80 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-        <AlertCircle className="w-3 h-3 mr-1" />Refunded
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100/80 text-gray-700 dark:bg-gray-800/30 dark:text-gray-400">
+        <AlertCircle className="w-3 h-3 mr-1" />{status}
       </span>
     )
   }

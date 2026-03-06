@@ -1,7 +1,5 @@
 // src/lib/printers/usbPrinter.ts
 
-import { connectToDatabase } from "@/config/db-Connect";
-
 /* ─────────────────────────────────────────────────────────────────────────────
    WEBUSB TYPE SHIMS  (not in default TS lib)
 ───────────────────────────────────────────────────────────────────────────── */
@@ -299,15 +297,17 @@ export class USBPrinterManager {
       const buffer = buildReceiptBuffer(content);
       await this.device.transferOut(this.endpointNumber, buffer);
 
-      // Save to DB
-      const db = await connectToDatabase();
-      await db.collection("print_jobs").insertOne({
-        content,
-        connectionType: "usb",
-        status: "success",
-        timestamp: new Date(),
-        createdAt: new Date(),
-      });
+      // Save to DB via API
+      await fetch("/api/print-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          connectionType: "usb",
+          status: "success",
+          timestamp: new Date(),
+        }),
+      }).catch(err => console.error("Failed to log print job:", err));
 
       this.emit("connected", "Print job sent ✓");
     } catch (err: unknown) {
@@ -316,20 +316,18 @@ export class USBPrinterManager {
         `Print failed: ${err instanceof Error ? err.message : String(err)}`,
       );
 
-      // Log failure to DB
-      try {
-        const db = await connectToDatabase();
-        await db.collection("print_jobs").insertOne({
+      // Log failure to DB via API
+      await fetch("/api/print-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           content,
           connectionType: "usb",
           status: "failed",
           timestamp: new Date(),
-          createdAt: new Date(),
           error: err instanceof Error ? err.message : String(err),
-        });
-      } catch {
-        /* don't throw over a logging failure */
-      }
+        }),
+      }).catch(e => console.error("Failed to log print failure:", e));
 
       throw err;
     }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withTransaction } from '@/config/db-Connect';
+import { CLIENT, MONGODB } from '@/config/db';
 import { 
   INVENTORY_COLLECTION, 
   Inventory,
@@ -16,24 +16,27 @@ import {
   areUnitsCompatible,
   hasDensity,
   formatQuantity,
-  getUnitCategory,
-  convertUnit
+  getUnitCategory
 } from '@/lib/unit-conversion';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  return withTransaction(async (session) => {
-    try {
+  const session = CLIENT.startSession();
+  try {
+    let response: NextResponse = NextResponse.json({ error: 'Failed to adjust stock' }, { status: 500 });
+    
+    await session.withTransaction(async () => {
       // Await the params first
       const { id } = await params;
       
       if (!ObjectId.isValid(id)) {
-        return NextResponse.json(
+        response = NextResponse.json(
           { error: 'Invalid item ID format' },
           { status: 400 }
         );
+        return;
       }
 
       const body = await request.json();
@@ -41,16 +44,15 @@ export async function POST(
 
       // Validate quantity
       if (quantity === undefined || quantity <= 0 || quantity > 100000) {
-        return NextResponse.json(
+        response = NextResponse.json(
           { error: 'Quantity must be between 1 and 100,000' },
           { status: 400 }
         );
+        return;
       }
 
-      const db = session.client.db();
-      
       // Get inventory item
-      const inventoryItem = await db
+      const inventoryItem = await MONGODB
         .collection(INVENTORY_COLLECTION)
         .findOne(
           { _id: new ObjectId(id) },
@@ -58,10 +60,11 @@ export async function POST(
         ) as Inventory | null;
       
       if (!inventoryItem) {
-        return NextResponse.json(
+        response = NextResponse.json(
           { error: 'Item not found' },
           { status: 404 }
         );
+        return;
       }
 
       let convertedQuantity = quantity;
@@ -83,22 +86,24 @@ export async function POST(
                 (fromCategory === 'volume' && toCategory === 'weight')) {
               
               if (!inventoryItem.density && !hasDensity(inventoryItem.name)) {
-                return NextResponse.json(
+                response = NextResponse.json(
                   { 
                     error: 'Cannot convert units',
                     details: `No density data for ${inventoryItem.name}. Please add density or use ${inventoryUnit}.`
                   },
                   { status: 400 }
                 );
+                return;
               }
             } else {
-              return NextResponse.json(
+              response = NextResponse.json(
                 { 
                   error: 'Incompatible units',
                   details: `Cannot convert ${unit} to ${inventoryUnit}`
                 },
                 { status: 400 }
               );
+              return;
             }
           }
 
@@ -106,7 +111,7 @@ export async function POST(
             quantity,
             unit,
             inventoryUnit,
-            inventoryItem.name  // ✅ Only 4 arguments - density is accessed internally via hasDensity()
+            inventoryItem.name
           );
           
           convertedQuantity = formatQuantity(convertedQuantity, inventoryUnit);
@@ -114,13 +119,14 @@ export async function POST(
           originalUnit = unit as Unit;
           conversionNote = `${quantity} ${unit} = ${convertedQuantity} ${inventoryUnit}`;
         } catch (error) {
-          return NextResponse.json(
+          response = NextResponse.json(
             { 
               error: 'Unit conversion failed',
               details: error instanceof Error ? error.message : 'Unknown error'
             },
             { status: 400 }
           );
+          return;
         }
       }
 
@@ -132,17 +138,18 @@ export async function POST(
         case 'restock':
           newStock = previousStock + convertedQuantity;
           if (newStock > 100000) {
-            return NextResponse.json(
+            response = NextResponse.json(
               { error: 'Stock cannot exceed 100,000 units' },
               { status: 400 }
             );
+            return;
           }
           break;
         case 'usage':
         case 'waste':
         case 'deduction':
           if (previousStock < convertedQuantity) {
-            return NextResponse.json(
+            response = NextResponse.json(
               { 
                 error: 'Insufficient stock',
                 available: previousStock,
@@ -152,23 +159,26 @@ export async function POST(
               },
               { status: 400 }
             );
+            return;
           }
           newStock = Math.max(0, previousStock - convertedQuantity);
           break;
         case 'correction':
           if (convertedQuantity > 100000) {
-            return NextResponse.json(
+            response = NextResponse.json(
               { error: 'Stock cannot exceed 100,000 units' },
               { status: 400 }
             );
+            return;
           }
           newStock = convertedQuantity;
           break;
         default:
-          return NextResponse.json(
+          response = NextResponse.json(
             { error: 'Invalid adjustment type' },
             { status: 400 }
           );
+          return;
       }
 
       // Ensure stock doesn't go below 0 and format
@@ -188,7 +198,7 @@ export async function POST(
       const updatedData = updateInventoryItem(inventoryItem, updates);
 
       // Update inventory
-      await db.collection(INVENTORY_COLLECTION).updateOne(
+      await MONGODB.collection(INVENTORY_COLLECTION).updateOne(
         { _id: new ObjectId(id) },
         { $set: updatedData },
         { session }
@@ -217,7 +227,7 @@ export async function POST(
         performedBy: performedBy || 'Admin'
       });
 
-      await db
+      await MONGODB
         .collection(STOCK_ADJUSTMENT_COLLECTION)
         .insertOne(adjustment, { session });
 
@@ -226,23 +236,27 @@ export async function POST(
                     newStock <= inventoryItem.reorderPoint ? 'low' :
                     newStock <= inventoryItem.minStock ? 'warning' : 'ok';
 
-      return NextResponse.json({
+      response = NextResponse.json({
         success: true,
         newStock,
         status,
         adjustment,
         conversionNote
       });
+    });
 
-    } catch (error) {
-      console.error('Error adjusting stock:', error);
-      return NextResponse.json(
-        { 
-          error: 'Failed to adjust stock',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        },
-        { status: 500 }
-      );
-    }
-  });
+    return response;
+
+  } catch (error) {
+    console.error('Error adjusting stock:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to adjust stock',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  } finally {
+    await session.endSession();
+  }
 }
