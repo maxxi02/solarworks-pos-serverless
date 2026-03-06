@@ -37,31 +37,64 @@ function formatProduct(p: WithId<Document>): FormattedProduct {
 
 export async function GET() {
   try {
-    console.log("🔍 Fetching categories...");
+    const categoriesWithProducts = await MONGODB.collection("categories").aggregate([
+      { $sort: { createdAt: -1 } },
+      {
+        $addFields: { 
+          idString: { $toString: "$_id" } 
+        }
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "idString",
+          foreignField: "categoryId",
+          as: "rawProducts"
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          description: 1,
+          menuType: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          products: {
+            $map: {
+              input: "$rawProducts",
+              as: "p",
+              in: {
+                _id: { $toString: "$$p._id" },
+                name: "$$p.name",
+                price: "$$p.price",
+                description: { $ifNull: ["$$p.description", ""] },
+                available: { $ifNull: ["$$p.available", true] },
+                categoryId: "$$p.categoryId",
+                imageUrl: { $ifNull: ["$$p.imageUrl", ""] },
+                ingredients: {
+                  $map: {
+                    input: { $ifNull: ["$$p.ingredients", []] },
+                    as: "ing",
+                    in: {
+                      inventoryItemId: { $ifNull: ["$$ing.inventoryItemId", ""] },
+                      name: "$$ing.name",
+                      quantity: { $convert: { input: "$$ing.quantity", to: "double", onError: 0, onNull: 0 } },
+                      unit: "$$ing.unit"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    ]).toArray();
 
-    const categories = await MONGODB.collection("categories")
-      .find({})
-      .sort({ createdAt: -1 })
-      .toArray();
-    console.log(`📊 Found ${categories.length} categories`);
-
-    const products = await MONGODB.collection("products").find({}).toArray();
-    console.log(`📊 Found ${products.length} products`);
-
-    const categoriesWithProducts = categories.map((category) => ({
-      _id: category._id.toString(),
-      name: category.name as string,
-      description: (category.description as string) || "",
-      menuType: (category.menuType as MongoDBCategory["menuType"]) || "food",
-      products: products
-        .filter((p) => p.categoryId === category._id.toString())
-        .map(formatProduct),
-      createdAt: category.createdAt as Date | undefined,
-      updatedAt: category.updatedAt as Date | undefined,
-    }));
-
-    console.log("✅ Categories fetched successfully");
-    return NextResponse.json(categoriesWithProducts);
+    return NextResponse.json(categoriesWithProducts.map(c => ({
+      ...c,
+      _id: c._id.toString()
+    })));
   } catch (error: unknown) {
     console.error("❌ GET Error:", error);
     return NextResponse.json(

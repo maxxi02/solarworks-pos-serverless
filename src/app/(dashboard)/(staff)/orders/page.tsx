@@ -64,7 +64,7 @@ import { ChatDrawer } from "./_components/ChatDrawer";
 import { AttendanceBar } from "./_components/AttendanceBar";
 import { ProductCard } from "./_components/ProductCard";
 import { CartItem } from "./_components/CartItem";
-import { AdminPinModal } from "./_components/AdminPinModal";
+import { StaffPinClockIn } from "./_components/StaffPinClockIn";
 import { useCart, useSavedOrders, buildOrder } from "./_components/usePOS";
 import {
   Product,
@@ -103,6 +103,7 @@ export default function OrdersPage() {
     attendance,
     clockIn,
     clockOut,
+    refreshStatus,
   } = useAttendance();
   const { playSuccess, playError, playOrder } = useNotificationSound();
   const { settings, isLoading: settingsLoading } = useReceiptSettings();
@@ -206,13 +207,6 @@ export default function OrdersPage() {
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
 
-  // Admin PIN states
-  const [showAdminPinModal, setShowAdminPinModal] = useState(false);
-  const [adminPinAction, setAdminPinAction] = useState<{
-    callback: () => void;
-    title?: string;
-    description?: string;
-  } | null>(null);
 
   //ORDER STATES
   // pendingWebOrders removed — orders go directly into Queue Board via socket now
@@ -446,38 +440,19 @@ export default function OrdersPage() {
     // clearStockCheck(); // Commented out - inventory tracking postponed
   }, [clearCartItems]); // Removed clearStockCheck from dependencies
 
-  const executeWithAdminAuth = useCallback(
-    (action: () => void, title?: string, description?: string) => {
-      setAdminPinAction({ callback: action, title, description });
-      setShowAdminPinModal(true);
-    },
-    [],
-  );
 
   const handleUpdateQuantity = useCallback(
     (id: string, delta: number) => {
-      if (delta < 0) {
-        executeWithAdminAuth(
-          () => updateQuantity(id, delta),
-          "Authorize Quantity Reduction",
-          "An administrator must authorize reducing the quantity of this item.",
-        );
-      } else {
-        updateQuantity(id, delta);
-      }
+      updateQuantity(id, delta);
     },
-    [updateQuantity, executeWithAdminAuth],
+    [updateQuantity],
   );
 
   const handleRemoveFromCart = useCallback(
     (id: string) => {
-      executeWithAdminAuth(
-        () => removeFromCart(id),
-        "Authorize Item Removal",
-        "An administrator must authorize removing this item from the cart.",
-      );
+      removeFromCart(id);
     },
-    [removeFromCart, executeWithAdminAuth],
+    [removeFromCart],
   );
 
   const handleApplyDiscount = useCallback(
@@ -955,35 +930,13 @@ export default function OrdersPage() {
 
   if (!isClockedIn) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <div className="max-w-lg w-full">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-10 text-center shadow-sm">
-            <AlertTriangle className="h-20 w-20 text-yellow-600 mx-auto mb-8" />
-            <h2 className="text-3xl font-bold mb-4">Clock In Required</h2>
-            <p className="text-lg text-muted-foreground mb-8">
-              You need to start your shift before accessing the POS system.
-            </p>
-            <Button
-              onClick={() => {
-                clockIn();
-                playSuccess();
-              }}
-              disabled={attendanceLoading}
-              size="lg"
-              className="w-full sm:w-auto h-12 text-base px-8"
-            >
-              {attendanceLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "Start Shift (Clock In)"
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
+      <StaffPinClockIn
+        staffId={session?.user?.id || ""}
+        staffName={staffName}
+        onSuccess={refreshStatus}
+        playSuccess={playSuccess}
+        playError={playError}
+      />
     );
   }
 
@@ -1145,13 +1098,7 @@ export default function OrdersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              executeWithAdminAuth(
-                                clearCart,
-                                "Authorize Clear Cart",
-                                "An administrator must authorize clearing the entire cart.",
-                              );
-                            }}
+                            onClick={clearCart}
                             disabled={!cart.length || isDisabled}
                             className="h-8 w-8 md:h-9 md:w-9 p-0"
                           >
@@ -1424,20 +1371,8 @@ export default function OrdersPage() {
                 onClose={() => setShowSavedOrders(false)}
                 onLoad={loadSavedOrder}
                 onReprint={handleReprintReceipt}
-                onDelete={(id) => {
-                  executeWithAdminAuth(
-                    () => deleteOrder(id),
-                    "Authorize Order Deletion",
-                    "An administrator must authorize deleting this saved order.",
-                  );
-                }}
-                onClearAll={() => {
-                  executeWithAdminAuth(
-                    clearAllSavedOrders,
-                    "Authorize Clear All",
-                    "An administrator must authorize clearing all saved orders.",
-                  );
-                }}
+                onDelete={deleteOrder}
+                onClearAll={clearAllSavedOrders}
               />
             </ScrollArea>
           </DialogContent>
@@ -1519,18 +1454,6 @@ export default function OrdersPage() {
           />
         )}
 
-        <AdminPinModal
-          open={showAdminPinModal}
-          onOpenChange={setShowAdminPinModal}
-          onSuccess={() => {
-            if (adminPinAction) {
-              adminPinAction.callback();
-              setAdminPinAction(null);
-            }
-          }}
-          title={adminPinAction?.title}
-          description={adminPinAction?.description}
-        />
       </>
     </div>
   );

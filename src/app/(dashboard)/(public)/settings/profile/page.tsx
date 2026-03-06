@@ -402,7 +402,7 @@ export default function ProfilePage() {
               <div className="space-y-1">
                 <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
                   <KeyRound className="h-6 w-6 text-primary" />
-                  Attendance & Admin PIN
+                  {user.role === "admin" ? "Attendance & Admin PIN" : "Attendance PIN"}
                   {hasPin !== null && (
                     <Badge variant={hasPin ? "default" : "secondary"} className="text-sm">
                       {hasPin ? "PIN Set" : "No PIN"}
