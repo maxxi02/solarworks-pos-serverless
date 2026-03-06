@@ -199,15 +199,26 @@ function buildReceiptText(
   const c = (t: string) =>
     " ".repeat(Math.max(0, Math.floor((W - t.length) / 2))) + t;
   const lr = (l: string, r: string) => {
-    const sp = Math.max(1, W - l.length - r.length);
-    return l + " ".repeat(sp) + r;
+    const maxL = W - r.length - 1;
+    const left = l.length > maxL ? l.substring(0, maxL - 1) + "…" : l;
+    const sp = Math.max(1, W - left.length - r.length);
+    return left + " ".repeat(sp) + r;
   };
   const fmt = (n: number) => `P${n.toFixed(2)}`;
   const div = "-".repeat(W);
   const dbDiv = "=".repeat(W);
 
+  const NAME_W = W - 13; // 19 chars for name
+  const itemRow = (name: string, qty: string, price: string) => {
+    const n =
+      name.length > NAME_W
+        ? name.substring(0, NAME_W - 1) + "…"
+        : name.padEnd(NAME_W);
+    return `${n}${qty.padStart(4)}${price.padStart(9)}`;
+  };
+
   let s = "";
-  s += c(settings.businessName || "Rendezvous Cafe") + "\n";
+  s += c((settings.businessName || "Rendezvous Cafe").toUpperCase()) + "\n";
   if (settings.locationAddress) s += c(settings.locationAddress) + "\n";
   if (settings.phoneNumber) s += c(settings.phoneNumber) + "\n";
   s += dbDiv + "\n";
@@ -221,17 +232,19 @@ function buildReceiptText(
   if (receipt.orderType === "dine-in" && receipt.tableNumber)
     s += lr("Table:", receipt.tableNumber) + "\n";
   s += div + "\n";
+  s += itemRow("ITEM", "QTY", "AMOUNT") + "\n";
+  s += div + "\n";
   receipt.items.forEach((item) => {
     const p = item.hasDiscount ? item.price * 0.8 : item.price;
     const tot = (p * item.quantity).toFixed(2);
-    s +=
-      lr(`${item.quantity}x ${item.name.substring(0, 22)}`, `P${tot}`) + "\n";
+    s += itemRow(item.name, String(item.quantity), `P${tot}`) + "\n";
     if (item.hasDiscount) s += "  [Senior/PWD 20% off]\n";
   });
   s += div + "\n";
   s += lr("Subtotal:", fmt(receipt.subtotal)) + "\n";
   if (receipt.discountTotal > 0)
     s += lr("Discount:", `-${fmt(receipt.discountTotal)}`) + "\n";
+  s += dbDiv + "\n";
   s += lr("TOTAL:", fmt(receipt.total)) + "\n";
   s += dbDiv + "\n";
   s += lr("Payment:", receipt.paymentMethod.toUpperCase()) + "\n";
@@ -245,7 +258,7 @@ function buildReceiptText(
   }
   s += dbDiv + "\n";
   s += c(settings.receiptMessage || "Thank you!") + "\n";
-  if (receipt.isReprint) s += c("*** REPRINT ***") + "\n";
+  if (receipt.isReprint) s += c("REPRINT") + "\n";
   return s;
 }
 
@@ -260,7 +273,7 @@ function buildKitchenText(receipt: ReceiptData): string {
   const dbDiv = "=".repeat(W);
 
   let s = "";
-  s += c("*** KITCHEN ORDER ***") + "\n";
+  s += c("KITCHEN ORDER") + "\n";
   s += dbDiv + "\n";
   s += lr("Order #:", receipt.orderNumber) + "\n";
   s +=
@@ -276,13 +289,15 @@ function buildKitchenText(receipt: ReceiptData): string {
     s += lr("Table:", receipt.tableNumber) + "\n";
   if (receipt.customerName) s += lr("Customer:", receipt.customerName) + "\n";
   s += dbDiv + "\n";
+  s += c("TO COOK") + "\n";
+  s += dbDiv + "\n";
   receipt.items.forEach((item) => {
     if (item.menuType !== "food") return;
     s += `${item.quantity}x  ${item.name}\n`;
   });
   s += dbDiv + "\n";
   if (receipt.orderNote) s += `NOTE: ${receipt.orderNote}\n` + dbDiv + "\n";
-  s += c("*** PLEASE PREPARE ***") + "\n";
+  s += c("PLEASE PREPARE") + "\n";
   return s;
 }
 

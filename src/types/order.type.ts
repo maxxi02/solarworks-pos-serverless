@@ -54,6 +54,7 @@ export interface CustomerOrder {
   queueingAt?: Date;
   preparingAt?: Date;
   servingAt?: Date;
+  servedAt?: Date;
   doneAt?: Date;
   cancelledAt?: Date;
 }

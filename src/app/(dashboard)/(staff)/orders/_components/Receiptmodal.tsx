@@ -39,70 +39,88 @@ export const ReceiptModal = ({
   const rawText = useMemo(() => {
     if (!receipt || !settings) return "";
 
-    const is58mm = settings.receiptWidth === "58mm";
-    const width = is58mm ? 32 : 42;
-    const dash = "-".repeat(width);
+    const is58mm = settings.receiptWidth !== "80mm";
+    const W = is58mm ? 32 : 42;
+    const dash = "-".repeat(W);
+    const eq = "=".repeat(W);
+
+    // Center a string within W chars
     const center = (text: string) => {
-      const padding = Math.max(0, Math.floor((width - text.length) / 2));
-      return " ".repeat(padding) + text;
+      const pad = Math.max(0, Math.floor((W - text.length) / 2));
+      return " ".repeat(pad) + text;
     };
-    const justify = (left: string, right: string) => {
-      const space = Math.max(1, width - left.length - right.length);
-      return left + " ".repeat(space) + right;
+
+    // Left-right justify within W chars (no tag awareness needed)
+    const lr = (left: string, right: string) => {
+      const maxLeft = W - right.length - 1;
+      const l = left.length > maxLeft ? left.substring(0, maxLeft - 1) + "…" : left;
+      const gap = Math.max(1, W - l.length - right.length);
+      return l + " ".repeat(gap) + right;
     };
+
+    // Item row columns: Name (W-13), Qty (4), Price (8)  → sum = W
+    const NAME_W = W - 13; // 19 for 32-wide
+    const itemRow = (name: string, qty: string, price: string) => {
+      const n = name.length > NAME_W ? name.substring(0, NAME_W - 1) + "…" : name.padEnd(NAME_W);
+      const q = qty.padStart(4);
+      const p = price.padStart(8);
+      return `${n}${q}${p}`;
+    };
+
+    const fmt = (n: number) => `P${n.toFixed(2)}`;
 
     let lines: string[] = [];
 
     // Header
     if (receipt.isReprint) lines.push(center("*** REPRINT ***"));
-    lines.push(center(settings.businessName || "RENDEZVOUS CAFE"));
+    lines.push(center((settings.businessName || "RENDEZVOUS CAFE").toUpperCase()));
     if (settings.locationAddress) lines.push(center(settings.locationAddress));
     if (settings.phoneNumber) lines.push(center(settings.phoneNumber));
-    lines.push(dash);
+    lines.push(eq);
 
     // Order Info
-    lines.push(justify("Order #:", receipt.orderNumber));
-    lines.push(justify("Date:", new Date(receipt.timestamp).toLocaleString()));
-    lines.push(justify("Cashier:", receipt.cashier || "Staff"));
-    lines.push(justify("Type:", receipt.orderType.toUpperCase()));
-    if (receipt.tableNumber) lines.push(justify("Table:", receipt.tableNumber));
-    if (receipt.customerName) lines.push(justify("Customer:", receipt.customerName));
+    lines.push(lr("Order #:", receipt.orderNumber));
+    lines.push(lr("Date:", new Date(receipt.timestamp).toLocaleString()));
+    lines.push(lr("Cashier:", receipt.cashier || "Staff"));
+    lines.push(lr("Type:", receipt.orderType === "dine-in" ? "Dine-in" : "Take Away"));
+    if (receipt.tableNumber) lines.push(lr("Table:", receipt.tableNumber));
+    if (receipt.customerName) lines.push(lr("Customer:", receipt.customerName));
     lines.push(dash);
 
-    // Items
-    lines.push(justify("ITEM", "QTY   AMT"));
+    // Items header
+    lines.push(itemRow("ITEM", "QTY", "AMOUNT"));
+    lines.push(dash);
+
     receipt.items.forEach((item) => {
       const price = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price;
-      const amt = (price * item.quantity).toFixed(2);
-      lines.push(justify(item.name, `${item.quantity}  ${amt}`));
-      if (item.hasDiscount) {
-        lines.push("  (20% Senior/PWD Discount)");
-      }
+      const total = price * item.quantity;
+      lines.push(itemRow(item.name, String(item.quantity), fmt(total)));
+      if (item.hasDiscount) lines.push("  (20% Senior/PWD Discount)");
     });
     lines.push(dash);
 
     // Totals
-    lines.push(justify("Subtotal:", receipt.subtotal.toFixed(2)));
+    lines.push(lr("Subtotal:", fmt(receipt.subtotal)));
     if (receipt.discountTotal > 0) {
-      lines.push(justify("Discount:", `-${receipt.discountTotal.toFixed(2)}`));
+      lines.push(lr("Discount:", `-${fmt(receipt.discountTotal)}`));
     }
-    lines.push(justify("TOTAL:", `PHP ${receipt.total.toFixed(2)}`));
-    lines.push(dash);
+    lines.push(eq);
+    lines.push(lr("TOTAL:", `PHP ${receipt.total.toFixed(2)}`));
+    lines.push(eq);
 
     // Payment
-    lines.push(justify("Payment:", receipt.paymentMethod.toUpperCase()));
+    lines.push(lr("Payment:", receipt.paymentMethod.toUpperCase()));
     if (receipt.paymentMethod === "cash" && receipt.amountPaid) {
-      lines.push(justify("Amount Paid:", receipt.amountPaid.toFixed(2)));
-      lines.push(justify("Change:", (receipt.change || 0).toFixed(2)));
+      lines.push(lr("Amount Paid:", fmt(receipt.amountPaid)));
+      lines.push(lr("Change:", fmt(receipt.change || 0)));
     } else if (receipt.paymentMethod === "split" && receipt.splitPayment) {
-      lines.push(justify("Cash:", receipt.splitPayment.cash.toFixed(2)));
-      lines.push(justify("GCash:", receipt.splitPayment.gcash.toFixed(2)));
+      lines.push(lr("  Cash:", fmt(receipt.splitPayment.cash)));
+      lines.push(lr("  GCash:", fmt(receipt.splitPayment.gcash)));
     }
     lines.push(dash);
 
     // Footer
     if (settings.receiptMessage) lines.push(center(settings.receiptMessage));
-    lines.push(center("Thank you for your patronage!"));
 
     return lines.join("\n");
   }, [receipt, settings]);

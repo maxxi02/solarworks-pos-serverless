@@ -27,7 +27,6 @@ import {
   RefreshCw,
   Printer,
   Percent,
-  AlertTriangle,
 } from "lucide-react";
 
 // UI
@@ -548,7 +547,7 @@ export default function OrdersPage() {
       setShowOrderHistory(false);
       setShowReceipt(true);
     },
-    [seniorPwdIds],
+    [staffName, seniorPwdIds],
   );
 
   // ——— Print ———
@@ -569,10 +568,12 @@ export default function OrdersPage() {
       const receiptInput = {
         orderNumber: currentReceipt.orderNumber,
         customerName: currentReceipt.customerName,
-        cashier: staffName,
+        cashier: currentReceipt.cashier || staffName,
         timestamp: new Date(currentReceipt.timestamp),
         orderType: currentReceipt.orderType,
         tableNumber: currentReceipt.tableNumber,
+        orderNote: currentReceipt.orderNote,
+        isReprint: currentReceipt.isReprint,
         items: currentReceipt.items.map((item) => ({
           name: item.name,
           price: item.price,
@@ -606,12 +607,12 @@ export default function OrdersPage() {
 
       const result = await printBoth(receiptInput);
       if (result.receipt || result.kitchen) {
-        // toast.success("Reprinted successfully via Companion App");
+        // toast.success("Printed successfully via Companion App");
       } else {
         toast.warning("Companion App received request but printers not ready");
       }
     } catch {
-      toast.error("Reprint failed");
+      toast.error("Printing failed");
     } finally {
       setIsPrinting(false);
     }
@@ -753,11 +754,8 @@ export default function OrdersPage() {
         }
       }
 
-      setCurrentReceipt({
-        ...completedOrder,
-        seniorPwdIds: seniorPwdIds.length ? seniorPwdIds : undefined,
-      });
-      setShowReceipt(true);
+      // Receipt modal no longer auto-shows after payment.
+      // Reprint is still available via QueueBoard / Saved Orders.
 
       // Complete the customer order so it transitions to the QueueBoard
       if (activeCustomerOrderId) {
@@ -1372,6 +1370,7 @@ export default function OrdersPage() {
                   tableId: order.tableNumber,
                 })
               }
+              onReprintReceipt={handleReprintReceipt}
             />
           </TabsContent>
         </Tabs>
@@ -1415,8 +1414,9 @@ export default function OrdersPage() {
           onViewDetails={(order) => {
             setCurrentReceipt({
               ...order,
-              cashier: order.cashier || "Cashier",
+              cashier: order.cashier || staffName,
               seniorPwdIds: order.seniorPwdIds,
+              isReprint: true,
             });
             setShowOrderHistory(false);
             setShowReceipt(true);

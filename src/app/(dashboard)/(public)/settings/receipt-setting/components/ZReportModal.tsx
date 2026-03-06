@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Printer, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSocket } from '@/provider/socket-provider';
 
 interface Props {
   session: any;
@@ -13,16 +14,17 @@ interface Props {
 }
 
 const TENDER_LABELS: Record<string, string> = {
-  cash: 'CASH', 
-  credit_card: 'CREDIT', 
+  cash: 'CASH',
+  credit_card: 'CREDIT',
   pay_later: 'PY LTR',
-  online: 'ONLINE', 
-  invoice: 'INVOICE', 
-  e_wallet: 'EWALLET', 
+  online: 'ONLINE',
+  invoice: 'INVOICE',
+  e_wallet: 'EWALLET',
   pay_in: 'PAYIN'
 };
 
 export default function ZReportModal({ session, summary, settings, onClose, onConfirmClose }: Props) {
+  const { emitPrintZReport, companionStatus } = useSocket();
   // Format helpers
   const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const fmtP = (n: number) => `₱${fmt(n)}`;
@@ -31,19 +33,19 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
   const todayEarnings = summary.netSales || 0;
   const totalSales = summary.totalSales || 0;
   const totalDiscounts = summary.totalDiscounts || 0;
-  
+
   // Get actual cash from summary
   const actualCash = summary.actualCash || 0;
   const expectedCash = summary.expectedCash || summary.cashEarned || 0;
   const difference = actualCash - expectedCash;
   const isBalanced = Math.abs(difference) < 0.01;
 
-  const today = new Date().toLocaleDateString('en-PH', { 
-    year: 'numeric', month: '2-digit', day: '2-digit' 
+  const today = new Date().toLocaleDateString('en-PH', {
+    year: 'numeric', month: '2-digit', day: '2-digit'
   });
-  
-  const timeNow = new Date().toLocaleTimeString('en-PH', { 
-    hour: '2-digit', minute: '2-digit' 
+
+  const timeNow = new Date().toLocaleTimeString('en-PH', {
+    hour: '2-digit', minute: '2-digit'
   });
 
   // Get ZReading settings with defaults
@@ -79,7 +81,7 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
   // Filter active discounts
   const getActiveDiscounts = () => {
     const discounts: { key: string; label: string; value: number }[] = [];
-    
+
     if (showSC && summary.discounts?.sc > 0) {
       discounts.push({ key: 'sc', label: 'SC:', value: summary.discounts.sc });
     }
@@ -95,7 +97,7 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
     if (showOtherDisc && summary.discounts?.other > 0) {
       discounts.push({ key: 'other', label: 'OTHER:', value: summary.discounts.other });
     }
-    
+
     return discounts;
   };
 
@@ -103,6 +105,41 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
   const dash = '-'.repeat(is58mm ? 24 : 32);
 
   const handlePrint = () => {
+    const zReportData = {
+      businessName: settings?.businessName,
+      locationAddress: settings?.locationAddress,
+      taxPin: settings?.taxPin,
+      today,
+      timeNow,
+      cashierName: session?.cashierName,
+      registerName: session?.registerName || 'Main Register',
+      openedAt: session?.openedAt?.split(',')[0],
+      closedAt: session?.closedAt?.split(',')[0],
+      totalSales,
+      totalDiscounts,
+      totalRefunds: summary.totalRefunds || 0,
+      totalVoids: summary.totalVoids || 0,
+      netSales: todayEarnings,
+      openingFund: summary.openingFund || 0,
+      cashEarned: summary.cashEarned || 0,
+      expectedCash,
+      actualCash,
+      difference,
+      tenders: summary.tenders || {},
+      discounts: getActiveDiscounts(),
+      transactions: summary.transactions || 0,
+      items: summary.items || 0,
+      receiptMessage: settings?.receiptMessage,
+      disclaimer: settings?.disclaimer,
+      showCashierSignature
+    };
+
+    // If companion is connected, use it
+    if (companionStatus.usb || companionStatus.bt) {
+      emitPrintZReport(zReportData);
+      return;
+    }
+
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) return;
 
@@ -189,15 +226,15 @@ ${Sep()}
 
 <div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">PAYMENT BREAKDOWN</div>
 ${getActiveTenders().map(([k, v]) => {
-  const value = typeof v === 'number' ? v : 0;
-  return Row(`${TENDER_LABELS[k]}:`, fmtP(value));
-}).join('')}
+      const value = typeof v === 'number' ? v : 0;
+      return Row(`${TENDER_LABELS[k]}:`, fmtP(value));
+    }).join('')}
 ${Sep()}
 
 <div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">DISCOUNTS</div>
-${getActiveDiscounts().length > 0 
-  ? getActiveDiscounts().map(d => Row(d.label, fmtP(d.value))).join('')
-  : Row('No Discounts', '0.00')}
+${getActiveDiscounts().length > 0
+        ? getActiveDiscounts().map(d => Row(d.label, fmtP(d.value))).join('')
+        : Row('No Discounts', '0.00')}
 ${Sep()}
 
 ${shortOverHtml}
@@ -209,8 +246,8 @@ ${Row('Total Items:', (summary.items || 0).toString())}
 ${Row('Net Income:', fmtP(todayEarnings), true)}
 ${Sep()}
 
-${settings?.receiptMessage ? 
-  `<div style="text-align:center;font-style:italic;font-size:${fs};margin-bottom:3px;color:#000000;">${settings.receiptMessage}</div>` : ''}
+${settings?.receiptMessage ?
+        `<div style="text-align:center;font-style:italic;font-size:${fs};margin-bottom:3px;color:#000000;">${settings.receiptMessage}</div>` : ''}
 
 ${showCashierSignature ? `
 <div style="display:flex;justify-content:space-between;margin-top:15px;gap:8px">
@@ -233,9 +270,9 @@ ${Sep()}
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
-    
-    setTimeout(() => { 
-      printWindow.print(); 
+
+    setTimeout(() => {
+      printWindow.print();
       setTimeout(() => {
         printWindow.close();
       }, 500);
@@ -254,7 +291,7 @@ ${Sep()}
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
       <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[380px]'} rounded-xl bg-white border shadow-xl overflow-hidden`}>
-        
+
         {/* Header */}
         <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
           <h3 className="font-bold text-base flex items-center gap-2 text-black">
@@ -469,17 +506,17 @@ ${Sep()}
         {/* Footer */}
         <div className="border-t-2 bg-gray-50 p-3 sticky bottom-0">
           <div className="flex gap-2">
-            <Button 
+            <Button
               onClick={handlePrintAndClose}
-              className="flex-1 gap-2 h-11 text-base font-bold bg-orange-600 hover:bg-orange-700 text-white" 
+              className="flex-1 gap-2 h-11 text-base font-bold bg-orange-600 hover:bg-orange-700 text-white"
               size="default"
             >
               <Printer className="w-5 h-5 text-white" />PRINT & CLOSE
             </Button>
-            <Button 
-              onClick={onConfirmClose || onClose} 
-              variant="outline" 
-              className="flex-1 h-11 text-base font-bold border-gray-300 text-gray-700 hover:bg-gray-50" 
+            <Button
+              onClick={onConfirmClose || onClose}
+              variant="outline"
+              className="flex-1 h-11 text-base font-bold border-gray-300 text-gray-700 hover:bg-gray-50"
               size="default"
             >
               CLOSE ONLY

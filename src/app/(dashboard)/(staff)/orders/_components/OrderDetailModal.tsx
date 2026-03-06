@@ -1,18 +1,21 @@
 "use client";
 
-import { Coffee, Utensils, Clock, User, MapPin, FileText, X } from "lucide-react";
+import { Coffee, Utensils, Clock, User, MapPin, FileText, X, Printer } from "lucide-react";
 import { CustomerOrder } from "@/types/order.type";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogFooter,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 
 interface OrderDetailModalProps {
     order: CustomerOrder | null;
     onClose: () => void;
+    onPrint?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -30,10 +33,11 @@ function formatTime(date: Date | string | undefined): string {
     return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
+export function OrderDetailModal({ order, onClose, onPrint }: OrderDetailModalProps) {
     if (!order) return null;
 
     const status = statusConfig[order.queueStatus || "pending_payment"] ?? statusConfig["pending_payment"];
+    const canPrint = order.queueStatus !== "pending_payment" && !!onPrint;
 
     return (
         <Dialog open={!!order} onOpenChange={onClose}>
@@ -104,11 +108,9 @@ export function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
                                     )}
                                     <div className="flex items-center gap-2 mt-1">
                                         <span className="text-xs text-muted-foreground">×{item.quantity}</span>
-                                        {item.menuType && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
-                                                {item.menuType}
-                                            </span>
-                                        )}
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
+                                            {item.menuType || "none"}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -158,6 +160,23 @@ export function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
                         <span className="font-bold text-lg text-primary">₱{order.total?.toFixed(0)}</span>
                     </div>
                 </div>
+
+                <DialogFooter className="px-6 py-4 bg-background border-t border-border sm:justify-between">
+                    <Button variant="outline" onClick={onClose}>
+                        Close
+                    </Button>
+                    {canPrint && (
+                        <Button
+                            onClick={() => {
+                                onPrint();
+                            }}
+                            className="gap-2"
+                        >
+                            <Printer className="w-4 h-4" />
+                            Print Receipt
+                        </Button>
+                    )}
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

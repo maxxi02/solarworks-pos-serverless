@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import {
+  Printer,
   RefreshCw,
   ChefHat,
   UtensilsCrossed,
@@ -13,6 +14,7 @@ import { CustomerOrder, QueueStatus } from "@/types/order.type";
 import { OrderDetailModal } from "./OrderDetailModal";
 import { useSocket } from "@/provider/socket-provider";
 import { Badge } from "@/components/ui/badge";
+import { SavedOrder, CartItem } from "./pos.types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -86,11 +88,12 @@ function Th({
 
 interface QueueBoardProps {
   onOpenChat?: (order: CustomerOrder) => void;
+  onReprintReceipt?: (order: SavedOrder) => void;
 }
 
 type FilterType = "all" | "queueing" | "preparing" | "serving";
 
-export function QueueBoard({ onOpenChat }: QueueBoardProps) {
+export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
   const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
 
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -199,6 +202,41 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
         next.delete(orderId);
         return next;
       });
+    }
+  };
+
+  // ─── Map to SavedOrder for printing ─────────────────────────────
+  const mapToSavedOrder = (order: CustomerOrder): SavedOrder => {
+    return {
+      id: order.orderId,
+      orderNumber: order.orderNumber || order.orderId.slice(-6).toUpperCase(),
+      customerName: order.customerName,
+      items: order.items.map((item) => ({
+        _id: item._id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        menuType: item.menuType,
+        ingredients: item.ingredients || [],
+        available: true,
+      })) as CartItem[],
+      subtotal: order.subtotal,
+      discountTotal: 0,
+      total: order.total,
+      paymentMethod: "gcash", // Default for web orders
+      orderType: order.orderType || "takeaway",
+      tableNumber: order.tableNumber,
+      timestamp: order.timestamp ? new Date(order.timestamp) : new Date(),
+      status: "completed",
+      orderNote: order.orderNote,
+      cashier: "Web Order",
+    };
+  };
+
+  const handlePrint = (e: React.MouseEvent, order: CustomerOrder) => {
+    e.stopPropagation();
+    if (onReprintReceipt) {
+      onReprintReceipt(mapToSavedOrder(order));
     }
   };
 
@@ -409,6 +447,15 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                           className="flex items-center justify-end gap-2"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {onReprintReceipt && (
+                            <button
+                              onClick={(e) => handlePrint(e, order)}
+                              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-accent transition-colors"
+                              title="Print Receipt"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {(order.queueStatus === "pending_payment" ||
                             order.queueStatus === "queueing") && (
                             <button
@@ -558,7 +605,18 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
                     )}
                   </div>
 
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2"
+                  >
+                    {onReprintReceipt && (
+                      <button
+                        onClick={(e) => handlePrint(e, order)}
+                        className="p-2 rounded-lg border border-border text-muted-foreground hover:bg-accent transition-colors"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {(order.queueStatus === "pending_payment" ||
                       order.queueStatus === "queueing") && (
                       <button
@@ -625,6 +683,11 @@ export function QueueBoard({ onOpenChat }: QueueBoardProps) {
       <OrderDetailModal
         order={selectedOrder}
         onClose={() => setSelectedOrder(null)}
+        onPrint={() =>
+          selectedOrder &&
+          onReprintReceipt &&
+          onReprintReceipt(mapToSavedOrder(selectedOrder))
+        }
       />
     </div>
   );
