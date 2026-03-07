@@ -8,6 +8,9 @@ import { adminClient } from "better-auth/client/plugins";
 import { UserRole } from "@/types/role.type";
 
 export const auth = betterAuth({
+  advanced: {
+    cookiePrefix: "pos-system",
+  },
   database: mongodbAdapter(MONGODB),
   appName: "POS SYSTEM",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",

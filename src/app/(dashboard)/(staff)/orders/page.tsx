@@ -267,6 +267,9 @@ export default function OrdersPage() {
     preloadNotificationSounds();
   }, []);
 
+  // Track recently notified orders to prevent duplicate alerts from multiple webhook triggers
+  const notifiedOrdersRef = useRef<Set<string>>(new Set());
+
   // Join POS room whenever socket connects/reconnects, then listen for new orders
   useEffect(() => {
     if (!isConnected) return;
@@ -279,7 +282,14 @@ export default function OrdersPage() {
       queueStatus: string;
       order: CustomerOrder;
     }) => {
-      if (data.queueStatus === "queueing") {
+      const isNewTableOrder =
+        data.queueStatus === "pending_payment" &&
+        data.order?.orderType === "dine-in";
+
+      if (data.queueStatus === "queueing" || isNewTableOrder) {
+        if (notifiedOrdersRef.current.has(data.orderId)) return;
+        notifiedOrdersRef.current.add(data.orderId);
+
         if (activeTab !== "queue") {
           setUnreadQueueCount((prev) => prev + 1);
         }

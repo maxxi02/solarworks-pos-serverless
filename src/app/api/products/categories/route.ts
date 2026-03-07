@@ -37,64 +37,37 @@ function formatProduct(p: WithId<Document>): FormattedProduct {
 
 export async function GET() {
   try {
-    const categoriesWithProducts = await MONGODB.collection("categories").aggregate([
-      { $sort: { createdAt: -1 } },
-      {
-        $addFields: { 
-          idString: { $toString: "$_id" } 
-        }
-      },
-      {
-        $lookup: {
-          from: "products",
-          localField: "idString",
-          foreignField: "categoryId",
-          as: "rawProducts"
-        }
-      },
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          description: 1,
-          menuType: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          products: {
-            $map: {
-              input: "$rawProducts",
-              as: "p",
-              in: {
-                _id: { $toString: "$$p._id" },
-                name: "$$p.name",
-                price: "$$p.price",
-                description: { $ifNull: ["$$p.description", ""] },
-                available: { $ifNull: ["$$p.available", true] },
-                categoryId: "$$p.categoryId",
-                imageUrl: { $ifNull: ["$$p.imageUrl", ""] },
-                ingredients: {
-                  $map: {
-                    input: { $ifNull: ["$$p.ingredients", []] },
-                    as: "ing",
-                    in: {
-                      inventoryItemId: { $ifNull: ["$$ing.inventoryItemId", ""] },
-                      name: "$$ing.name",
-                      quantity: { $convert: { input: "$$ing.quantity", to: "double", onError: 0, onNull: 0 } },
-                      unit: "$$ing.unit"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    ]).toArray();
+    // Fetch categories and products in parallel, sorting categories by creation date
+    const [categories, products] = await Promise.all([
+      MONGODB.collection("categories")
+        .find({})
+        .sort({ createdAt: -1 })
+        .toArray(),
+      MONGODB.collection("products").find({}).toArray(),
+    ]);
 
-    return NextResponse.json(categoriesWithProducts.map(c => ({
-      ...c,
-      _id: c._id.toString()
-    })));
+    // Group products by categoryId mapping to avoid repeated nested loops
+    const productsByCategoryId: Record<string, FormattedProduct[]> = {};
+    for (const p of products) {
+      const catId = p.categoryId as string;
+      if (!productsByCategoryId[catId]) {
+        productsByCategoryId[catId] = [];
+      }
+      productsByCategoryId[catId].push(formatProduct(p));
+    }
+
+    // Map grouped products back into each category
+    const formattedCategories = categories.map((c) => ({
+      _id: c._id.toString(),
+      name: c.name,
+      description: c.description,
+      menuType: c.menuType,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      products: productsByCategoryId[c._id.toString()] || [],
+    }));
+
+    return NextResponse.json(formattedCategories);
   } catch (error: unknown) {
     console.error("❌ GET Error:", error);
     return NextResponse.json(

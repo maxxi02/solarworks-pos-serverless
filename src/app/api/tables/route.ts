@@ -155,10 +155,29 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
+    const formattedTable = {
       ...table,
       _id: table._id.toString(),
-    });
+    };
+
+    // Broadcast via socket
+    try {
+      const socketServerUrl =
+        process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8080";
+      const internalSecret = process.env.INTERNAL_SECRET || "";
+      await fetch(`${socketServerUrl}/internal/tables-updated`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": internalSecret,
+        },
+        body: JSON.stringify(formattedTable),
+      });
+    } catch (e) {
+      console.error("Failed to broadcast table update", e);
+    }
+
+    return NextResponse.json(formattedTable);
   } catch (error: unknown) {
     console.error("❌ PATCH Table Error:", error);
     return NextResponse.json(
@@ -169,4 +188,16 @@ export async function PATCH(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+// OPTIONS preflight handler for CORS
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }

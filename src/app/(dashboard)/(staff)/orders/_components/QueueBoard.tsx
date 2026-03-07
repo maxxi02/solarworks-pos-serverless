@@ -109,11 +109,17 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
     try {
       setIsLoading(true);
       const res = await fetch(
-        "/api/orders/queue?statuses=queueing,preparing,serving",
+        "/api/orders/queue?statuses=pending_payment,queueing,preparing,serving",
       );
       if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setOrders(data);
+      const data: CustomerOrder[] = await res.json();
+
+      // We only want pending_payment if it's a dine-in (table) order
+      const filtered = data.filter(
+        (o) => o.queueStatus !== "pending_payment" || o.orderType === "dine-in",
+      );
+
+      setOrders(filtered);
     } catch {
       toast.error("Failed to load queue");
     } finally {
@@ -132,8 +138,13 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
       queueStatus: string;
       order: CustomerOrder;
     }) => {
-      // Ignore pending_payment — only show orders that have been paid
-      if (data.queueStatus === "pending_payment") return;
+      // Ignore pending_payment for takeaway (wait until paid)
+      if (
+        data.queueStatus === "pending_payment" &&
+        data.order?.orderType !== "dine-in"
+      ) {
+        return;
+      }
 
       setOrders((prev) => {
         const exists = prev.find((o) => o.orderId === data.orderId);

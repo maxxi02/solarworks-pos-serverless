@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+import { useSocket } from "@/provider/socket-provider";
+
 export interface Table {
   _id: string;
   tableId: string;
@@ -19,6 +21,7 @@ export function useTables() {
   const [tables, setTables] = useState<Table[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { onTableUpdated, offTableUpdated } = useSocket();
 
   const fetchTables = useCallback(async () => {
     try {
@@ -38,6 +41,26 @@ export function useTables() {
   useEffect(() => {
     fetchTables();
   }, [fetchTables]);
+
+  useEffect(() => {
+    if (!onTableUpdated || !offTableUpdated) return;
+
+    const handleTableUpdate = (updatedTable: any) => {
+      setTables((prev) => {
+        // Find if table exists; if yes, update it; if no, add it.
+        const exists = prev.find((t) => t.tableId === updatedTable.tableId);
+        if (exists) {
+          return prev.map((t) =>
+            t.tableId === updatedTable.tableId ? { ...t, ...updatedTable } : t,
+          );
+        }
+        return [...prev, updatedTable];
+      });
+    };
+
+    onTableUpdated(handleTableUpdate);
+    return () => offTableUpdated(handleTableUpdate);
+  }, [onTableUpdated, offTableUpdated]);
 
   const createTable = useCallback(
     async (label: string, qrType: string = "dine-in") => {

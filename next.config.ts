@@ -11,17 +11,16 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Access-Control-Allow-Origin",
-            value: process.env.CUSTOMER_PORTAL_URL || "http://localhost:3001",
+            value: "*", // Allow any origin since customer-portal and pos-serverless are on different domains
           },
           {
             key: "Access-Control-Allow-Methods",
-            value: "GET, POST, PUT, DELETE, OPTIONS",
+            value: "GET, POST, PUT, DELETE, PATCH, OPTIONS",
           },
           {
             key: "Access-Control-Allow-Headers",
             value: "Content-Type, Authorization",
           },
-          { key: "Access-Control-Allow-Credentials", value: "true" },
         ],
       },
     ];
