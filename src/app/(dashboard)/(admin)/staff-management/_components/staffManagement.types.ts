@@ -16,6 +16,7 @@ export interface BetterAuthUser {
   image?: string | null;
   isOnline?: boolean;
   phoneNumber?: string | null;
+  isAnonymous?: boolean;
 }
 
 export interface TableUser extends Omit<BetterAuthUser, "banned"> {
@@ -23,4 +24,5 @@ export interface TableUser extends Omit<BetterAuthUser, "banned"> {
   banned: boolean;
   payRange: string;
   isOnline?: boolean;
+  isAnonymous?: boolean;
 }

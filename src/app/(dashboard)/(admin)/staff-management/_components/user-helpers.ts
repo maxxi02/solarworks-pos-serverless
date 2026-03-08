@@ -10,6 +10,7 @@ export function transformToTableUser(user: BetterAuthUser): TableUser {
     role: user.role ?? "staff",
     payRange: getPayRange(user.role ?? "staff"),
     isOnline: user.isOnline ?? false,
+    isAnonymous: user.isAnonymous ?? false,
   };
 }
 

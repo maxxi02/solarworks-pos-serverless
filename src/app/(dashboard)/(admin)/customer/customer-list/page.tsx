@@ -1,16 +1,22 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Users, Search, Mail, CheckCircle, UserX, Star } from 'lucide-react';
+import { useState } from "react";
+import { Users, Search, Mail, CheckCircle, UserX, Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-import { useUsers } from '../../staff-management/_components/use-users';
-import { TableUser } from '../../staff-management/_components/staffManagement.types';
-import { useEffect, useMemo } from 'react';
+import { useUsers } from "../../staff-management/_components/use-users";
+import { TableUser } from "../../staff-management/_components/staffManagement.types";
+import { useEffect, useMemo } from "react";
 
 interface Customer {
   id: string;
@@ -18,7 +24,7 @@ interface Customer {
   name: string;
   createdAt: string;
   lastLogin: string;
-  status: 'active' | 'inactive' | 'new';
+  status: "active" | "inactive" | "new";
   loginCount: number;
 }
 
@@ -27,9 +33,9 @@ interface Customer {
 export default function CustomerListPage() {
   const { users, loading, fetchUsers } = useUsers();
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
 
   useEffect(() => {
     fetchUsers();
@@ -37,39 +43,64 @@ export default function CustomerListPage() {
 
   const customerList = useMemo(() => {
     return users
-      .filter((u) => u.role === "customer" || !u.role) // Assuming default role might be customer if empty
-      .map((u): Customer => ({
-        id: u.id,
-        name: u.name || "Unknown",
-        email: u.email,
-        createdAt: u.createdAt.toString(),
-        lastLogin: u.lastActive ? u.lastActive.toString() : u.createdAt.toString(),
-        status: u.status === 'banned' ? 'inactive' : (new Date().getTime() - new Date(u.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 ? 'new' : 'active'),
-        loginCount: 0 // Placeholder as logic not in useUsers
-      }));
+      .filter((u) => (u.role === "customer" || !u.role) && !u.isAnonymous) // Filter out anonymous users
+      .map(
+        (u): Customer => ({
+          id: u.id,
+          name: u.name || "Unknown",
+          email: u.email,
+          createdAt: u.createdAt.toString(),
+          lastLogin: u.lastActive
+            ? u.lastActive.toString()
+            : u.createdAt.toString(),
+          status:
+            u.status === "banned"
+              ? "inactive"
+              : new Date().getTime() - new Date(u.createdAt).getTime() <
+                  7 * 24 * 60 * 60 * 1000
+                ? "new"
+                : "active",
+          loginCount: 0, // Placeholder as logic not in useUsers
+        }),
+      );
   }, [users]);
 
   const filteredCustomers = customerList
-    .filter(customer => {
-      const matchesSearch = searchQuery === '' ||
+    .filter((customer) => {
+      const matchesSearch =
+        searchQuery === "" ||
         customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" || customer.status === statusFilter;
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === "newest")
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      if (sortBy === "name") return a.name.localeCompare(b.name);
       return b.loginCount - a.loginCount;
     });
 
   const getStatusBadge = (status: string) => {
     const config = {
-      active: { icon: <CheckCircle className="h-3 w-3" />, color: 'bg-green-100 text-green-800' },
-      inactive: { icon: <UserX className="h-3 w-3" />, color: 'bg-gray-100 text-gray-800' },
-      new: { icon: <Star className="h-3 w-3" />, color: 'bg-blue-100 text-blue-800' }
+      active: {
+        icon: <CheckCircle className="h-3 w-3" />,
+        color: "bg-green-100 text-green-800",
+      },
+      inactive: {
+        icon: <UserX className="h-3 w-3" />,
+        color: "bg-gray-100 text-gray-800",
+      },
+      new: {
+        icon: <Star className="h-3 w-3" />,
+        color: "bg-blue-100 text-blue-800",
+      },
     };
-    const { icon, color } = config[status as keyof typeof config] || config.active;
+    const { icon, color } =
+      config[status as keyof typeof config] || config.active;
 
     return (
       <Badge className={`${color} gap-1 capitalize`}>
@@ -78,14 +109,25 @@ export default function CustomerListPage() {
     );
   };
 
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const formatTime = (dateString: string) => new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  const formatTime = (dateString: string) =>
+    new Date(dateString).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   const stats = {
     total: customerList.length,
-    active: customerList.filter(c => c.status === 'active').length,
-    new: customerList.filter(c => c.status === 'new').length,
-    today: customerList.filter(c => new Date(c.lastLogin).toDateString() === new Date().toDateString()).length
+    active: customerList.filter((c) => c.status === "active").length,
+    new: customerList.filter((c) => c.status === "new").length,
+    today: customerList.filter(
+      (c) => new Date(c.lastLogin).toDateString() === new Date().toDateString(),
+    ).length,
   };
 
   return (
@@ -93,8 +135,12 @@ export default function CustomerListPage() {
       <main className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground">Customer List</h2>
-          <p className="text-muted-foreground">Manage all registered customers</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+            Customer List
+          </h2>
+          <p className="text-muted-foreground">
+            Manage all registered customers
+          </p>
         </div>
 
         {/* Stats */}
@@ -205,11 +251,17 @@ export default function CustomerListPage() {
             ) : (
               <div className="space-y-4">
                 {filteredCustomers.map((customer) => (
-                  <div key={customer.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div
+                    key={customer.id}
+                    className="flex items-center justify-between p-4 border rounded-lg"
+                  >
                     <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="font-medium text-primary">
-                          {customer.name.split(' ').map(n => n[0]).join('')}
+                          {customer.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
                         </span>
                       </div>
                       <div>
@@ -223,18 +275,26 @@ export default function CustomerListPage() {
 
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <div className="text-sm">{formatDate(customer.createdAt)}</div>
-                        <div className="text-xs text-muted-foreground">{formatTime(customer.lastLogin)}</div>
+                        <div className="text-sm">
+                          {formatDate(customer.createdAt)}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatTime(customer.lastLogin)}
+                        </div>
                       </div>
 
                       {getStatusBadge(customer.status)}
 
                       <div className="text-right">
                         <div className="font-medium">{customer.loginCount}</div>
-                        <div className="text-xs text-muted-foreground">logins</div>
+                        <div className="text-xs text-muted-foreground">
+                          logins
+                        </div>
                       </div>
 
-                      <Button variant="ghost" size="sm">View</Button>
+                      <Button variant="ghost" size="sm">
+                        View
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -246,7 +306,9 @@ export default function CustomerListPage() {
                 <Users className="mx-auto h-12 w-12 text-muted-foreground" />
                 <h3 className="mt-4 text-lg font-medium">No customers found</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {searchQuery ? 'Try a different search' : 'No customers match filters'}
+                  {searchQuery
+                    ? "Try a different search"
+                    : "No customers match filters"}
                 </p>
               </div>
             )}

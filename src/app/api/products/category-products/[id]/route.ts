@@ -133,7 +133,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // MODIFIED: Make ingredients optional for updates
     // Only validate ingredients if they are provided and not empty
-    if (body.ingredients && Array.isArray(body.ingredients) && body.ingredients.length > 0) {
+    if (
+      body.ingredients &&
+      Array.isArray(body.ingredients) &&
+      body.ingredients.length > 0
+    ) {
       errors.push(
         ...validateIngredients(body.ingredients as ProductIngredient[]),
       );
@@ -157,30 +161,42 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // MODIFIED: Handle ingredients update - if provided, use them; otherwise keep existing
     let ingredients: ProductIngredient[];
-    
+
     if (body.ingredients && Array.isArray(body.ingredients)) {
       // New ingredients provided (could be empty array)
-      ingredients = body.ingredients.length > 0
-        ? (body.ingredients as ProductIngredient[]).map((ing) => ({
-            inventoryItemId: ing.inventoryItemId.trim(),
-            name: ing.name.trim(),
-            quantity: Number(ing.quantity),
-            unit: ing.unit.trim(),
-          }))
-        : []; // Empty array if user explicitly cleared ingredients
+      ingredients =
+        body.ingredients.length > 0
+          ? (body.ingredients as ProductIngredient[]).map((ing) => ({
+              inventoryItemId: ing.inventoryItemId.trim(),
+              name: ing.name.trim(),
+              quantity: Number(ing.quantity),
+              unit: ing.unit.trim(),
+            }))
+          : []; // Empty array if user explicitly cleared ingredients
     } else {
       // No ingredients field in update - keep existing ones
       ingredients = existingProduct.ingredients || [];
     }
+
+    // Determine imageUrl:
+    // - If body.imageUrl is explicitly provided (even as "" to delete it), use that value.
+    // - Only fall back to the existing image if imageUrl was NOT included in the request at all.
+    const imageUrl =
+      "imageUrl" in body
+        ? (body.imageUrl?.trim() ?? "")
+        : existingProduct.imageUrl || "";
 
     const updateData = {
       name: body.name!.trim(),
       price: Number(body.price),
       description: body.description?.trim() || "",
       ingredients,
-      available: body.available !== undefined ? Boolean(body.available) : existingProduct.available,
+      available:
+        body.available !== undefined
+          ? Boolean(body.available)
+          : existingProduct.available,
       categoryId: body.categoryId!,
-      imageUrl: body.imageUrl?.trim() || existingProduct.imageUrl || "",
+      imageUrl,
       updatedAt: new Date(),
     };
 
