@@ -42,20 +42,22 @@ export const ProductCard = memo(
           </div>
 
           {/* Content - Compact but readable */}
-          <div className="p-2.5 flex-1 flex flex-col">
-            <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors min-h-10">
+          <div className="p-2.5 flex-1 flex flex-col min-h-0">
+            <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5rem] leading-tight">
               {product.name}
             </h3>
 
             {/* Optional: Show description only if available and compact */}
-            {product.description && (
-              <p className="text-[10px] text-muted-foreground/70 mt-1 line-clamp-2">
-                {product.description}
-              </p>
-            )}
+            <div className="flex-1">
+              {product.description && (
+                <p className="text-[10px] text-muted-foreground/70 mt-1 line-clamp-2 leading-relaxed">
+                  {product.description}
+                </p>
+              )}
+            </div>
 
             {/* Price and Add Button - Always visible at bottom */}
-            <div className="flex items-center justify-between mt-auto pt-2">
+            <div className="flex items-center justify-between pt-2 mt-2 border-t border-muted/30">
               <span className="font-bold text-base text-primary">
                 {formatCurrency(product.price)}
               </span>

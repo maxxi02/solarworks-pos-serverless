@@ -31,58 +31,77 @@ interface Customer {
 // Static data removed, using useUsers hook below
 
 export default function CustomerListPage() {
-  const { users, loading, fetchUsers } = useUsers();
-
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit] = useState(20);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  // Data states
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [pagination, setPagination] = useState({ total: 0, pages: 0 });
+  const [stats, setStats] = useState({ total: 0, active: 0, new: 0, today: 0 });
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const customerList = useMemo(() => {
-    return users
-      .filter((u) => (u.role === "customer" || !u.role) && !u.isAnonymous) // Filter out anonymous users
-      .map(
-        (u): Customer => ({
-          id: u.id,
+  const fetchCustomers = async (page = 1, append = false) => {
+    if (page === 1) setLoading(true);
+    else setLoadingMore(true);
+
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        search: searchQuery,
+        status: statusFilter,
+        sortBy: sortBy,
+      });
+
+      const response = await fetch(`/api/admin/customers?${params.toString()}`);
+      const result = await response.json();
+
+      if (result.success) {
+        const mapped: Customer[] = result.data.customers.map((u: any) => ({
+          id: u.id || u._id,
           name: u.name || "Unknown",
           email: u.email,
-          createdAt: u.createdAt.toString(),
-          lastLogin: u.lastActive
-            ? u.lastActive.toString()
-            : u.createdAt.toString(),
-          status:
-            u.status === "banned"
-              ? "inactive"
-              : new Date().getTime() - new Date(u.createdAt).getTime() <
-                  7 * 24 * 60 * 60 * 1000
-                ? "new"
-                : "active",
-          loginCount: 0, // Placeholder as logic not in useUsers
-        }),
-      );
-  }, [users]);
+          createdAt: u.createdAt,
+          lastLogin: u.lastActive || u.createdAt,
+          status: getFrontendStatus(u),
+          loginCount: 0, // Still placeholder until we have a real login counter
+        }));
 
-  const filteredCustomers = customerList
-    .filter((customer) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        statusFilter === "all" || customer.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      if (sortBy === "newest")
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      return b.loginCount - a.loginCount;
-    });
+        setCustomers((prev) => (append ? [...prev, ...mapped] : mapped));
+        setPagination(result.data.pagination);
+        setStats(result.data.stats);
+      }
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const getFrontendStatus = (u: any) => {
+    if (u.banned) return "inactive";
+    const sevenDaysAgo = new Date().getTime() - 7 * 24 * 60 * 60 * 1000;
+    if (new Date(u.createdAt).getTime() > sevenDaysAgo) return "new";
+    return "active";
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchCustomers(1, false);
+  }, [searchQuery, statusFilter, sortBy]);
+
+  const handleLoadMore = () => {
+    if (currentPage < pagination.pages) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      fetchCustomers(nextPage, true);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const config = {
@@ -120,15 +139,6 @@ export default function CustomerListPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
-
-  const stats = {
-    total: customerList.length,
-    active: customerList.filter((c) => c.status === "active").length,
-    new: customerList.filter((c) => c.status === "new").length,
-    today: customerList.filter(
-      (c) => new Date(c.lastLogin).toDateString() === new Date().toDateString(),
-    ).length,
-  };
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -241,7 +251,7 @@ export default function CustomerListPage() {
         {/* Customers List */}
         <Card>
           <CardHeader>
-            <CardTitle>Customers ({filteredCustomers.length})</CardTitle>
+            <CardTitle>Customers ({pagination.total})</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -250,7 +260,7 @@ export default function CustomerListPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredCustomers.map((customer) => (
+                {customers.map((customer) => (
                   <div
                     key={customer.id}
                     className="flex items-center justify-between p-4 border rounded-lg"
@@ -298,10 +308,30 @@ export default function CustomerListPage() {
                     </div>
                   </div>
                 ))}
+
+                {currentPage < pagination.pages && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="gap-2"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Users className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        "Load More"
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
-            {filteredCustomers.length === 0 && (
+            {!loading && customers.length === 0 && (
               <div className="text-center py-12">
                 <Users className="mx-auto h-12 w-12 text-muted-foreground" />
                 <h3 className="mt-4 text-lg font-medium">No customers found</h3>

@@ -1,15 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { Search, TrendingUp, Clock, Calendar, RefreshCw, Wallet, CreditCard, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { io as socketIO, Socket } from 'socket.io-client';
+import { useState, useEffect } from "react";
+import {
+  Search,
+  TrendingUp,
+  Clock,
+  Calendar,
+  RefreshCw,
+  Wallet,
+  CreditCard,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { useSocket } from "@/provider/socket-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 // ============ Types ============
-type PeriodFilter = 'all' | 'today' | 'week' | 'month' | 'year';
-type PaymentFilter = 'all' | 'cash' | 'gcash';
+type PeriodFilter = "all" | "today" | "week" | "month" | "year";
+type PaymentFilter = "all" | "cash" | "gcash";
 
 interface TransactionItem {
   name: string;
@@ -62,6 +73,16 @@ interface SummaryResponse {
       totalTransactions: number;
       avgOrderValue: number;
     };
+    daily: Array<{
+      date: string;
+      revenue: number;
+      transactions: number;
+    }>;
+    paymentMethods: Array<{
+      _id: string;
+      total: number;
+      count: number;
+    }>;
     recentTransactions: Transaction[];
   };
   error?: string;
@@ -69,24 +90,24 @@ interface SummaryResponse {
 
 // ============ Utils ============
 const formatCurrency = (value: number = 0): string => {
-  return `₱${value.toLocaleString(undefined, { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 2 
+  return `₱${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })}`;
 };
 
 const formatDateTime = (dateStr: string): string => {
-  if (!dateStr) return '';
+  if (!dateStr) return "";
 
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
 
-    return date.toLocaleString('en-PH', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return date.toLocaleString("en-PH", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return dateStr;
@@ -99,33 +120,34 @@ const getItemCount = (transaction: Transaction): number => {
 };
 
 const getProductNames = (transaction: Transaction): string => {
-  if (!transaction?.items || !Array.isArray(transaction.items)) return 'No items';
-  return transaction.items.map(item => item.name).join(', ');
+  if (!transaction?.items || !Array.isArray(transaction.items))
+    return "No items";
+  return transaction.items.map((item) => item.name).join(", ");
 };
 
 // Date filter function
 const isWithinDateRange = (date: string, filter: PeriodFilter): boolean => {
-  if (filter === 'all') return true;
-  
+  if (filter === "all") return true;
+
   const transactionDate = new Date(date);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   switch (filter) {
-    case 'today': {
+    case "today": {
       return transactionDate >= today;
     }
-    case 'week': {
+    case "week": {
       const weekAgo = new Date(today);
       weekAgo.setDate(weekAgo.getDate() - 7);
       return transactionDate >= weekAgo;
     }
-    case 'month': {
+    case "month": {
       const monthAgo = new Date(today);
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       return transactionDate >= monthAgo;
     }
-    case 'year': {
+    case "year": {
       const yearAgo = new Date(today);
       yearAgo.setFullYear(yearAgo.getFullYear() - 1);
       return transactionDate >= yearAgo;
@@ -137,31 +159,32 @@ const isWithinDateRange = (date: string, filter: PeriodFilter): boolean => {
 
 // ============ Main Component ============
 export default function TransactionsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
-  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("all");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(20);
-  
+
   // Data states
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<SummaryResponse['data'] | null>(null);
+  const [summary, setSummary] = useState<SummaryResponse["data"] | null>(null);
   const [pagination, setPagination] = useState({ total: 0, pages: 0 });
-  
+
   // UI states
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  
+
   // Refunded transactions
-  const [refundedTransactions, setRefundedTransactions] = useState<Transaction[]>([]);
+  const [refundedTransactions, setRefundedTransactions] = useState<
+    Transaction[]
+  >([]);
   const [showRefundedTable, setShowRefundedTable] = useState(false);
   const [refundedLoading, setRefundedLoading] = useState(false);
 
   // Socket connection
-  const [isLive, setIsLive] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
+  const { socket, isConnected: isLive } = useSocket();
 
   // ============ Data Fetching ============
   const fetchTransactions = async (page = currentPage, append = false) => {
@@ -170,43 +193,65 @@ export default function TransactionsPage() {
     } else {
       setIsLoadingMore(true);
     }
-    
+
     setError(null);
 
     try {
       // Build query params for /api/payments
       const params = new URLSearchParams({
         limit: limit.toString(),
-        page: page.toString()
+        page: page.toString(),
+        paymentMethod: paymentFilter,
+        search: searchQuery,
       });
 
+      // Map periodFilter to date range if necessary
+      if (periodFilter !== "all") {
+        const now = new Date();
+        let startDate = new Date();
+        switch (periodFilter) {
+          case "today":
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            break;
+          case "week":
+            startDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+          case "month":
+            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            break;
+          case "year":
+            startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+            break;
+        }
+        params.append("startDate", startDate.toISOString());
+      }
+
       const url = `/api/payments?${params.toString()}`;
-      console.log('Fetching transactions:', url);
 
       const response = await fetch(url);
       const result: PaymentsResponse = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch transactions');
+        throw new Error(result.error || "Failed to fetch transactions");
       }
 
       if (result.data?.payments) {
-        setAllTransactions(prev => 
-          append ? [...prev, ...result.data!.payments] : result.data!.payments
+        setAllTransactions((prev) =>
+          append ? [...prev, ...result.data!.payments] : result.data!.payments,
         );
       }
 
       if (result.data?.pagination) {
         setPagination({
           total: result.data.pagination.total,
-          pages: result.data.pagination.pages
+          pages: result.data.pagination.pages,
         });
       }
 
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Error fetching transactions:', error);
-      setError('Failed to load transactions. Please try again.');
+      console.error("Error fetching transactions:", error);
+      setError("Failed to load transactions. Please try again.");
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -216,7 +261,7 @@ export default function TransactionsPage() {
   const fetchSummary = async () => {
     try {
       const params = new URLSearchParams({
-        period: periodFilter
+        period: periodFilter,
       });
 
       const url = `/api/payments/summary?${params.toString()}`;
@@ -227,7 +272,7 @@ export default function TransactionsPage() {
         setSummary(result.data);
       }
     } catch (error) {
-      console.error('Error fetching summary:', error);
+      console.error("Error fetching summary:", error);
     }
   };
 
@@ -244,57 +289,6 @@ export default function TransactionsPage() {
     }
   };
 
-  // ============ Filtering Logic ============
-  const filteredTransactions = allTransactions.filter(transaction => {
-    // Date filter
-    if (!isWithinDateRange(transaction.createdAt, periodFilter)) {
-      return false;
-    }
-
-    // Payment method filter
-    if (paymentFilter !== 'all' && transaction.paymentMethod?.toLowerCase() !== paymentFilter.toLowerCase()) {
-      return false;
-    }
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        transaction.orderNumber?.toLowerCase().includes(query) ||
-        transaction.customerName?.toLowerCase().includes(query) ||
-        transaction.items?.some(item => item.name.toLowerCase().includes(query))
-      );
-    }
-
-    return true;
-  });
-
-  // Calculate stats based on filtered transactions
-  const totalRevenue = filteredTransactions.reduce((sum, t) => sum + t.total, 0);
-  const totalTransactions = filteredTransactions.length;
-  const avgOrderValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
-
-  // Calculate payment method summaries (cash and gcash only)
-  const cashTransactions = filteredTransactions.filter(t => 
-    t.paymentMethod?.toLowerCase() === 'cash'
-  );
-  const gcashTransactions = filteredTransactions.filter(t => 
-    t.paymentMethod?.toLowerCase() === 'gcash'
-  );
-
-  const cashTotal = cashTransactions.reduce((sum, t) => sum + t.total, 0);
-  const gcashTotal = gcashTransactions.reduce((sum, t) => sum + t.total, 0);
-
-  const cashCount = cashTransactions.length;
-  const gcashCount = gcashTransactions.length;
-
-  // Get today's date for stats
-  const today = new Date().toDateString();
-  const todayTransactions = filteredTransactions.filter(t => 
-    new Date(t.createdAt).toDateString() === today
-  );
-  const todayRevenue = todayTransactions.reduce((sum, t) => sum + t.total, 0);
-
   // ============ Effects ============
   // Initial load
   useEffect(() => {
@@ -302,58 +296,24 @@ export default function TransactionsPage() {
     fetchTransactions(1, false);
     fetchSummary();
     fetchRefunded();
-  }, []); // Only run once on mount
+  }, [periodFilter, paymentFilter, searchQuery]); // Refetch when filters change
 
-  // Refetch when period changes for summary
+  // Socket listener for real-time updates
   useEffect(() => {
-    fetchSummary();
-  }, [periodFilter]);
+    if (!socket) return;
 
-  // Socket.IO connection for real-time updates
-  useEffect(() => {
-    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8080';
-
-    const socket = socketIO(SOCKET_URL, {
-      auth: { userId: 'transactions-dashboard' },
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-    });
-
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log('✅ Transactions socket connected:', socket.id);
-      setIsLive(true);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('❌ Transactions socket disconnected');
-      setIsLive(false);
-    });
-
-    // Listen for sales updates (from your POST endpoint)
-    socket.on('sales:updated', () => {
-      console.log('📊 Sales updated — refreshing transactions...');
-      
-      // Refresh both transactions and summary
+    const handleSalesUpdated = () => {
       setCurrentPage(1);
       fetchTransactions(1, false);
       fetchSummary();
-    });
+    };
 
-    socket.on('reconnect', () => {
-      console.log('🔄 Socket reconnected');
-      setIsLive(true);
-      fetchTransactions(1, false);
-      fetchSummary();
-    });
+    socket.on("sales:updated", handleSalesUpdated);
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      socket.off("sales:updated", handleSalesUpdated);
     };
-  }, []);
+  }, [socket]);
 
   // Auto-refresh every 60 seconds as fallback
   useEffect(() => {
@@ -364,6 +324,34 @@ export default function TransactionsPage() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // stats from summary
+  const totalRevenue = summary?.summary?.totalRevenue || 0;
+  const totalTransactionsCount = summary?.summary?.totalTransactions || 0;
+  const avgOrderValue = summary?.summary?.avgOrderValue || 0;
+
+  // Today's revenue calculation (might still need local if summary doesn't give today specifically when in "all" mode)
+  // But we can just use the summary data which is more accurate.
+  const todayRevenue =
+    periodFilter === "today"
+      ? totalRevenue
+      : summary?.daily?.find(
+          (d) => d.date === new Date().toISOString().split("T")[0],
+        )?.revenue || 0;
+
+  // Payment methods totals from summary
+  const cashTotal =
+    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "cash")
+      ?.total || 0;
+  const gcashTotal =
+    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "gcash")
+      ?.total || 0;
+  const cashCount =
+    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "cash")
+      ?.count || 0;
+  const gcashCount =
+    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "gcash")
+      ?.count || 0;
 
   // ============ Handlers ============
   const handleLoadMore = () => {
@@ -389,11 +377,17 @@ export default function TransactionsPage() {
         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground">Sales Transactions</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+                Sales Transactions
+              </h2>
               {/* Live Indicator */}
               <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary">
-                <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
-                <span className="text-xs font-medium">{isLive ? 'LIVE' : 'OFFLINE'}</span>
+                <span
+                  className={`w-2 h-2 rounded-full ${isLive ? "bg-green-500 animate-pulse" : "bg-red-400"}`}
+                />
+                <span className="text-xs font-medium">
+                  {isLive ? "LIVE" : "OFFLINE"}
+                </span>
               </div>
             </div>
             <p className="text-muted-foreground mt-1">
@@ -405,15 +399,17 @@ export default function TransactionsPage() {
               )}
             </p>
           </div>
-          
-          <Button 
-            variant="outline" 
-            onClick={handleRefresh} 
+
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
             className="gap-2"
             disabled={isLoading}
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            {isLoading ? 'Refreshing...' : 'Refresh'}
+            <RefreshCw
+              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+            />
+            {isLoading ? "Refreshing..." : "Refresh"}
           </Button>
         </div>
 
@@ -425,41 +421,46 @@ export default function TransactionsPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                   <p className="text-2xl font-bold">
-                    {isLoading ? '...' : formatCurrency(totalRevenue)}
+                    {isLoading ? "..." : formatCurrency(totalRevenue)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {totalTransactions} transactions
+                    {totalTransactionsCount} transactions
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Today's Sales</p>
                   <p className="text-2xl font-bold">
-                    {isLoading ? '...' : formatCurrency(todayRevenue)}
+                    {isLoading ? "..." : formatCurrency(todayRevenue)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {todayTransactions.length} transactions today
+                    {summary?.daily?.find(
+                      (d) => d.date === new Date().toISOString().split("T")[0],
+                    )?.transactions || 0}{" "}
+                    transactions today
                   </p>
                 </div>
                 <Calendar className="h-8 w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avg Transaction</p>
+                  <p className="text-sm text-muted-foreground">
+                    Avg Transaction
+                  </p>
                   <p className="text-2xl font-bold">
-                    {isLoading ? '...' : formatCurrency(avgOrderValue)}
+                    {isLoading ? "..." : formatCurrency(avgOrderValue)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Per transaction
@@ -481,7 +482,7 @@ export default function TransactionsPage() {
                     <Wallet className="h-4 w-4" /> Cash Sales
                   </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {isLoading ? '...' : formatCurrency(cashTotal)}
+                    {isLoading ? "..." : formatCurrency(cashTotal)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {cashCount} transactions
@@ -502,7 +503,7 @@ export default function TransactionsPage() {
                     <CreditCard className="h-4 w-4" /> GCASH Sales
                   </p>
                   <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {isLoading ? '...' : formatCurrency(gcashTotal)}
+                    {isLoading ? "..." : formatCurrency(gcashTotal)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {gcashCount} transactions
@@ -520,7 +521,7 @@ export default function TransactionsPage() {
         {(refundedTransactions.length > 0 || refundedLoading) && (
           <div className="mb-6 border border-orange-300 dark:border-orange-700 rounded-xl overflow-hidden">
             <button
-              onClick={() => setShowRefundedTable(v => !v)}
+              onClick={() => setShowRefundedTable((v) => !v)}
               className="w-full flex items-center justify-between px-5 py-4 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
             >
               <div className="flex items-center gap-3">
@@ -529,16 +530,26 @@ export default function TransactionsPage() {
                 </div>
                 <div className="text-left">
                   <p className="font-semibold text-orange-800 dark:text-orange-200">
-                    {refundedLoading ? 'Loading...' : `${refundedTransactions.length} Refunded Transaction${refundedTransactions.length !== 1 ? 's' : ''}`}
+                    {refundedLoading
+                      ? "Loading..."
+                      : `${refundedTransactions.length} Refunded Transaction${refundedTransactions.length !== 1 ? "s" : ""}`}
                   </p>
                   <p className="text-sm text-orange-600 dark:text-orange-400">
-                    Total refunded: {formatCurrency(refundedTransactions.reduce((s, t) => s + (t.total || 0), 0))}
+                    Total refunded:{" "}
+                    {formatCurrency(
+                      refundedTransactions.reduce(
+                        (s, t) => s + (t.total || 0),
+                        0,
+                      ),
+                    )}
                   </p>
                 </div>
               </div>
-              {showRefundedTable
-                ? <ChevronUp className="h-4 w-4 text-orange-600" />
-                : <ChevronDown className="h-4 w-4 text-orange-600" />}
+              {showRefundedTable ? (
+                <ChevronUp className="h-4 w-4 text-orange-600" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-orange-600" />
+              )}
             </button>
 
             {showRefundedTable && (
@@ -546,20 +557,48 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-orange-50/60 dark:bg-orange-900/10">
                     <tr className="border-b border-orange-200 dark:border-orange-800">
-                      {['Order #', 'Customer', 'Amount', 'Refunded By', 'Refunded At', 'Reason'].map(h => (
-                        <th key={h} className="text-left px-4 py-2.5 font-medium text-orange-800 dark:text-orange-300">{h}</th>
+                      {[
+                        "Order #",
+                        "Customer",
+                        "Amount",
+                        "Refunded By",
+                        "Refunded At",
+                        "Reason",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-2.5 font-medium text-orange-800 dark:text-orange-300"
+                        >
+                          {h}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {refundedTransactions.map(t => (
-                      <tr key={t._id} className="border-b border-border hover:bg-muted/40">
-                        <td className="px-4 py-3 font-mono text-xs font-medium">{t.orderNumber}</td>
-                        <td className="px-4 py-3">{t.customerName || 'Walk-in'}</td>
-                        <td className="px-4 py-3 font-semibold text-orange-700 dark:text-orange-400">{formatCurrency(t.total)}</td>
-                        <td className="px-4 py-3">{t.refundedBy || '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{t.refundedAt ? formatDateTime(t.refundedAt) : '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate" title={t.refundReason}>{t.refundReason || '—'}</td>
+                    {refundedTransactions.map((t) => (
+                      <tr
+                        key={t._id}
+                        className="border-b border-border hover:bg-muted/40"
+                      >
+                        <td className="px-4 py-3 font-mono text-xs font-medium">
+                          {t.orderNumber}
+                        </td>
+                        <td className="px-4 py-3">
+                          {t.customerName || "Walk-in"}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-orange-700 dark:text-orange-400">
+                          {formatCurrency(t.total)}
+                        </td>
+                        <td className="px-4 py-3">{t.refundedBy || "—"}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {t.refundedAt ? formatDateTime(t.refundedAt) : "—"}
+                        </td>
+                        <td
+                          className="px-4 py-3 text-muted-foreground max-w-[200px] truncate"
+                          title={t.refundReason}
+                        >
+                          {t.refundReason || "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -592,7 +631,9 @@ export default function TransactionsPage() {
                 {/* Period Filter */}
                 <select
                   value={periodFilter}
-                  onChange={(e) => setPeriodFilter(e.target.value as PeriodFilter)}
+                  onChange={(e) =>
+                    setPeriodFilter(e.target.value as PeriodFilter)
+                  }
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm min-w-[130px]"
                 >
                   <option value="all">All Time</option>
@@ -605,7 +646,9 @@ export default function TransactionsPage() {
                 {/* Payment Method Filter - Cash and GCASH only */}
                 <select
                   value={paymentFilter}
-                  onChange={(e) => setPaymentFilter(e.target.value as PaymentFilter)}
+                  onChange={(e) =>
+                    setPaymentFilter(e.target.value as PaymentFilter)
+                  }
                   className="rounded-lg border border-border bg-background px-3 py-2 text-sm min-w-[130px]"
                 >
                   <option value="all">All Payments</option>
@@ -618,15 +661,18 @@ export default function TransactionsPage() {
             {/* Active filters summary */}
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span>Showing: </span>
-              {periodFilter !== 'all' && (
+              {periodFilter !== "all" && (
                 <span className="text-xs bg-secondary px-2 py-1 rounded">
-                  {periodFilter === 'today' ? 'Today' : 
-                   periodFilter === 'week' ? 'Last 7 days' :
-                   periodFilter === 'month' ? 'Last 30 days' :
-                   'Last 12 months'}
+                  {periodFilter === "today"
+                    ? "Today"
+                    : periodFilter === "week"
+                      ? "Last 7 days"
+                      : periodFilter === "month"
+                        ? "Last 30 days"
+                        : "Last 12 months"}
                 </span>
               )}
-              {paymentFilter !== 'all' && (
+              {paymentFilter !== "all" && (
                 <span className="text-xs bg-secondary px-2 py-1 rounded capitalize">
                   {paymentFilter} only
                 </span>
@@ -644,7 +690,9 @@ export default function TransactionsPage() {
         {error && (
           <Card className="mb-6 border-red-200 bg-red-50 dark:bg-red-900/10">
             <CardContent className="py-4">
-              <p className="text-red-600 dark:text-red-400 text-center">{error}</p>
+              <p className="text-red-600 dark:text-red-400 text-center">
+                {error}
+              </p>
             </CardContent>
           </Card>
         )}
@@ -659,10 +707,12 @@ export default function TransactionsPage() {
               <div className="flex justify-center py-12">
                 <RefreshCw className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : filteredTransactions.length === 0 ? (
+            ) : allTransactions.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p>No transactions found</p>
-                <p className="text-sm mt-2">Try adjusting your filters or create a new sale</p>
+                <p className="text-sm mt-2">
+                  Try adjusting your filters or create a new sale
+                </p>
               </div>
             ) : (
               <>
@@ -670,32 +720,56 @@ export default function TransactionsPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 text-sm font-medium">Order #</th>
-                        <th className="text-left p-3 text-sm font-medium">Customer</th>
-                        <th className="text-left p-3 text-sm font-medium">Items</th>
-                        <th className="text-left p-3 text-sm font-medium">Products</th>
-                        <th className="text-left p-3 text-sm font-medium">Total</th>
-                        <th className="text-left p-3 text-sm font-medium">Payment</th>
-                        <th className="text-left p-3 text-sm font-medium">Type</th>
-                        <th className="text-left p-3 text-sm font-medium">Date & Time</th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Order #
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Customer
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Items
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Products
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Total
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Payment
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Type
+                        </th>
+                        <th className="text-left p-3 text-sm font-medium">
+                          Date & Time
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredTransactions.map((transaction) => (
-                        <tr key={transaction._id} className="border-b hover:bg-secondary/50">
+                      {allTransactions.map((transaction) => (
+                        <tr
+                          key={transaction._id}
+                          className="border-b hover:bg-secondary/50"
+                        >
                           <td className="p-3">
                             <div className="font-medium font-mono text-xs">
                               {transaction.orderNumber}
                             </div>
                           </td>
                           <td className="p-3">
-                            <div className="font-medium">{transaction.customerName || 'Walk-in Customer'}</div>
+                            <div className="font-medium">
+                              {transaction.customerName || "Walk-in Customer"}
+                            </div>
                           </td>
                           <td className="p-3">
                             {getItemCount(transaction)} items
                           </td>
                           <td className="p-3">
-                            <div className="text-sm truncate max-w-[200px]" title={getProductNames(transaction)}>
+                            <div
+                              className="text-sm truncate max-w-[200px]"
+                              title={getProductNames(transaction)}
+                            >
                               {getProductNames(transaction)}
                             </div>
                           </td>
@@ -703,23 +777,29 @@ export default function TransactionsPage() {
                             {formatCurrency(transaction.total)}
                           </td>
                           <td className="p-3">
-                            <span className={`capitalize text-sm px-2 py-1 rounded-full ${
-                              transaction.paymentMethod?.toLowerCase() === 'cash' 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                : transaction.paymentMethod?.toLowerCase() === 'gcash'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                            }`}>
+                            <span
+                              className={`capitalize text-sm px-2 py-1 rounded-full ${
+                                transaction.paymentMethod?.toLowerCase() ===
+                                "cash"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                  : transaction.paymentMethod?.toLowerCase() ===
+                                      "gcash"
+                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                    : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400"
+                              }`}
+                            >
                               {transaction.paymentMethod}
                             </span>
                           </td>
                           <td className="p-3">
                             <span className="capitalize text-sm">
-                              {transaction.orderType || 'takeaway'}
+                              {transaction.orderType || "takeaway"}
                             </span>
                           </td>
                           <td className="p-3">
-                            <div className="text-sm">{formatDateTime(transaction.createdAt)}</div>
+                            <div className="text-sm">
+                              {formatDateTime(transaction.createdAt)}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -730,12 +810,13 @@ export default function TransactionsPage() {
                 {/* Pagination */}
                 <div className="mt-6 pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
                   <div className="text-sm text-muted-foreground">
-                    Showing {filteredTransactions.length} of {pagination.total} transactions
+                    Showing {allTransactions.length} of {pagination.total}{" "}
+                    transactions
                   </div>
-                  
+
                   {currentPage < pagination.pages && (
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={handleLoadMore}
                       disabled={isLoadingMore}
                       className="gap-2"
@@ -746,7 +827,7 @@ export default function TransactionsPage() {
                           Loading...
                         </>
                       ) : (
-                        'Load More'
+                        "Load More"
                       )}
                     </Button>
                   )}
@@ -755,31 +836,6 @@ export default function TransactionsPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Debug Info - Remove in production */}
-        <div className="mt-4 text-xs text-muted-foreground">
-          <details>
-            <summary>Debug Info</summary>
-            <pre className="mt-2 p-2 bg-muted rounded overflow-auto">
-              {JSON.stringify({
-                totalTransactions: pagination.total,
-                displayedTransactions: filteredTransactions.length,
-                currentPage,
-                totalPages: pagination.pages,
-                filters: { 
-                  period: periodFilter, 
-                  payment: paymentFilter,
-                  search: searchQuery 
-                },
-                paymentSummary: {
-                  cash: { total: cashTotal, count: cashCount },
-                  gcash: { total: gcashTotal, count: gcashCount }
-                },
-                socketConnected: isLive
-              }, null, 2)}
-            </pre>
-          </details>
-        </div>
       </main>
     </div>
   );

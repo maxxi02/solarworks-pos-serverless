@@ -4,7 +4,7 @@ import React from "react";
 import DashboardLayout from "../DashboardLayout";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSession } from "@/lib/auth-client";
-import { SocketProvider } from "@/hooks/useSocket";
+import { SocketProvider } from "@/provider/socket-provider";
 
 const queryClient = new QueryClient();
 interface SessionUser {
@@ -14,7 +14,11 @@ interface SessionUser {
   image?: string | null;
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { data: session, isPending } = useSession();
   const currentUser = session?.user as SessionUser | undefined;
 

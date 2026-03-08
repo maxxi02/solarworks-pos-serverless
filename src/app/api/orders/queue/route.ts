@@ -6,6 +6,7 @@ import { MONGODB } from "@/config/db";
 const VALID_STATUSES = [
   "pending_payment",
   "queueing",
+  "preparing",
   "serving",
   "done",
   "cancelled",
@@ -13,6 +14,7 @@ const VALID_STATUSES = [
 
 const TIMESTAMP_MAP: Record<string, string> = {
   queueing: "queueingAt",
+  preparing: "preparingAt",
   serving: "servingAt",
   done: "doneAt",
   cancelled: "cancelledAt",

@@ -31,7 +31,7 @@ import { authClient } from "@/lib/auth-client";
 import { ExtendedUser } from "@/types/user.type";
 import { UserRole } from "@/types/role.type";
 import { adminNavigation, staffNavigation } from "@/constants/navigation";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocket } from "@/provider/socket-provider";
 import { useUnreadCount } from "@/hooks/useConversations";
 
 const storeData = {

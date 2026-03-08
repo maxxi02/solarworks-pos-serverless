@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     if (!body.orderNumber || !body.total || !body.paymentMethod) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     console.error("Payment save error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to save payment" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -59,16 +59,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
 
     const limit = parseInt(searchParams.get("limit") || "10");
-    const page  = parseInt(searchParams.get("page")  || "1");
-    const skip  = (page - 1) * limit;
+    const page = parseInt(searchParams.get("page") || "1");
+    const skip = (page - 1) * limit;
 
-    const status        = searchParams.get("status");
+    const status = searchParams.get("status");
     const paymentMethod = searchParams.get("paymentMethod");
-    const search        = searchParams.get("search");
-    const startDate     = searchParams.get("startDate");
-    const endDate       = searchParams.get("endDate");
-    const sortBy        = searchParams.get("sortBy")    || "date";
-    const sortOrder     = searchParams.get("sortOrder") || "desc";
+    const search = searchParams.get("search");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const sortBy = searchParams.get("sortBy") || "date";
+    const sortOrder = searchParams.get("sortOrder") || "desc";
 
     // ── Build filter ─────────────────────────────────────────────────────────
     const filter: Record<string, any> = {};
@@ -83,9 +83,9 @@ export async function GET(request: Request) {
 
     if (search) {
       filter.$or = [
-        { orderNumber:  { $regex: search, $options: "i" } },
+        { orderNumber: { $regex: search, $options: "i" } },
         { customerName: { $regex: search, $options: "i" } },
-        { cashier:      { $regex: search, $options: "i" } },
+        { cashier: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       // Support both old records (createdAt only) and new records (timestamp field)
       const dateFilter: Record<string, any> = {};
       if (startDate) dateFilter.$gte = new Date(startDate);
-      if (endDate)   dateFilter.$lte = new Date(endDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
 
       const dateConditions = [
         { timestamp: dateFilter },
@@ -102,10 +102,7 @@ export async function GET(request: Request) {
 
       if (filter.$or) {
         // Merge with existing $or (from search)
-        filter.$and = [
-          { $or: filter.$or },
-          { $or: dateConditions },
-        ];
+        filter.$and = [{ $or: filter.$or }, { $or: dateConditions }];
         delete filter.$or;
       } else {
         filter.$or = dateConditions;
@@ -115,56 +112,88 @@ export async function GET(request: Request) {
     // ── Build sort ───────────────────────────────────────────────────────────
     // Use createdAt — it exists on ALL records (old and new)
     const sortField =
-      sortBy === "amount" ? "total" :
-      sortBy === "name"   ? "customerName" :
-                            "createdAt";
+      sortBy === "amount"
+        ? "total"
+        : sortBy === "name"
+          ? "customerName"
+          : "createdAt";
     const sort: Record<string, 1 | -1> = {
       [sortField]: sortOrder === "asc" ? 1 : -1,
     };
 
     const collection = MONGODB.collection("payments");
 
+    // ── Field projection: Only return what the table needs ───────────────────
+    const projection = {
+      orderNumber: 1,
+      customerName: 1,
+      total: 1,
+      paymentMethod: 1,
+      orderType: 1,
+      createdAt: 1,
+      items: 1, // Needed for getItemCount and getProductNames in frontend
+      status: 1,
+      refundedAt: 1,
+      refundedBy: 1,
+      refundReason: 1,
+    };
+
     // ── Paginated results + total count ──────────────────────────────────────
     const [payments, total] = await Promise.all([
-      collection.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
+      collection
+        .find(filter, { projection })
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
       collection.countDocuments(filter),
     ]);
 
     // ── Stats (completed only, within same date/search filter) ───────────────
     const statsFilter = { ...filter, status: "completed" };
-    
-    const statsResult = await collection.aggregate([
-      { $match: statsFilter },
-      {
-        $group: {
-          _id: null,
-          totalSales: { $sum: "$total" },
-          totalTransactions: { $sum: 1 },
-          cashSales: {
-            $sum: { $cond: [{ $eq: ["$paymentMethod", "cash"] }, "$total", 0] }
+
+    const statsResult = await collection
+      .aggregate([
+        { $match: statsFilter },
+        {
+          $group: {
+            _id: null,
+            totalSales: { $sum: "$total" },
+            totalTransactions: { $sum: 1 },
+            cashSales: {
+              $sum: {
+                $cond: [{ $eq: ["$paymentMethod", "cash"] }, "$total", 0],
+              },
+            },
+            gcashSales: {
+              $sum: {
+                $cond: [{ $eq: ["$paymentMethod", "gcash"] }, "$total", 0],
+              },
+            },
+            splitSales: {
+              $sum: {
+                $cond: [{ $eq: ["$paymentMethod", "split"] }, "$total", 0],
+              },
+            },
           },
-          gcashSales: {
-            $sum: { $cond: [{ $eq: ["$paymentMethod", "gcash"] }, "$total", 0] }
-          },
-          splitSales: {
-            $sum: { $cond: [{ $eq: ["$paymentMethod", "split"] }, "$total", 0] }
-          }
-        }
-      }
-    ]).toArray();
+        },
+      ])
+      .toArray();
 
     const summary = statsResult[0] || {
       totalSales: 0,
       totalTransactions: 0,
       cashSales: 0,
       gcashSales: 0,
-      splitSales: 0
+      splitSales: 0,
     };
 
     const stats = {
       totalSales: summary.totalSales,
       totalTransactions: summary.totalTransactions,
-      averageTransaction: summary.totalTransactions ? summary.totalSales / summary.totalTransactions : 0,
+      averageTransaction: summary.totalTransactions
+        ? summary.totalSales / summary.totalTransactions
+        : 0,
       cashSales: summary.cashSales,
       gcashSales: summary.gcashSales,
       splitSales: summary.splitSales,
@@ -187,7 +216,7 @@ export async function GET(request: Request) {
     console.error("Payment fetch error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to fetch payments" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

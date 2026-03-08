@@ -163,7 +163,8 @@ export async function PATCH(request: NextRequest) {
     // Broadcast via socket
     try {
       const socketServerUrl =
-        process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8080";
+        process.env.NEXT_PUBLIC_SOCKET_URL ||
+        "https://rendezvous-server-gpmv.onrender.com";
       const internalSecret = process.env.INTERNAL_SECRET || "";
       await fetch(`${socketServerUrl}/internal/tables-updated`, {
         method: "POST",

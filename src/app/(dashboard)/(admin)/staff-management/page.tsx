@@ -10,20 +10,59 @@ import { Header } from "./_components/user-display/header";
 import { BulkActions } from "./_components/user-display/bulk-actions";
 import { getColumns } from "./_components/user-display/columns";
 import { TableUser } from "./_components/staffManagement.types";
+import { transformToTableUser } from "./_components/user-helpers";
 
 export default function AccessControlPage() {
   const { data: session } = authClient.useSession();
   const isAdmin = session?.user?.role === "admin";
 
-  const {
-    users,
-    loading,
-    rowSelection,
-    setRowSelection,
-    fetchUsers,
-    refreshUsers,
-    updateUserStatus,
-  } = useUsers();
+  const [users, setUsers] = React.useState<TableUser[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [rowSelection, setRowSelection] = React.useState<
+    Record<string, boolean>
+  >({});
+
+  const fetchStaff = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/staff");
+      const result = await response.json();
+      if (result.success) {
+        const mapped = result.data.map((user: any) =>
+          transformToTableUser({
+            ...user,
+            id: user.id || user._id,
+          }),
+        );
+        setUsers(mapped);
+      }
+    } catch (error) {
+      console.error("Failed to fetch staff:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshUsers = React.useCallback(async () => {
+    await fetchStaff();
+  }, [fetchStaff]);
+
+  const updateUserStatus = React.useCallback(
+    (userId: string, isOnline: boolean, lastSeen?: Date) => {
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId
+            ? {
+                ...user,
+                isOnline,
+                lastActive: lastSeen || user.lastActive,
+              }
+            : user,
+        ),
+      );
+    },
+    [],
+  );
 
   // Real-time status updates
   useUserStatus((data) => {
@@ -31,20 +70,15 @@ export default function AccessControlPage() {
   });
 
   React.useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
-
-  const filteredUsers = React.useMemo(
-    () => users.filter((u) => u.role !== "admin" && u.role !== "customer"),
-    [users]
-  );
+    fetchStaff();
+  }, [fetchStaff]);
 
   const selectedUsers = React.useMemo(
     () =>
       Object.keys(rowSelection)
-        .map((id) => filteredUsers.find((u) => u.id === id))
+        .map((id) => users.find((u) => u.id === id))
         .filter((user): user is TableUser => user !== undefined),
-    [rowSelection, filteredUsers]
+    [rowSelection, users],
   );
 
   const columns = getColumns({ onRefresh: refreshUsers });
@@ -55,7 +89,7 @@ export default function AccessControlPage() {
 
       <Tabs defaultValue="users">
         <TabsList>
-          <TabsTrigger value="users">Staff ({filteredUsers.length})</TabsTrigger>
+          <TabsTrigger value="users">Staff ({users.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-6">
@@ -69,7 +103,7 @@ export default function AccessControlPage() {
 
           <DataTable
             columns={columns}
-            data={filteredUsers}
+            data={users}
             rowSelection={rowSelection}
             onRowSelectionChange={setRowSelection}
             getRowId={(row) => row.id}

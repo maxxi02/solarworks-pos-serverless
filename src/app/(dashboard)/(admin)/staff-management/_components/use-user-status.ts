@@ -1,5 +1,5 @@
 // hooks/use-user-status.ts
-import { UserStatusUpdate, useSocket } from "@/hooks/useSocket";
+import { UserStatusUpdate, useSocket } from "@/provider/socket-provider";
 import { useEffect, useRef } from "react";
 
 export function useUserStatus(

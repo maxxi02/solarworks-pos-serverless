@@ -44,10 +44,15 @@ const STATUS_CONFIG: Record<
     dot: "bg-yellow-400 animate-pulse",
     badge: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
   },
+  paid: {
+    label: "Wait List (Paid)",
+    dot: "bg-blue-500",
+    badge: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+  },
   queueing: {
-    label: "Queueing",
-    dot: "bg-sky-500 animate-pulse",
-    badge: "bg-sky-500/10 text-sky-400 border border-sky-500/20",
+    label: "Wait List",
+    dot: "bg-amber-500",
+    badge: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
   },
   preparing: {
     label: "Preparing",
