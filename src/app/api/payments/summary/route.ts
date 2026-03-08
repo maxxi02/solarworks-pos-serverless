@@ -46,12 +46,6 @@ export async function GET(request: Request) {
       },
     };
 
-    // Log para debugging
-    const count = await collection.countDocuments({
-      createdAt: { $gte: startDate },
-    });
-    console.log(`Found ${count} payments in date range`);
-
     // RUN ALL QUERIES IN PARALLEL
     const [
       summaryResult,

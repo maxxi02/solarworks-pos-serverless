@@ -1,33 +1,39 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { ShoppingCart, Package, Clock, RefreshCw, Utensils } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  ShoppingCart,
+  Package,
+  Clock,
+  RefreshCw,
+  Utensils,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   fetchInventory,
   getLowStockAlerts,
-  getCriticalStockAlerts
-} from '@/lib/inventoryService';
-import { useInventorySocket } from '@/hooks/useInventorySocket';
-import { useSocket } from '@/provider/socket-provider';
-import { formatCurrency, formatDateTime } from '@/lib/format-utils';
-import { AICompanion } from '@/components/ai-companion';
+  getCriticalStockAlerts,
+} from "@/lib/inventoryService";
+import { useInventorySocket } from "@/hooks/useInventorySocket";
+import { useSocket } from "@/provider/socket-provider";
+import { formatCurrency, formatDateTime } from "@/lib/format-utils";
+import { AICompanion } from "@/components/ai-companion";
 
 // Modular Components
-import { StatCard } from '@/components/dashboard/StatCard';
-import { SalesTrendChart } from '@/components/dashboard/SalesTrendChart';
-import { PaymentMethodsChart } from '@/components/dashboard/PaymentMethodsChart';
-import { RecentReceipts } from '@/components/dashboard/RecentReceipts';
-import { InventoryAlerts } from '@/components/dashboard/InventoryAlerts';
-import { AttendanceApprovals } from '@/components/dashboard/AttendanceApprovals';
-import { OrderQueue } from '@/components/dashboard/OrderQueue';
-import { authClient } from '@/lib/auth-client';
+import { StatCard } from "@/components/dashboard/StatCard";
+import { SalesTrendChart } from "@/components/dashboard/SalesTrendChart";
+import { PaymentMethodsChart } from "@/components/dashboard/PaymentMethodsChart";
+import { RecentReceipts } from "@/components/dashboard/RecentReceipts";
+import { InventoryAlerts } from "@/components/dashboard/InventoryAlerts";
+import { AttendanceApprovals } from "@/components/dashboard/AttendanceApprovals";
+import { OrderQueue } from "@/components/dashboard/OrderQueue";
+import { authClient } from "@/lib/auth-client";
 
 // Types
-import type { LowStockAlert } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { LowStockAlert } from "@/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PaymentMethod {
   _id: string;
@@ -54,13 +60,18 @@ interface AttendanceRecord {
   status: string;
 }
 
-type PeriodFilter = 'day' | 'week' | 'month' | 'quarter' | 'year';
+type PeriodFilter = "day" | "week" | "month" | "quarter" | "year";
 
 export default function AdminDashboard() {
-  const [loading, setLoading] = useState(true);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [invLoading, setInvLoading] = useState(true);
+  const [receiptsLoading, setReceiptsLoading] = useState(true);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<PeriodFilter>('week');
+  const [period, setPeriod] = useState<PeriodFilter>("week");
 
   // Sales State
   const [sales, setSales] = useState({
@@ -68,7 +79,7 @@ export default function AdminDashboard() {
     yesterday: 0,
     transactions: 0,
     daily: [] as DailyData[],
-    methods: [] as PaymentMethod[]
+    methods: [] as PaymentMethod[],
   });
 
   // Inventory State
@@ -80,7 +91,7 @@ export default function AdminDashboard() {
     low: 0,
     warning: 0,
     value: 0,
-    needRestock: 0
+    needRestock: 0,
   });
 
   // Recent Receipts State
@@ -91,19 +102,18 @@ export default function AdminDashboard() {
 
   // Socket
   const {
-    onSalesUpdated, offSalesUpdated,
-    onNewCustomerOrder, offNewCustomerOrder,
-    onAttendanceApproved, offAttendanceApproved,
-    onAttendanceStatusChanged, offAttendanceStatusChanged
+    onSalesUpdated,
+    offSalesUpdated,
+    onNewCustomerOrder,
+    offNewCustomerOrder,
+    onAttendanceApproved,
+    offAttendanceApproved,
+    onAttendanceStatusChanged,
+    offAttendanceStatusChanged,
   } = useSocket();
 
-  useInventorySocket({
-    userId: 'admin',
-    userName: 'Admin',
-    onInventoryAdjusted: loadInventoryData,
-    onItemCreated: loadInventoryData,
-    onItemDeleted: loadInventoryData
-  });
+  // Dashboard uses the main SocketProvider connection for attendance/sales refreshes.
+  // We removed useInventorySocket(admin) to avoid duplicate/failing socket handshakes.
 
   // Real-time Listeners
   useEffect(() => {
@@ -128,22 +138,38 @@ export default function AdminDashboard() {
       offAttendanceApproved(refreshAttendance);
       offAttendanceStatusChanged(refreshAttendance);
     };
-  }, [onSalesUpdated, onNewCustomerOrder, onAttendanceApproved, onAttendanceStatusChanged]);
+  }, [
+    onSalesUpdated,
+    onNewCustomerOrder,
+    onAttendanceApproved,
+    onAttendanceStatusChanged,
+  ]);
 
   // Data Loading functions
   const { data: session } = authClient.useSession();
-  const isAdmin = session?.user?.role === 'admin';
+  const isAdmin = session?.user?.role === "admin";
   const userId = session?.user?.id;
 
   async function loadSalesData() {
+    setSalesLoading(true);
     try {
-      let periodParam = 'week';
+      let periodParam = "week";
       switch (period) {
-        case 'day': periodParam = 'today'; break;
-        case 'week': periodParam = 'week'; break;
-        case 'month': periodParam = 'month'; break;
-        case 'quarter': periodParam = 'quarter'; break;
-        case 'year': periodParam = 'year'; break;
+        case "day":
+          periodParam = "today";
+          break;
+        case "week":
+          periodParam = "week";
+          break;
+        case "month":
+          periodParam = "month";
+          break;
+        case "quarter":
+          periodParam = "quarter";
+          break;
+        case "year":
+          periodParam = "year";
+          break;
       }
 
       let url = `/api/payments/summary?period=${periodParam}`;
@@ -154,66 +180,75 @@ export default function AdminDashboard() {
       const res = await fetch(url);
       const d = await res.json();
       if (d.success && d.data) {
-        const yesterday = d.data.daily.length > 1 ? d.data.daily[d.data.daily.length - 2]?.revenue || 0 : 0;
+        const yesterday =
+          d.data.daily.length > 1
+            ? d.data.daily[d.data.daily.length - 2]?.revenue || 0
+            : 0;
         setSales({
           today: d.data.summary.totalRevenue,
           yesterday,
           transactions: d.data.summary.totalTransactions,
           daily: d.data.daily || [],
-          methods: d.data.paymentMethods || []
+          methods: d.data.paymentMethods || [],
         });
       }
     } catch (err) {
-      console.error('Sales error:', err);
+      console.error("Sales error:", err);
+    } finally {
+      setSalesLoading(false);
     }
   }
 
   async function loadInventoryData() {
-    if (!isAdmin) return; // Staff doesn't need full inventory stats
+    if (!isAdmin) {
+      setInvLoading(false);
+      return;
+    }
+    setInvLoading(true);
     try {
-      const data = await fetchInventory();
-      const low = await getLowStockAlerts();
-      const crit = await getCriticalStockAlerts();
+      // NEW: Efficient consolidated inventory summary API
+      const res = await fetch("/api/dashboard/inventory-summary");
+      const d = await res.json();
 
-      setLowStock(low);
-      setCriticalStock(crit);
-
-      const criticalCount = crit.length;
-      const lowCount = low.filter((a: LowStockAlert) => a.status === 'low').length;
-      const warningCount = low.filter((a: LowStockAlert) => a.status === 'warning').length;
-
-      setInvStats({
-        total: data.length,
-        critical: criticalCount,
-        low: lowCount,
-        warning: warningCount,
-        value: data.reduce((s, i) => s + (i.currentStock * (i.pricePerUnit || 0)), 0),
-        needRestock: data.filter((i: any) => i.currentStock <= (i.reorderPoint || 0)).length
-      });
+      if (d.success && d.data) {
+        setInvStats(d.data.stats);
+        setLowStock(
+          d.data.lowStock.filter((i: any) => i.status !== "critical"),
+        );
+        setCriticalStock(
+          d.data.lowStock.filter((i: any) => i.status === "critical"),
+        );
+      }
     } catch (err) {
-      console.error('Inventory error:', err);
+      console.error("Inventory error:", err);
+    } finally {
+      setInvLoading(false);
     }
   }
 
   // Attendance History for Staff
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
   async function loadAttendanceHistory() {
-    if (isAdmin) return;
+    if (isAdmin) {
+      setAttendanceLoading(false);
+      return;
+    }
+    setAttendanceLoading(true);
     try {
-      const res = await fetch('/api/attendance/history?limit=5');
+      const res = await fetch("/api/attendance/history?limit=5");
       const d = await res.json();
       if (d.success) setAttendanceHistory(d.history || []);
     } catch (err) {
-      console.error('Attendance history error:', err);
+      console.error("Attendance history error:", err);
+    } finally {
+      setAttendanceLoading(false);
     }
   }
 
   async function loadRecentReceipts() {
+    setReceiptsLoading(true);
     try {
-      let url = '/api/receipts?limit=5';
-      if (!isAdmin && userId) {
-        // Assume API supports filtering or we handle it in frontend if it's just 5 items
-      }
+      let url = "/api/receipts?limit=5";
       const res = await fetch(url);
       const d = await res.json();
       if (d.receipts) {
@@ -223,38 +258,39 @@ export default function AdminDashboard() {
         setRecentReceipts(receipts);
       }
     } catch (err) {
-      console.error('Receipts error:', err);
+      console.error("Receipts error:", err);
+    } finally {
+      setReceiptsLoading(false);
     }
   }
 
   async function loadPendingData() {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      setPendingLoading(false);
+      return;
+    }
+    setPendingLoading(true);
     try {
-      const res = await fetch('/api/attendance/admin/pending');
+      const res = await fetch("/api/attendance/admin/pending");
       const d = await res.json();
       if (d.success) setPending(d.records || []);
     } catch (err) {
-      console.error('Pending error:', err);
+      console.error("Pending error:", err);
+    } finally {
+      setPendingLoading(false);
     }
   }
 
   async function loadAllData() {
-    setLoading(true);
     setError(null);
-    try {
-      await Promise.all([
-        loadSalesData(),
-        loadInventoryData(),
-        loadRecentReceipts(),
-        loadPendingData(),
-        loadAttendanceHistory()
-      ]);
-    } catch (err) {
-      setError('Failed to load data');
-    } finally {
-      setLoading(false);
-      setLastUpdated(new Date());
-    }
+    // Fetch everything independently in parallel
+    // slowest section won't block the faster ones anymore
+    loadSalesData();
+    loadInventoryData();
+    loadRecentReceipts();
+    loadPendingData();
+    loadAttendanceHistory();
+    setLastUpdated(new Date());
   }
 
   useEffect(() => {
@@ -264,24 +300,37 @@ export default function AdminDashboard() {
   }, [period]);
 
   const calculateTrend = (curr: number, prev: number) => {
-    if (prev === 0) return { change: 'No data', trend: 'stable' as const };
+    if (prev === 0) return { change: "No data", trend: "stable" as const };
     const p = ((curr - prev) / prev) * 100;
     return {
-      change: `${p > 0 ? '+' : ''}${p.toFixed(1)}%`,
-      trend: p > 5 ? 'up' as const : p < -5 ? 'down' as const : 'stable' as const
+      change: `${p > 0 ? "+" : ""}${p.toFixed(1)}%`,
+      trend:
+        p > 5
+          ? ("up" as const)
+          : p < -5
+            ? ("down" as const)
+            : ("stable" as const),
     };
   };
 
   const periodLabels = {
-    day: 'Today',
-    week: 'This Week',
-    month: 'This Month',
-    quarter: 'This Quarter',
-    year: 'This Year'
+    day: "Today",
+    week: "This Week",
+    month: "This Month",
+    quarter: "This Quarter",
+    year: "This Year",
   };
 
-  const uniqueLowStockItems = [...lowStock, ...criticalStock].filter((item, index, self) =>
-    index === self.findIndex((t) => t.itemId === item.itemId)
+  const isRefreshing =
+    salesLoading ||
+    invLoading ||
+    receiptsLoading ||
+    pendingLoading ||
+    attendanceLoading;
+
+  const uniqueLowStockItems = [...lowStock, ...criticalStock].filter(
+    (item, index, self) =>
+      index === self.findIndex((t) => t.itemId === item.itemId),
   );
 
   return (
@@ -290,11 +339,22 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-primary">Dashboard Overview</h1>
-            <p className="text-muted-foreground italic">Last synced: {formatDateTime(lastUpdated.toISOString())}</p>
+            <h1 className="text-3xl font-bold tracking-tight text-primary">
+              Dashboard Overview
+            </h1>
+            <p className="text-muted-foreground italic">
+              Last synced: {formatDateTime(lastUpdated.toISOString())}
+            </p>
           </div>
-          <Button variant="default" onClick={loadAllData} disabled={loading} className="shadow-sm">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button
+            variant="default"
+            onClick={loadAllData}
+            disabled={isRefreshing}
+            className="shadow-sm"
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
             Refresh Data
           </Button>
         </div>
@@ -312,14 +372,14 @@ export default function AdminDashboard() {
             value={formatCurrency(sales.today)}
             {...calculateTrend(sales.today, sales.yesterday)}
             isCurrency
-            isLoading={loading}
+            isLoading={salesLoading}
           />
           <StatCard
             title={isAdmin ? "Transactions" : "Your Transactions"}
             value={sales.transactions.toString()}
             {...calculateTrend(sales.transactions, sales.transactions * 0.95)}
             icon={<ShoppingCart className="h-5 w-5 text-muted-foreground" />}
-            isLoading={loading}
+            isLoading={salesLoading}
           />
           {isAdmin ? (
             <>
@@ -327,17 +387,17 @@ export default function AdminDashboard() {
                 title="Active Low Stocks"
                 value={(invStats.critical + invStats.low).toString()}
                 change={`${invStats.critical} critical items`}
-                trend={invStats.critical > 0 ? 'attention' : 'stable'}
+                trend={invStats.critical > 0 ? "attention" : "stable"}
                 icon={<Package className="h-5 w-5 text-muted-foreground" />}
-                isLoading={loading}
+                isLoading={invLoading}
               />
               <StatCard
                 title="Staff Approvals"
                 value={pending.length.toString()}
                 change={`${pending.length} pending requests`}
-                trend={pending.length > 0 ? 'attention' : 'stable'}
+                trend={pending.length > 0 ? "attention" : "stable"}
                 icon={<Clock className="h-5 w-5 text-muted-foreground" />}
-                isLoading={loading}
+                isLoading={pendingLoading}
               />
             </>
           ) : (
@@ -348,15 +408,19 @@ export default function AdminDashboard() {
                 change="Incoming orders"
                 trend="stable"
                 icon={<Utensils className="h-5 w-5 text-muted-foreground" />}
-                isLoading={loading}
+                isLoading={false}
               />
               <StatCard
                 title="Your Attendance"
-                value={attendanceHistory[0]?.status || 'No record'}
-                change={attendanceHistory[0] ? `Last: ${formatDateTime(attendanceHistory[0].date)}` : 'Check history below'}
+                value={attendanceHistory[0]?.status || "No record"}
+                change={
+                  attendanceHistory[0]
+                    ? `Last: ${formatDateTime(attendanceHistory[0].date)}`
+                    : "Check history below"
+                }
                 trend="stable"
                 icon={<Clock className="h-5 w-5 text-muted-foreground" />}
-                isLoading={loading}
+                isLoading={attendanceLoading}
               />
             </>
           )}
@@ -369,7 +433,7 @@ export default function AdminDashboard() {
               data={sales.daily}
               period={period}
               onPeriodChange={setPeriod}
-              isLoading={loading}
+              isLoading={salesLoading}
             />
           </div>
           <div className="lg:col-span-1">
@@ -377,7 +441,7 @@ export default function AdminDashboard() {
               <PaymentMethodsChart
                 methods={sales.methods}
                 periodLabel={periodLabels[period]}
-                isLoading={loading}
+                isLoading={salesLoading}
               />
             ) : (
               <OrderQueue />
@@ -388,30 +452,55 @@ export default function AdminDashboard() {
         {/* Detail Sections */}
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="space-y-6">
-            <RecentReceipts receipts={recentReceipts} isLoading={loading} />
+            <RecentReceipts
+              receipts={recentReceipts}
+              isLoading={receiptsLoading}
+            />
           </div>
           <div className="space-y-6">
             {isAdmin ? (
               <>
-                <InventoryAlerts items={uniqueLowStockItems} isLoading={loading} />
-                <AttendanceApprovals pending={pending} isLoading={loading} />
+                <InventoryAlerts
+                  items={uniqueLowStockItems}
+                  isLoading={invLoading}
+                />
+                <AttendanceApprovals
+                  pending={pending}
+                  isLoading={pendingLoading}
+                />
               </>
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm font-medium">Your Recent Attendance</CardTitle>
+                  <CardTitle className="text-sm font-medium">
+                    Your Recent Attendance
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {attendanceHistory.map((rec) => (
-                      <div key={rec._id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                      <div
+                        key={rec._id}
+                        className="flex justify-between items-center border-b pb-2 last:border-0"
+                      >
                         <div className="text-sm">
-                          <p className="font-medium">{new Date(rec.date).toLocaleDateString()}</p>
+                          <p className="font-medium">
+                            {new Date(rec.date).toLocaleDateString()}
+                          </p>
                           <p className="text-xs text-muted-foreground">
-                            {rec.clockInTime} {rec.clockOutTime ? `- ${rec.clockOutTime}` : '(Active)'}
+                            {rec.clockInTime}{" "}
+                            {rec.clockOutTime
+                              ? `- ${rec.clockOutTime}`
+                              : "(Active)"}
                           </p>
                         </div>
-                        <Badge variant={rec.status === 'present' || rec.status === 'on-time' ? 'default' : 'secondary'}>
+                        <Badge
+                          variant={
+                            rec.status === "present" || rec.status === "on-time"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
                           {rec.status}
                         </Badge>
                       </div>

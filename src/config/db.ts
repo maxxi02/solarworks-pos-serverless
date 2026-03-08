@@ -47,7 +47,7 @@ export const MONGODB: Db = client.db();
  */
 export async function initIndexes() {
   const db = MONGODB;
-  
+
   const createIdx = async (col: string, spec: any, options?: any) => {
     try {
       await db.collection(col).createIndex(spec, options);
@@ -61,23 +61,33 @@ export async function initIndexes() {
 
   try {
     // Payments
-    await createIdx('payments', { createdAt: -1 });
-    await createIdx('payments', { status: 1 });
-    await createIdx('payments', { orderNumber: 1 });
-    await createIdx('payments', { timestamp: -1 });
-    
+    await createIdx("payments", { createdAt: -1 });
+    await createIdx("payments", { status: 1 });
+    await createIdx("payments", { orderNumber: 1 });
+    await createIdx("payments", { timestamp: -1 });
+
     // Inventory
-    await createIdx('inventory', { name: 1 });
-    await createIdx('inventory', { status: 1 });
-    await createIdx('inventory', { category: 1 });
-    
+    await createIdx("inventory", { name: 1 });
+    await createIdx("inventory", { status: 1 });
+    await createIdx("inventory", { category: 1 });
+
+    // Attendance
+    await createIdx("attendance", { userId: 1, date: -1 });
+    await createIdx("attendance", { status: 1 });
+    await createIdx("attendance", { clockInTime: -1 });
+
+    // Attendance Temp (Pending)
+    await createIdx("attendance_temp", { userId: 1, date: -1 });
+    await createIdx("attendance_temp", { status: 1 });
+    await createIdx("attendance_temp", { clockInTime: -1 });
+
     // Stock adjustments
-    await createIdx('stockAdjustments', { itemId: 1, createdAt: -1 });
-    await createIdx('stockAdjustments', { transactionId: 1 });
-    
-    console.log('✅ Database indexes checked/initialized');
+    await createIdx("stockAdjustments", { itemId: 1, createdAt: -1 });
+    await createIdx("stockAdjustments", { transactionId: 1 });
+
+    console.log("✅ Database indexes checked/initialized");
   } catch (error) {
-    console.warn('⚠️ Failed to initialize indexes:', error);
+    console.warn("⚠️ Failed to initialize indexes:", error);
   }
 }
 

@@ -3,7 +3,11 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
-import { AttendanceRecord, EnrichedAttendance, UserBasicInfo } from "@/types/attendance";
+import {
+  AttendanceRecord,
+  EnrichedAttendance,
+  UserBasicInfo,
+} from "@/types/attendance";
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,59 +31,65 @@ export async function GET(req: NextRequest) {
     const tempCollection =
       MONGODB.collection<AttendanceRecord>("attendance_temp");
 
-    const records = await tempCollection
-      .find({})
-      .sort({ clockInTime: -1 })
-      .toArray();
-
-    // ── Prepare user lookup ─────────────────────────────────────────────
-    const userIds = [...new Set(records.map((r) => String(r.userId)))].filter(
-      Boolean,
-    );
-
-    const userObjectIds = userIds
-      .map((id) => {
-        try {
-          return new ObjectId(id);
-        } catch {
-          console.warn(`Invalid userId in pending: ${id}`);
-          return null;
-        }
-      })
-      .filter((id): id is ObjectId => id !== null);
-
-    console.log("[pending] Looking up users for IDs:", userIds);
-
-    const usersCollection = MONGODB.collection("user");
-
-    const users = await usersCollection
-      .find({ _id: { $in: userObjectIds } })
-      .toArray();
-
-    console.log("[pending] Found users:", users.length);
-
-    const userMap = new Map<string, UserBasicInfo>(
-      users.map((user) => [
-        user._id.toString(),
+    // Use aggregation with $lookup for faster server-side join
+    const enrichedRecords = await tempCollection
+      .aggregate([
+        { $sort: { clockInTime: -1 } },
         {
-          id: user._id.toString(),
-          name: (user.name as string) || "Unnamed User",
-          email: (user.email as string) || "—",
-          role: (user.role as string) || "—",
-        } satisfies UserBasicInfo,
-      ]),
-    );
+          $lookup: {
+            from: "user",
+            let: { userIdStr: "$userId" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: ["$_id", { $toObjectId: "$$userIdStr" }],
+                  },
+                },
+              },
+              {
+                $project: {
+                  _id: 1,
+                  name: 1,
+                  email: 1,
+                  role: 1,
+                },
+              },
+            ],
+            as: "userInfo",
+          },
+        },
+        {
+          $addFields: {
+            user: { $arrayElemAt: ["$userInfo", 0] },
+          },
+        },
+        {
+          $project: {
+            userInfo: 0,
+          },
+        },
+      ])
+      .toArray();
 
-    const enrichedRecords: EnrichedAttendance[] = records.map((record) => ({
+    // Minor formatting to ensure IDs are strings for the frontend
+    const formattedRecords = enrichedRecords.map((record) => ({
       ...record,
       _id: String(record._id),
       userId: String(record.userId),
-      user: userMap.get(String(record.userId)),
+      user: record.user
+        ? {
+            id: String(record.user._id),
+            name: record.user.name || "Unnamed User",
+            email: record.user.email || "—",
+            role: record.user.role || "—",
+          }
+        : undefined,
     }));
 
     return NextResponse.json({
       success: true,
-      records: enrichedRecords,
+      records: formattedRecords,
     });
   } catch (error) {
     console.error("[pending] Error:", error);

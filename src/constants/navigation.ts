@@ -25,7 +25,6 @@ export const PATHS = {
     SALES: "/sales",
     SALES_ALL_TRANSACTIONS: "/sales/all-transactions",
     SALES_ANALYTICS: "/sales/sales-analytics",
-    SALES_REFUND_RETURN: "/sales/refund-and-return",
     SALES_REFUND_REPORTS: "/sales/refund-reports",
 
     INVENTORY_CATEGORIES: "/inventory/categories",
@@ -90,7 +89,6 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "All Transactions", url: PATHS.ADMIN.SALES_ALL_TRANSACTIONS },
       { title: "Sales Analytics", url: PATHS.ADMIN.SALES_ANALYTICS },
-      { title: "Refunds & Returns", url: PATHS.ADMIN.SALES_REFUND_RETURN },
       { title: "Refund Reports", url: PATHS.ADMIN.SALES_REFUND_REPORTS },
     ],
   },

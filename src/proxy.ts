@@ -73,7 +73,7 @@ export async function proxy(request: NextRequest) {
     const forbiddenForStaff = [
       "/sales/all-transactions",
       "/sales/sales-analytics",
-      "/sales/refund-and-return",
+      "/sales/refund-reports",
       "/inventory/addproduct",
       "/inventory/categories",
       "/inventory/stockalert",
