@@ -355,6 +355,7 @@ export function SocketProvider({
     socket.on("connect", () => {
       setIsConnected(true);
       socket.emit("user:online");
+      socket.emit("pos:join"); // Join cashiers room so companion printer status is received
       console.log("✅ Connected:", socket.id);
     });
 
