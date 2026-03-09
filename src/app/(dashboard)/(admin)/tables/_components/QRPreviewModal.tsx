@@ -97,15 +97,19 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
       return;
     }
 
+    let actualTarget = printTarget;
+
     const targetOnline =
-      printTarget === "receipt" ? companionStatus.usb : companionStatus.bt;
+      actualTarget === "receipt" ? companionStatus.usb : companionStatus.bt;
+    
     if (!targetOnline) {
-      const fallbackTarget = printTarget === "receipt" ? "kitchen" : "receipt";
+      const fallbackTarget = actualTarget === "receipt" ? "kitchen" : "receipt";
       const fallbackOnline =
         fallbackTarget === "receipt" ? companionStatus.usb : companionStatus.bt;
 
       if (fallbackOnline) {
         setPrintTarget(fallbackTarget);
+        actualTarget = fallbackTarget;
       } else {
         toast.error("Selected printer is offline", {
           description: "Check your printer connection in the companion app.",
@@ -130,7 +134,7 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
       if (result.success) {
         setHasPrinted(true);
         toast.success("QR Code printed!", {
-          description: `${label} sent to ${printTarget === "receipt" ? "receipt" : "kitchen"} printer.`,
+          description: `${label} sent to ${actualTarget === "receipt" ? "receipt" : "kitchen"} printer.`,
         });
       } else {
         toast.error("Print failed", {
@@ -142,7 +146,7 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
     socket.on("print:job:result", handleResult);
 
     // Emit the QR print job with target
-    socket.emit("print:qr", { url, label, jobId, target: printTarget });
+    socket.emit("print:qr", { url, label, jobId, target: actualTarget });
 
     // Timeout fallback
     setTimeout(() => {
