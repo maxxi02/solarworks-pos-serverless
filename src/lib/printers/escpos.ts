@@ -194,10 +194,12 @@ export function buildCustomerReceiptLines(
     bold: true,
     doubleHeight: true,
   });
-  if (data.businessAddress)
+  if (data.businessAddress) {
     lines.push({ type: "text", text: data.businessAddress, align: "center" });
-  if (data.businessPhone)
+  }
+  if (data.businessPhone) {
     lines.push({ type: "text", text: data.businessPhone, align: "center" });
+  }
   lines.push({ type: "divider", char: "=" });
 
   // Order info
@@ -226,10 +228,12 @@ export function buildCustomerReceiptLines(
     left: "Type:",
     right: data.orderType === "dine-in" ? "Dine In" : "Take Away",
   });
-  if (data.orderType === "dine-in" && data.tableNumber)
+  if (data.orderType === "dine-in" && data.tableNumber) {
     lines.push({ type: "two-col", left: "Table:", right: data.tableNumber });
-  if (data.orderNote)
+  }
+  if (data.orderNote) {
     lines.push({ type: "text", text: `Note: ${data.orderNote}` });
+  }
   lines.push({ type: "divider" });
 
   // Items header

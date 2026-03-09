@@ -199,7 +199,7 @@ export default function OrdersPage() {
   >([]);
   const [showInsufficientStockModal, setShowInsufficientStockModal] =
     useState(false);
-  const [isCheckingStock, setIsCheckingStock] = useState(false);
+
   const [isPrinting, setIsPrinting] = useState(false);
   const [isDraggingCategory, setIsDraggingCategory] = useState(false);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
@@ -223,7 +223,7 @@ export default function OrdersPage() {
   const productsContainerRef = useRef<HTMLDivElement>(null);
 
   // ——— Computed ———
-  const isDisabled = isProcessing || isCheckingStock || isPrinting;
+  const isDisabled = isProcessing || isPrinting || attendanceLoading;
 
   const canProcessPayment = useMemo(() => {
     if (!cart.length) return false;
@@ -655,7 +655,7 @@ export default function OrdersPage() {
       }
     }
 
-    setIsCheckingStock(true);
+
     try {
       const orderItems = cart.map((i) => ({
         productId: i._id,
@@ -792,8 +792,6 @@ export default function OrdersPage() {
         description: error instanceof Error ? error.message : "Unknown error",
       });
       playError();
-    } finally {
-      setIsCheckingStock(false);
     }
   };
 
@@ -1320,12 +1318,10 @@ export default function OrdersPage() {
                         size="lg"
                         variant={canProcessPayment ? "default" : "secondary"}
                       >
-                        {isProcessing || isCheckingStock ? (
+                        {isProcessing ? (
                           <>
-                            <RefreshCw className="w-5 h-5 mr-3 animate-spin" />
-                            {isCheckingStock
-                              ? "Checking Stock..."
-                              : "Processing..."}
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Processing...
                           </>
                         ) : isPrinting ? (
                           <>
@@ -1338,8 +1334,8 @@ export default function OrdersPage() {
                             {paymentMethod === "cash" && amountPaid >= total
                               ? `Pay & Change: ₱${(amountPaid - total).toFixed(2)}`
                               : paymentMethod === "split" &&
-                                  splitPayment.cash + splitPayment.gcash >=
-                                    total
+                                splitPayment.cash + splitPayment.gcash >=
+                                total
                                 ? "Pay (Split)"
                                 : `Pay ${formatCurrency(total)}`}
                           </>
