@@ -5,7 +5,7 @@ import {
   Search, Download, Printer, RefreshCw,
   CheckCircle2, XCircle, AlertCircle,
   DollarSign, Smartphone, Receipt, TrendingUp, FileText,
-  ArrowLeft, ArrowRight, X, CreditCard, ChevronUp, ChevronDown,
+  ArrowLeft, ArrowRight, X, CreditCard, ChevronUp, ChevronDown, QrCode,
 } from 'lucide-react'
 
 interface TransactionItem {
@@ -31,7 +31,7 @@ interface Transaction {
   status: 'completed' | 'cancelled' | 'refunded'
   cashier: string
   timestamp: string
-  orderType: 'dine-in' | 'takeaway'
+  orderType: 'dine-in' | 'takeaway' | 'qr'
   tableNumber?: string
   seniorPwdIds?: string[]
   createdAt: string
@@ -57,6 +57,7 @@ const History = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPayment, setFilterPayment] = useState<string>('all')
+  const [filterOrderType, setFilterOrderType] = useState<string>('all')
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('today')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
@@ -70,12 +71,13 @@ const History = () => {
   const [totalTransactions, setTotalTransactions] = useState(0)
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 50, pages: 1 })
   const [stats, setStats] = useState({
-    totalSales: 0, totalTransactions: 0, averageTransaction: 0,
+    totalSales: 0, totalTransactions: 0, qrSales: 0,
     cashSales: 0, gcashSales: 0, splitSales: 0,
   })
 
   useEffect(() => { fetchTransactions() }, [currentPage])
-  useEffect(() => { if (transactions.length > 0) calculateStats() }, [transactions])
+  // Recalculate stats whenever filters change
+  useEffect(() => { calculateStats() }, [transactions, filterStatus, filterPayment, filterOrderType, dateRange, searchTerm, customStartDate, customEndDate])
 
   const fetchTransactions = async () => {
     setLoading(true)
@@ -93,11 +95,28 @@ const History = () => {
   }
 
   const calculateStats = () => {
-    const completed = transactions.filter(t => t.status === 'completed')
+    // Filtered stats — match exactly what the table shows
+    const df = getDateFilter()
+    const base = transactions.filter(t => {
+      const matchesSearch = t.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) || t.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) || t.cashier?.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = filterStatus === 'all' || t.status === filterStatus
+      const matchesPayment = filterPayment === 'all' || t.paymentMethod === filterPayment
+      const matchesOrderType = filterOrderType === 'all' || t.orderType === filterOrderType
+      const d = new Date(t.timestamp || t.createdAt)
+      const matchesDate = !df?.start || !df?.end ? true : d >= new Date(df.start) && d <= new Date(df.end)
+      return matchesSearch && matchesStatus && matchesPayment && matchesOrderType && matchesDate
+    })
+    const completed = base.filter(t => t.status === 'completed')
     const totalSales = completed.reduce((s, t) => s + t.total, 0)
+
+    // Today's QR sales — always today, ignores other filters
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+    const qrSales = transactions
+      .filter(t => t.status === 'completed' && t.orderType === 'qr' && new Date(t.timestamp || t.createdAt) >= todayStart)
+      .reduce((s, t) => s + t.total, 0)
+
     setStats({
-      totalSales, totalTransactions: completed.length,
-      averageTransaction: completed.length ? totalSales / completed.length : 0,
+      totalSales, totalTransactions: completed.length, qrSales,
       cashSales: completed.filter(t => t.paymentMethod === 'cash').reduce((s, t) => s + t.total, 0),
       gcashSales: completed.filter(t => t.paymentMethod === 'gcash').reduce((s, t) => s + t.total, 0),
       splitSales: completed.filter(t => t.paymentMethod === 'split').reduce((s, t) => s + t.total, 0),
@@ -120,10 +139,11 @@ const History = () => {
     const matchesSearch = t.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) || t.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) || t.cashier?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === 'all' || t.status === filterStatus
     const matchesPayment = filterPayment === 'all' || t.paymentMethod === filterPayment
+    const matchesOrderType = filterOrderType === 'all' || t.orderType === filterOrderType
     const df = getDateFilter()
     const d = new Date(t.timestamp || t.createdAt)
     const matchesDate = !df?.start || !df?.end ? true : d >= new Date(df.start) && d <= new Date(df.end)
-    return matchesSearch && matchesStatus && matchesPayment && matchesDate
+    return matchesSearch && matchesStatus && matchesPayment && matchesOrderType && matchesDate
   })
 
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
@@ -157,48 +177,48 @@ const History = () => {
     const tempDiv = document.createElement('div')
     tempDiv.style.cssText = 'position:absolute;top:-9999px;left:-9999px;'
     tempDiv.innerHTML = `<div>
-      ${settings.showLogo && settings.logoPreview ? `<div class="text-center mb-1"><img src="${settings.logoPreview}" style="height:${settings.logoSize||'48px'};object-fit:contain;margin:0 auto;"/></div>` : ''}
-      ${settings.sections?.storeName?.header && !settings.sections?.storeName?.disabled ? `<div class="text-center font-bold mb-1">${settings.businessName||''}</div>` : ''}
+      ${settings.showLogo && settings.logoPreview ? `<div class="text-center mb-1"><img src="${settings.logoPreview}" style="height:${settings.logoSize || '48px'};object-fit:contain;margin:0 auto;"/></div>` : ''}
+      ${settings.sections?.storeName?.header && !settings.sections?.storeName?.disabled ? `<div class="text-center font-bold mb-1">${settings.businessName || ''}</div>` : ''}
       ${settings.sections?.locationAddress?.header && !settings.sections?.locationAddress?.disabled && settings.locationAddress ? `<div class="text-center mb-1">${settings.locationAddress}</div>` : ''}
       ${settings.sections?.phoneNumber?.header && !settings.sections?.phoneNumber?.disabled && settings.phoneNumber ? `<div class="text-center mb-1">${settings.phoneNumber}</div>` : ''}
       <div class="text-center mb-1">${dash}</div>
       <div class="mb-1">
         <div class="flex justify-between"><span>Order #:</span><span>${transaction.orderNumber}</span></div>
-        <div class="flex justify-between"><span>Date:</span><span>${formatDate(transaction.timestamp||transaction.createdAt)}</span></div>
+        <div class="flex justify-between"><span>Date:</span><span>${formatDate(transaction.timestamp || transaction.createdAt)}</span></div>
         <div class="flex justify-between"><span>Cashier:</span><span>${transaction.cashier}</span></div>
         <div class="flex justify-between"><span>Customer:</span><span>${transaction.customerName}</span></div>
-        <div class="flex justify-between"><span>Type:</span><span>${transaction.orderType?.toUpperCase()||'N/A'}</span></div>
+        <div class="flex justify-between"><span>Type:</span><span>${transaction.orderType?.toUpperCase() || 'N/A'}</span></div>
         ${transaction.tableNumber ? `<div class="flex justify-between"><span>Table:</span><span>${transaction.tableNumber}</span></div>` : ''}
         ${transaction.seniorPwdIds?.length ? `<div>Senior/PWD IDs: ${transaction.seniorPwdIds.join(', ')}</div>` : ''}
       </div>
       <div class="text-center mb-1">${dash}</div>
       <div class="mb-1">
         <div class="flex justify-between font-bold mb-1"><span>Item</span><span>Qty Amount</span></div>
-        ${transaction.items.map(item => { const dp = item.hasDiscount ? item.price*(1-DISCOUNT_RATE) : item.price; return `<div class="flex justify-between"><span>${item.name}</span><span>${item.quantity} ${fmt(dp*item.quantity)}</span></div>${item.hasDiscount?`<div style="font-size:.85em;padding-left:8px;">(20% Senior/PWD) -${fmt(item.price*item.quantity*DISCOUNT_RATE)}</div>`:''}` }).join('')}
+        ${transaction.items.map(item => { const dp = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price; return `<div class="flex justify-between"><span>${item.name}</span><span>${item.quantity} ${fmt(dp * item.quantity)}</span></div>${item.hasDiscount ? `<div style="font-size:.85em;padding-left:8px;">(20% Senior/PWD) -${fmt(item.price * item.quantity * DISCOUNT_RATE)}</div>` : ''}` }).join('')}
       </div>
       <div class="text-center mb-1">${dash}</div>
       <div class="mb-1">
         <div class="flex justify-between"><span>Subtotal:</span><span>${fmt(transaction.subtotal)}</span></div>
-        ${discountTotal>0?`<div class="flex justify-between"><span>Discount:</span><span>-${fmt(discountTotal)}</span></div>`:''}
+        ${discountTotal > 0 ? `<div class="flex justify-between"><span>Discount:</span><span>-${fmt(discountTotal)}</span></div>` : ''}
         <div class="flex justify-between font-bold"><span>TOTAL:</span><span>${fmt(transaction.total)}</span></div>
       </div>
       <div class="text-center mb-1">${dash}</div>
       <div class="mb-1">
         <div class="flex justify-between"><span>Payment:</span><span>${transaction.paymentMethod.toUpperCase()}</span></div>
-        ${transaction.paymentMethod==='cash'&&transaction.amountPaid?`<div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt(transaction.change||0)}</span></div>`:''}
-        ${transaction.paymentMethod==='split'&&transaction.splitPayment?`<div class="flex justify-between"><span>Cash:</span><span>${fmt(transaction.splitPayment.cash)}</span></div><div class="flex justify-between"><span>GCash:</span><span>${fmt(transaction.splitPayment.gcash)}</span></div>${(transaction.splitPayment.cash+transaction.splitPayment.gcash)>transaction.total?`<div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt((transaction.splitPayment.cash+transaction.splitPayment.gcash)-transaction.total)}</span></div>`:''}`:''}
+        ${transaction.paymentMethod === 'cash' && transaction.amountPaid ? `<div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt(transaction.change || 0)}</span></div>` : ''}
+        ${transaction.paymentMethod === 'split' && transaction.splitPayment ? `<div class="flex justify-between"><span>Cash:</span><span>${fmt(transaction.splitPayment.cash)}</span></div><div class="flex justify-between"><span>GCash:</span><span>${fmt(transaction.splitPayment.gcash)}</span></div>${(transaction.splitPayment.cash + transaction.splitPayment.gcash) > transaction.total ? `<div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt((transaction.splitPayment.cash + transaction.splitPayment.gcash) - transaction.total)}</span></div>` : ''}` : ''}
       </div>
-      ${settings.showTaxPIN&&settings.taxPin?`<div class="text-center" style="font-size:.8em;">Tax PIN: ${settings.taxPin}</div>`:''}
-      ${settings.sections?.message?.footer&&!settings.sections?.message?.disabled&&settings.receiptMessage?`<div class="text-center" style="font-size:.8em;">${settings.receiptMessage}</div>`:''}
+      ${settings.showTaxPIN && settings.taxPin ? `<div class="text-center" style="font-size:.8em;">Tax PIN: ${settings.taxPin}</div>` : ''}
+      ${settings.sections?.message?.footer && !settings.sections?.message?.disabled && settings.receiptMessage ? `<div class="text-center" style="font-size:.8em;">${settings.receiptMessage}</div>` : ''}
       <div class="text-center" style="font-size:.8em;margin-top:2px;">** REPRINT **</div>
     </div>`
     document.body.appendChild(tempDiv)
     const iframe = document.createElement('iframe')
-    Object.assign(iframe.style, { position:'absolute', width:'0', height:'0', border:'none', opacity:'0' })
+    Object.assign(iframe.style, { position: 'absolute', width: '0', height: '0', border: 'none', opacity: '0' })
     document.body.appendChild(iframe)
     const doc = iframe.contentWindow?.document
     if (doc) {
-      doc.write(`<!DOCTYPE html><html><head><title>Receipt</title><meta charset="utf-8"><style>@page{size:${is58mm?'58mm':'80mm'} auto;margin:0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:${is58mm?'14px':'16px'};font-weight:bold;width:${is58mm?'58mm':'80mm'};max-width:${is58mm?'58mm':'80mm'};margin:0 auto;padding:2mm;line-height:1.5}.text-center{text-align:center}.flex{display:flex}.justify-between{justify-content:space-between}.font-bold{font-weight:900}.mb-1{margin-bottom:4px}</style></head><body>${tempDiv.innerHTML}</body></html>`)
+      doc.write(`<!DOCTYPE html><html><head><title>Receipt</title><meta charset="utf-8"><style>@page{size:${is58mm ? '58mm' : '80mm'} auto;margin:0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:${is58mm ? '14px' : '16px'};font-weight:bold;width:${is58mm ? '58mm' : '80mm'};max-width:${is58mm ? '58mm' : '80mm'};margin:0 auto;padding:2mm;line-height:1.5}.text-center{text-align:center}.flex{display:flex}.justify-between{justify-content:space-between}.font-bold{font-weight:900}.mb-1{margin-bottom:4px}</style></head><body>${tempDiv.innerHTML}</body></html>`)
       doc.close()
       iframe.onload = () => setTimeout(() => { iframe.contentWindow?.print(); setTimeout(() => { document.body.removeChild(iframe); document.body.removeChild(tempDiv); setIsPrinting(false) }, 500) }, 200)
     } else { document.body.removeChild(tempDiv); setIsPrinting(false) }
@@ -207,10 +227,10 @@ const History = () => {
   const handleExport = () => {
     if (!sortedTransactions.length) return
     const data = sortedTransactions.map(t => ({
-      'Order #': t.orderNumber, 'Date': formatDate(t.timestamp||t.createdAt), 'Customer': t.customerName,
-      'Items': t.items.length, 'Subtotal': t.subtotal, 'Discount': t.discountTotal??t.discount??0, 'Total': t.total,
-      'Amount Paid': t.paymentMethod==='cash'?(t.amountPaid??t.total):t.paymentMethod==='split'&&t.splitPayment?t.splitPayment.cash+t.splitPayment.gcash:t.total,
-      'Change': t.paymentMethod==='cash'?(t.change??0):t.paymentMethod==='split'&&t.splitPayment?Math.max(0,(t.splitPayment.cash+t.splitPayment.gcash)-t.total):0,
+      'Order #': t.orderNumber, 'Date': formatDate(t.timestamp || t.createdAt), 'Customer': t.customerName,
+      'Items': t.items.length, 'Subtotal': t.subtotal, 'Discount': t.discountTotal ?? t.discount ?? 0, 'Total': t.total,
+      'Amount Paid': t.paymentMethod === 'cash' ? (t.amountPaid ?? t.total) : t.paymentMethod === 'split' && t.splitPayment ? t.splitPayment.cash + t.splitPayment.gcash : t.total,
+      'Change': t.paymentMethod === 'cash' ? (t.change ?? 0) : t.paymentMethod === 'split' && t.splitPayment ? Math.max(0, (t.splitPayment.cash + t.splitPayment.gcash) - t.total) : 0,
       'Payment': t.paymentMethod, 'Status': t.status, 'Cashier': t.cashier,
     }))
     const csv = [Object.keys(data[0]).join(','), ...data.map(r => Object.values(r).join(','))].join('\n')
@@ -252,11 +272,29 @@ const History = () => {
     )
   }
 
+  const getOrderTypeBadge = (type: string) => {
+    if (type === 'qr') return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-500 border border-violet-500/20">
+        QR
+      </span>
+    )
+    if (type === 'dine-in') return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20">
+        Dine-in
+      </span>
+    )
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border">
+        Takeaway
+      </span>
+    )
+  }
+
   if (loading && transactions.length === 0) return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto p-6 md:p-8 animate-pulse space-y-6">
         <div className="h-8 w-56 bg-muted rounded" />
-        <div className="grid grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded-lg" />)}</div>
+        <div className="grid grid-cols-4 gap-4">{[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-muted rounded-lg" />)}</div>
         <div className="h-96 bg-muted rounded-lg" />
       </div>
     </div>
@@ -292,9 +330,9 @@ const History = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-xl overflow-hidden mb-8 border border-border bg-border">
           {[
             { label: 'Total Sales', value: fmt(stats.totalSales), sub: `${stats.totalTransactions} transactions`, icon: TrendingUp },
-            { label: 'Cash', value: fmt(stats.cashSales), sub: `${((stats.cashSales/stats.totalSales)*100||0).toFixed(1)}% of total`, icon: DollarSign },
-            { label: 'GCash', value: fmt(stats.gcashSales), sub: `${((stats.gcashSales/stats.totalSales)*100||0).toFixed(1)}% of total`, icon: Smartphone },
-            { label: 'Avg. Transaction', value: fmt(stats.averageTransaction), sub: 'Per order', icon: Receipt },
+            { label: 'Cash', value: fmt(stats.cashSales), sub: `${((stats.cashSales / stats.totalSales) * 100 || 0).toFixed(1)}% of total`, icon: DollarSign },
+            { label: 'GCash', value: fmt(stats.gcashSales), sub: `${((stats.gcashSales / stats.totalSales) * 100 || 0).toFixed(1)}% of total`, icon: Smartphone },
+            { label: "Today's QR Sales", value: fmt(stats.qrSales), sub: 'QR orders today', icon: QrCode },
           ].map(({ label, value, sub, icon: Icon }) => (
             <div key={label} className="bg-card p-5">
               <div className="flex items-center justify-between mb-3">
@@ -323,9 +361,10 @@ const History = () => {
             </div>
 
             {[
-              { val: filterStatus, set: setFilterStatus, opts: [['all','All Status'],['completed','Completed'],['cancelled','Cancelled'],['refunded','Refunded']] },
-              { val: filterPayment, set: setFilterPayment, opts: [['all','All Payments'],['cash','Cash'],['gcash','GCash'],['split','Split']] },
-              { val: dateRange, set: (v: any) => setDateRange(v), opts: [['today','Today'],['week','Last 7 Days'],['month','Last 30 Days'],['custom','Custom Range'],['all','All Time']] },
+              { val: filterStatus, set: setFilterStatus, opts: [['all', 'All Status'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['refunded', 'Refunded']] },
+              { val: filterPayment, set: setFilterPayment, opts: [['all', 'All Payments'], ['cash', 'Cash'], ['gcash', 'GCash'], ['split', 'Split']] },
+              { val: filterOrderType, set: setFilterOrderType, opts: [['all', 'All Order Types'], ['dine-in', 'Dine-in'], ['takeaway', 'Takeaway'], ['qr', 'QR Orders']] },
+              { val: dateRange, set: (v: any) => setDateRange(v), opts: [['today', 'Today'], ['week', 'Last 7 Days'], ['month', 'Last 30 Days'], ['custom', 'Custom Range'], ['all', 'All Time']] },
             ].map((s, i) => (
               <select key={i} value={s.val} onChange={e => s.set(e.target.value)}
                 className="px-3 py-2.5 rounded-lg text-sm bg-background border border-input text-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors">
@@ -373,12 +412,15 @@ const History = () => {
                 {currentItems.map(t => (
                   <tr key={t._id}
                     onClick={() => { setSelectedTransaction(t); setShowDetailsModal(true) }}
-                    className="cursor-pointer bg-background hover:bg-muted/40 transition-colors">
+                    className={`cursor-pointer bg-background hover:bg-muted/40 transition-colors ${t.orderType === 'qr' ? 'border-l-2 border-l-violet-500' : ''}`}>
                     <td className="px-4 py-3.5">
-                      <span className="text-sm font-mono font-semibold text-foreground">{t.orderNumber}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono font-semibold text-foreground">{t.orderNumber}</span>
+                        {t.orderType === 'qr' && getOrderTypeBadge('qr')}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="text-sm text-muted-foreground">{formatDate(t.timestamp||t.createdAt)}</span>
+                      <span className="text-sm text-muted-foreground">{formatDate(t.timestamp || t.createdAt)}</span>
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="text-sm font-medium text-foreground">{t.customerName}</span>
@@ -445,7 +487,7 @@ const History = () => {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Receipt</p>
                     <h2 className="text-xl font-bold tracking-tight font-mono">{selectedTransaction.orderNumber}</h2>
-                    <p className="text-sm text-muted-foreground mt-1">{formatDate(selectedTransaction.timestamp||selectedTransaction.createdAt)}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{formatDate(selectedTransaction.timestamp || selectedTransaction.createdAt)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     {getStatusBadge(selectedTransaction.status)}
@@ -513,14 +555,14 @@ const History = () => {
                   <div className="space-y-2">
                     {selectedTransaction.paymentMethod === 'cash' && selectedTransaction.amountPaid && <>
                       <div className="flex justify-between text-sm text-muted-foreground"><span>Received</span><span>{fmt(selectedTransaction.amountPaid)}</span></div>
-                      <div className="flex justify-between text-sm font-semibold text-foreground"><span>Change</span><span>{fmt(selectedTransaction.change||0)}</span></div>
+                      <div className="flex justify-between text-sm font-semibold text-foreground"><span>Change</span><span>{fmt(selectedTransaction.change || 0)}</span></div>
                     </>}
                     {selectedTransaction.paymentMethod === 'split' && selectedTransaction.splitPayment && <>
                       <div className="flex justify-between text-sm text-muted-foreground"><span>Cash</span><span>{fmt(selectedTransaction.splitPayment.cash)}</span></div>
                       <div className="flex justify-between text-sm text-muted-foreground"><span>GCash</span><span>{fmt(selectedTransaction.splitPayment.gcash)}</span></div>
-                      <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold text-foreground"><span>Total Paid</span><span>{fmt(selectedTransaction.splitPayment.cash+selectedTransaction.splitPayment.gcash)}</span></div>
-                      {(selectedTransaction.splitPayment.cash+selectedTransaction.splitPayment.gcash) > selectedTransaction.total && (
-                        <div className="flex justify-between text-sm font-semibold text-foreground"><span>Change</span><span>{fmt((selectedTransaction.splitPayment.cash+selectedTransaction.splitPayment.gcash)-selectedTransaction.total)}</span></div>
+                      <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold text-foreground"><span>Total Paid</span><span>{fmt(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash)}</span></div>
+                      {(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash) > selectedTransaction.total && (
+                        <div className="flex justify-between text-sm font-semibold text-foreground"><span>Change</span><span>{fmt((selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash) - selectedTransaction.total)}</span></div>
                       )}
                     </>}
                     {selectedTransaction.paymentMethod === 'gcash' && (

@@ -5,7 +5,7 @@ import {
   Clock, Search, Printer, RefreshCw, ArrowUpDown,
   CheckCircle2, XCircle, AlertCircle, DollarSign, Smartphone, Receipt,
   TrendingUp, FileText, ArrowLeft, ArrowRight, X, CreditCard, WifiOff,
-  Ban,
+  Ban, QrCode,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -42,52 +42,52 @@ const DISCOUNT_RATE = 0.2
 const History = () => {
   const { settings } = useReceiptSettings()
 
-  const [transactions, setTransactions]   = useState<Transaction[]>([])
-  const [loading, setLoading]             = useState(true)
-  const [error, setError]                 = useState<string | null>(null)
-  const [searchTerm, setSearchTerm]       = useState('')
-  const [filterStatus, setFilterStatus]   = useState<string>('all')
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPayment, setFilterPayment] = useState<string>('all')
-  const [dateRange, setDateRange]         = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('today')
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('today')
   const [customStartDate, setCustomStartDate] = useState('')
-  const [customEndDate, setCustomEndDate]     = useState('')
-  const [sortBy, setSortBy]               = useState<'date' | 'amount' | 'name'>('date')
-  const [sortOrder, setSortOrder]         = useState<'asc' | 'desc'>('desc')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'name'>('date')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
-  const [showDetailsModal, setShowDetailsModal]       = useState(false)
-  const [isPrinting, setIsPrinting]       = useState(false)
-  const [isRefunding, setIsRefunding]     = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [isRefunding, setIsRefunding] = useState(false)
   const [showRefundConfirm, setShowRefundConfirm] = useState(false)
-  const [refundReason, setRefundReason]       = useState('')
-  const [adminPin, setAdminPin]           = useState('')
-  const [currentPage, setCurrentPage]     = useState(1)
-  const [itemsPerPage]                    = useState(10)
-  const [totalCount, setTotalCount]       = useState(0)
+  const [refundReason, setRefundReason] = useState('')
+  const [adminPin, setAdminPin] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
   const [todayStats, setTodayStats] = useState({
     totalSales: 0, totalTransactions: 0, averageTransaction: 0,
-    cashSales: 0, gcashSales: 0, splitSales: 0,
+    cashSales: 0, gcashSales: 0, splitSales: 0, qrSales: 0,
   })
 
   // ── Build query params ────────────────────────────────────────────────────
   const buildQueryParams = useCallback(() => {
     const params = new URLSearchParams()
 
-    if (filterStatus !== 'all')  params.set('status', filterStatus)
+    if (filterStatus !== 'all') params.set('status', filterStatus)
     if (filterPayment !== 'all') params.set('paymentMethod', filterPayment)
-    if (searchTerm.trim())       params.set('search', searchTerm.trim())
+    if (searchTerm.trim()) params.set('search', searchTerm.trim())
 
-    const now   = new Date()
+    const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
     if (dateRange === 'today') {
       params.set('startDate', today.toISOString())
-      params.set('endDate',   now.toISOString())
+      params.set('endDate', now.toISOString())
     } else if (dateRange === 'week') {
-      params.set('startDate', new Date(today.getTime() - 7  * 86400000).toISOString())
-      params.set('endDate',   now.toISOString())
+      params.set('startDate', new Date(today.getTime() - 7 * 86400000).toISOString())
+      params.set('endDate', now.toISOString())
     } else if (dateRange === 'month') {
       params.set('startDate', new Date(today.getTime() - 30 * 86400000).toISOString())
-      params.set('endDate',   now.toISOString())
+      params.set('endDate', now.toISOString())
     } else if (dateRange === 'custom') {
       if (customStartDate) params.set('startDate', new Date(customStartDate).toISOString())
       if (customEndDate) {
@@ -98,10 +98,10 @@ const History = () => {
     }
     // 'all' → no date params
 
-    params.set('sortBy',    sortBy)
+    params.set('sortBy', sortBy)
     params.set('sortOrder', sortOrder)
-    params.set('page',      String(currentPage))
-    params.set('limit',     String(itemsPerPage))
+    params.set('page', String(currentPage))
+    params.set('limit', String(itemsPerPage))
 
     return params
   }, [filterStatus, filterPayment, searchTerm, dateRange, customStartDate, customEndDate, sortBy, sortOrder, currentPage, itemsPerPage])
@@ -109,18 +109,23 @@ const History = () => {
   // ── Fetch TODAY stats (always fixed, independent of filters) ─────────────
   const fetchTodayStats = useCallback(async () => {
     try {
-      const now   = new Date()
+      const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const params = new URLSearchParams({
         startDate: today.toISOString(),
-        endDate:   now.toISOString(),
-        limit:     '1000',
-        page:      '1',
+        endDate: now.toISOString(),
+        limit: '1000',
+        page: '1',
       })
-      const res  = await fetch(`/api/payments?${params.toString()}`)
+      const res = await fetch(`/api/payments?${params.toString()}`)
       const json = await res.json()
       if (json.success && json.data?.stats) {
-        setTodayStats(json.data.stats)
+        // Calculate QR sales from today's payments
+        const payments = json.data.payments ?? []
+        const qrSales = payments
+          .filter((p: any) => p.status === 'completed' && p.orderType === 'qr')
+          .reduce((s: number, p: any) => s + (p.total || 0), 0)
+        setTodayStats({ ...json.data.stats, qrSales })
       }
     } catch (e) {
       console.error('Failed to fetch today stats:', e)
@@ -132,9 +137,9 @@ const History = () => {
     setLoading(true)
     setError(null)
     try {
-      const params   = buildQueryParams()
+      const params = buildQueryParams()
       const response = await fetch(`/api/payments?${params.toString()}`)
-      const json     = await response.json()
+      const json = await response.json()
 
       if (!response.ok || !json.success) {
         throw new Error(json.error || `Server error: ${response.status}`)
@@ -146,7 +151,7 @@ const History = () => {
       // Normalise: map _id → id and parse timestamp strings
       const normalised: Transaction[] = (payments ?? []).map((t: any) => ({
         ...t,
-        id:        t._id?.toString() ?? t.id,
+        id: t._id?.toString() ?? t.id,
         timestamp: new Date(t.timestamp ?? t.createdAt),
       }))
 
@@ -173,12 +178,12 @@ const History = () => {
     [filterStatus, filterPayment, searchTerm, dateRange, customStartDate, customEndDate, sortBy, sortOrder])
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const totalPages       = Math.ceil(totalCount / itemsPerPage)
+  const totalPages = Math.ceil(totalCount / itemsPerPage)
   const indexOfFirstItem = (currentPage - 1) * itemsPerPage + 1
-  const indexOfLastItem  = Math.min(currentPage * itemsPerPage, totalCount)
+  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalCount)
 
-  const fmt         = (n: number) => `₱${n.toFixed(2)}`
-  const formatDate  = (d: Date) =>
+  const fmt = (n: number) => `₱${n.toFixed(2)}`
+  const formatDate = (d: Date) =>
     new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d)
   const formatShort = (d: Date) =>
     new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
@@ -188,18 +193,18 @@ const History = () => {
     if (!settings) return
     setIsPrinting(true)
 
-    const is58mm       = settings.receiptWidth === '58mm'
-    const dash         = '-'.repeat(is58mm ? 24 : 32)
+    const is58mm = settings.receiptWidth === '58mm'
+    const dash = '-'.repeat(is58mm ? 24 : 32)
     const discountTotal = transaction.discountTotal ?? transaction.discount ?? 0
 
     const tempDiv = document.createElement('div')
     tempDiv.style.cssText = 'position:absolute;top:-9999px;left:-9999px;'
     tempDiv.innerHTML = `
       <div>
-        ${settings.showLogo && settings.logoPreview ? `<div class="text-center mb-1"><img src="${settings.logoPreview}" style="height:${settings.logoSize||'48px'};object-fit:contain;margin:0 auto;" /></div>` : ''}
-        ${settings.sections?.storeName?.header    && !settings.sections?.storeName?.disabled    && settings.businessName    ? `<div class="text-center font-bold mb-1">${settings.businessName}</div>` : ''}
+        ${settings.showLogo && settings.logoPreview ? `<div class="text-center mb-1"><img src="${settings.logoPreview}" style="height:${settings.logoSize || '48px'};object-fit:contain;margin:0 auto;" /></div>` : ''}
+        ${settings.sections?.storeName?.header && !settings.sections?.storeName?.disabled && settings.businessName ? `<div class="text-center font-bold mb-1">${settings.businessName}</div>` : ''}
         ${settings.sections?.locationAddress?.header && !settings.sections?.locationAddress?.disabled && settings.locationAddress ? `<div class="text-center mb-1">${settings.locationAddress}</div>` : ''}
-        ${settings.sections?.phoneNumber?.header  && !settings.sections?.phoneNumber?.disabled  && settings.phoneNumber    ? `<div class="text-center mb-1">${settings.phoneNumber}</div>` : ''}
+        ${settings.sections?.phoneNumber?.header && !settings.sections?.phoneNumber?.disabled && settings.phoneNumber ? `<div class="text-center mb-1">${settings.phoneNumber}</div>` : ''}
         <div class="text-center mb-1">${dash}</div>
         <div class="mb-1">
           <div class="flex justify-between"><span>Order #:</span><span>${transaction.orderNumber}</span></div>
@@ -214,11 +219,11 @@ const History = () => {
         <div class="mb-1">
           <div class="flex justify-between font-bold mb-1"><span>Item</span><span>Qty Amount</span></div>
           ${transaction.items.map(item => {
-            const dp = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price
-            return `
+      const dp = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price
+      return `
               <div class="flex justify-between"><span>${item.name}</span><span>${item.quantity} ${fmt(dp * item.quantity)}</span></div>
               ${item.hasDiscount ? `<div class="flex justify-between" style="font-size:0.85em;padding-left:8px;"><span>(20% Senior/PWD)</span><span>-${fmt(item.price * item.quantity * DISCOUNT_RATE)}</span></div>` : ''}`
-          }).join('')}
+    }).join('')}
         </div>
         <div class="text-center mb-1">${dash}</div>
         <div class="mb-1">
@@ -240,8 +245,8 @@ const History = () => {
             <div style="border-top:1px dashed currentColor;margin:2px 0;opacity:0.3;"></div>
             <div class="text-right font-bold">${fmt(transaction.splitPayment.cash + transaction.splitPayment.gcash)}</div>
             ${(transaction.splitPayment.cash + transaction.splitPayment.gcash) > transaction.total
-              ? `<div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt((transaction.splitPayment.cash + transaction.splitPayment.gcash) - transaction.total)}</span></div>`
-              : ''}` : ''}
+          ? `<div class="flex justify-between font-bold"><span>CHANGE:</span><span>${fmt((transaction.splitPayment.cash + transaction.splitPayment.gcash) - transaction.total)}</span></div>`
+          : ''}` : ''}
           ${transaction.paymentMethod === 'gcash' ? `<div class="flex justify-between"><span>GCash Received:</span><span>${fmt(transaction.total)}</span></div>` : ''}
         </div>
         ${settings.sections?.barcode?.header && !settings.sections?.barcode?.disabled ? `<div class="text-center" style="font-size:0.8em;">[BARCODE: ${transaction.orderNumber}]</div>` : ''}
@@ -310,7 +315,7 @@ const History = () => {
   }
 
   const getPaymentIcon = (method: string) => {
-    if (method === 'cash')  return <DollarSign className="w-4 h-4" />
+    if (method === 'cash') return <DollarSign className="w-4 h-4" />
     if (method === 'gcash') return <Smartphone className="w-4 h-4" />
     return <CreditCard className="w-4 h-4" />
   }
@@ -322,7 +327,7 @@ const History = () => {
         <div className="animate-pulse space-y-6">
           <div className="h-8 w-64 bg-muted rounded" />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded" />)}
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-muted rounded" />)}
           </div>
           <div className="h-96 bg-muted rounded" />
         </div>
@@ -397,11 +402,11 @@ const History = () => {
           </div>
           <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Today's Avg. Transaction</span>
-              <Receipt className="w-4 h-4 text-purple-500" />
+              <span className="text-sm text-muted-foreground">Today's QR Sales</span>
+              <QrCode className="w-4 h-4 text-violet-500" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{fmt(todayStats.averageTransaction)}</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Per transaction</p>
+            <p className="text-2xl font-bold text-foreground">{fmt(todayStats.qrSales)}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">QR orders today</p>
           </div>
         </div>
 
@@ -471,7 +476,7 @@ const History = () => {
             <table className="w-full">
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
-                  {['Order #','Date & Time','Customer','Items','Total','Amount Paid','Change','Payment','Status','Cashier'].map(h => (
+                  {['Order #', 'Date & Time', 'Customer', 'Items', 'Total', 'Amount Paid', 'Change', 'Payment', 'Status', 'Cashier'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -483,7 +488,7 @@ const History = () => {
                     amountPaid = t.amountPaid; change = t.change || 0
                   } else if (t.paymentMethod === 'split' && t.splitPayment) {
                     amountPaid = t.splitPayment.cash + t.splitPayment.gcash
-                    change     = Math.max(0, amountPaid - t.total)
+                    change = Math.max(0, amountPaid - t.total)
                   }
                   return (
                     <tr
@@ -675,18 +680,18 @@ const History = () => {
                   </div>
                 </div>
 
-                  <div className="flex gap-3">
-                    {/* Refund button — only for completed transactions */}
-                    {selectedTransaction.status === 'completed' && (
-                      <button
-                        onClick={() => { setShowRefundConfirm(true); setRefundReason('') }}
-                        disabled={isRefunding}
-                        className="px-4 py-3 border-2 border-orange-400 text-orange-600 dark:text-orange-400 rounded-xl text-base font-semibold hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2 disabled:opacity-50 transition-colors"
-                      >
-                        <AlertCircle className="w-5 h-5" />
-                        Refund
-                      </button>
-                    )}
+                <div className="flex gap-3">
+                  {/* Refund button — only for completed transactions */}
+                  {selectedTransaction.status === 'completed' && (
+                    <button
+                      onClick={() => { setShowRefundConfirm(true); setRefundReason('') }}
+                      disabled={isRefunding}
+                      className="px-4 py-3 border-2 border-orange-400 text-orange-600 dark:text-orange-400 rounded-xl text-base font-semibold hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2 disabled:opacity-50 transition-colors"
+                    >
+                      <AlertCircle className="w-5 h-5" />
+                      Refund
+                    </button>
+                  )}
                   <button
                     onClick={() => handlePrint(selectedTransaction)}
                     disabled={isPrinting}
@@ -743,9 +748,8 @@ const History = () => {
                     {[0, 1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className={`w-full h-12 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all ${
-                          adminPin[i] ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/20"
-                        }`}
+                        className={`w-full h-12 rounded-lg border-2 flex items-center justify-center text-xl font-bold transition-all ${adminPin[i] ? "border-primary bg-primary/5 text-primary" : "border-muted bg-muted/20"
+                          }`}
                       >
                         {adminPin[i] ? "•" : ""}
                       </div>
