@@ -1,15 +1,12 @@
 // app/api/attendance/admin/staff-list/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { getFastSession } from "@/lib/fast-session";
 import { MONGODB } from "@/config/db";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
+    const session = await getFastSession();
 
     if (!session?.user) {
       return NextResponse.json(

@@ -44,6 +44,11 @@ interface AttendanceDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Module-level cache so re-opening the dialog doesn't re-fetch if data is fresh
+let staffCache: StaffMember[] = [];
+let staffCacheTime = 0;
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
 export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) {
   const [staffList, setStaffList] = React.useState<StaffMember[]>([]);
   const [selectedStaff, setSelectedStaff] = React.useState<StaffMember | null>(null);
@@ -68,12 +73,29 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
     }
   }, [open]);
 
-  const fetchStaff = async () => {
-    setIsFetchingStaff(true);
+  const fetchStaff = async (force = false) => {
+    const now = Date.now();
+    const isFresh = staffCache.length > 0 && now - staffCacheTime < CACHE_TTL_MS;
+
+    if (isFresh && !force) {
+      // Serve from cache instantly — no loading state
+      setStaffList(staffCache);
+      return;
+    }
+
+    // If we have stale data, show it immediately while refetching silently
+    if (staffCache.length > 0) {
+      setStaffList(staffCache);
+    } else {
+      setIsFetchingStaff(true);
+    }
+
     try {
       const res = await fetch("/api/attendance/staff-list");
       const data = await res.json();
       if (data.success) {
+        staffCache = data.staff;
+        staffCacheTime = Date.now();
         setStaffList(data.staff);
       }
     } catch {
@@ -122,6 +144,8 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
 
       if (data.success) {
         toast.success(data.message);
+        // Invalidate cache so next dialog open shows updated status
+        staffCacheTime = 0;
         onOpenChange(false);
       } else {
         toast.error(data.message || "Something went wrong");

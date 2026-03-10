@@ -1,0 +1,35 @@
+
+[2026-03-09T23:58:53.749Z] Attempting getFastSession. Token: undefined... - NO TOKEN
+
+[2026-03-09T23:58:53.753Z] Attempting getFastSession. Token: undefined... - NO TOKEN
+
+[2026-03-09T23:58:56.588Z] Attempting getFastSession. Token: undefined... - NO TOKEN
+
+[2026-03-09T23:58:56.601Z] Attempting getFastSession. Token: undefined... - NO TOKEN
+
+--- GET /api/attendance/staff-list ---
+Cookies: ["sidebar_state=true...","better-auth.session_token=FvTkcWF7HlZNzqR...","__next_hmr_refresh_hash__=109...","pos-system.session_token=L1dQpa3fpInNb67..."]
+Using fallback auth.api.getSession()
+
+--- GET /api/attendance/staff-list ---
+Cookies: ["sidebar_state=true...","better-auth.session_token=FvTkcWF7HlZNzqR...","__next_hmr_refresh_hash__=109...","pos-system.session_token=L1dQpa3fpInNb67..."]
+Using fallback auth.api.getSession()
+
+--- GET /api/attendance/staff-list ---
+Cookies: ["sidebar_state=true...","better-auth.session_token=FvTkcWF7HlZNzqR...","__next_hmr_refresh_hash__=109...","pos-system.session_token=L1dQpa3fpInNb67..."]
+Using fallback auth.api.getSession()
+
+--- GET /api/attendance/staff-list ---
+Cookies: ["sidebar_state=true...","better-auth.session_token=FvTkcWF7HlZNzqR...","__next_hmr_refresh_hash__=109...","pos-system.session_token=L1dQpa3fpInNb67..."]
+Using fallback auth.api.getSession()
+
+--- GET /api/attendance/staff-list ---
+Cookies: []
+Using fallback auth.api.getSession()
+
+--- DB SESSIONS ---
+[{"tokenStart":"L1dQpa3fpInNb67","len":32},{"tokenStart":"XNsknsctoMGD2K5","len":32},{"tokenStart":"yypiGGZctQrN31y","len":32}]
+
+--- FULL DB SESSIONS ---
+[{"token":"L1dQpa3fpInNb67gVbY6oYB7WzaTUZQ5","len":32},{"token":"XNsknsctoMGD2K5BqL79tPsOiP2Wgu2w","len":32},{"token":"yypiGGZctQrN31y7LngijRI1RfbIFxgM","len":32}]
+RAW COOKIE: undefined

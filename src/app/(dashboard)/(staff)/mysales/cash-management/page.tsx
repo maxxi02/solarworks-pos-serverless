@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import {
-  DollarSign,
-  CreditCard,
   Wallet,
   TrendingUp,
   RefreshCw,
   ShoppingBag,
   Percent,
   Receipt,
-  Minus,
-  AlertCircle,
   X,
   Banknote,
   Smartphone,
-  CheckCircle,
+  CreditCard,
+  ArrowDownLeft,
+  ArrowUpRight,
+  BarChart3,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useReceiptSettings } from "@/hooks/useReceiptSettings";
@@ -51,44 +50,22 @@ interface SessionData {
   cashOuts: CashOut[];
 }
 
-interface DrawerBreakdown {
-  openingFund: number;
-  cashSales: number;
-  cashRefunds: number;
-  cashOuts: number;
-  expectedCash: number;
-}
-
 export default function CashManagementPage() {
-  const router = useRouter();
   const { isLoading: settingsLoading } = useReceiptSettings();
-
   const { socket, isConnected: isLive } = useSocket();
 
   const [sessionReady, setSessionReady] = useState(false);
-  const [startingFundInput, setStartingFundInput] = useState("");
-  const [startingFundError, setStartingFundError] = useState("");
-  const [isOpeningSession, setIsOpeningSession] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<
-    "today" | "week" | "month"
-  >("today");
+  const [selectedPeriod, setSelectedPeriod] = useState<"today" | "week" | "month">("today");
 
   const [session, setSession] = useState<SessionData | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
 
-  const [drawer, setDrawer] = useState<DrawerBreakdown>({
-    openingFund: 0,
-    cashSales: 0,
-    cashRefunds: 0,
-    cashOuts: 0,
-    expectedCash: 0,
-  });
-
-  const [summary, setSummary] = useState({
-    totalSales: 0,
+  // Derived stats
+  const [stats, setStats] = useState({
+    grossSales: 0,
     netSales: 0,
     totalDiscounts: 0,
     totalRefunds: 0,
@@ -97,6 +74,8 @@ export default function CashManagementPage() {
     splitSales: 0,
     transactionCount: 0,
     itemCount: 0,
+    cashInDrawer: 0,
+    cashOuts: 0,
     hourlySales: [] as Array<{ hour: string; sales: number }>,
     topItems: [] as Array<{ name: string; qty: number; amount: number }>,
   });
@@ -105,38 +84,25 @@ export default function CashManagementPage() {
   const [cashOutAmount, setCashOutAmount] = useState<number | "">("");
   const [cashOutReason, setCashOutReason] = useState("");
   const [isCashingOut, setIsCashingOut] = useState(false);
-  const [showDrawerDetails, setShowDrawerDetails] = useState(false);
 
-  // Socket event listeners for real-time updates
+  // ── Socket ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
-
-    // Re-fetch when any payment or cash event happens
-    socket.on("cash:updated", () => {
-      loadPayments();
-      checkSession();
-    });
-    socket.on("sales:updated", () => loadPayments());
-
+    const onCashUpdated = () => { loadPayments(); checkSession(); };
+    const onSalesUpdated = () => loadPayments();
+    socket.on("cash:updated", onCashUpdated);
+    socket.on("sales:updated", onSalesUpdated);
     return () => {
-      socket.off("cash:updated");
-      socket.off("sales:updated");
+      socket.off("cash:updated", onCashUpdated);
+      socket.off("sales:updated", onSalesUpdated);
     };
   }, [socket]);
 
-  useEffect(() => {
-    if (settingsLoading) return;
-    checkSession();
-  }, [settingsLoading]);
+  useEffect(() => { if (!settingsLoading) checkSession(); }, [settingsLoading]);
+  useEffect(() => { if (sessionReady) loadPayments(); }, [sessionReady]);
+  useEffect(() => { if (session) calculateStats(); }, [payments, selectedPeriod, session]);
 
-  useEffect(() => {
-    if (sessionReady) loadPayments();
-  }, [sessionReady]);
-
-  useEffect(() => {
-    if (session) calculateAll();
-  }, [payments, selectedPeriod, session]);
-
+  // ── API ─────────────────────────────────────────────────────────────────
   const checkSession = async () => {
     try {
       const res = await fetch("/api/session");
@@ -148,61 +114,12 @@ export default function CashManagementPage() {
         setSession(null);
         setSessionReady(false);
         setPayments([]);
-        setSummary({
-          totalSales: 0,
-          netSales: 0,
-          totalDiscounts: 0,
-          totalRefunds: 0,
-          cashSales: 0,
-          gcashSales: 0,
-          splitSales: 0,
-          transactionCount: 0,
-          itemCount: 0,
-          hourlySales: [],
-          topItems: [],
-        });
-        setDrawer({
-          openingFund: 0,
-          cashSales: 0,
-          cashRefunds: 0,
-          cashOuts: 0,
-          expectedCash: 0,
-        });
       }
     } catch (err) {
       console.error("checkSession error:", err);
       setSessionReady(false);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleConfirmStartingFund = async () => {
-    const amount = parseFloat(startingFundInput);
-    if (isNaN(amount) || amount < 0) {
-      setStartingFundError("Please enter a valid amount.");
-      return;
-    }
-    setIsOpeningSession(true);
-    try {
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ openingFund: amount }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        setPayments([]);
-        setSession(result.data);
-        setSessionReady(true);
-        toast.success(`Register opened with starting fund of ${fmtP(amount)}`);
-      } else {
-        toast.error("Failed to open register");
-      }
-    } catch {
-      toast.error("Failed to open register");
-    } finally {
-      setIsOpeningSession(false);
     }
   };
 
@@ -213,23 +130,25 @@ export default function CashManagementPage() {
       const result = await res.json();
       if (result.success && result.data) setPayments(result.data.payments);
     } catch {
-      toast.error("Failed to load data");
+      toast.error("Failed to load payments");
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateAll = () => {
+
+
+  // ── Stats calculation ───────────────────────────────────────────────────
+  const calculateStats = useCallback(() => {
     if (!session) return;
+
     const now = new Date();
     const sessionStart = new Date(session.openedAt);
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     let startDate: Date;
-    if (selectedPeriod === "week")
-      startDate = new Date(today.getTime() - 7 * 86400000);
-    else if (selectedPeriod === "month")
-      startDate = new Date(today.getTime() - 30 * 86400000);
+    if (selectedPeriod === "week") startDate = new Date(today.getTime() - 7 * 86400000);
+    else if (selectedPeriod === "month") startDate = new Date(today.getTime() - 30 * 86400000);
     else startDate = today;
 
     const effectiveStart = startDate < sessionStart ? sessionStart : startDate;
@@ -238,15 +157,24 @@ export default function CashManagementPage() {
       const d = new Date(p.createdAt);
       return d >= effectiveStart && d <= now;
     });
+
     const completed = filtered.filter((p) => p.status === "completed");
     const refunded = filtered.filter((p) => p.status === "refunded");
 
-    const totalSales = completed.reduce((s, p) => s + p.total, 0);
+    // Gross Sales = all completed orders total
+    const grossSales = completed.reduce((s, p) => s + p.total, 0);
+
+    // Total discounts from orders
     const totalDiscounts = completed.reduce(
       (s, p) => s + (p.discountTotal || p.discount || 0),
       0,
     );
+
     const totalRefunds = refunded.reduce((s, p) => s + p.total, 0);
+
+    // Net Sales = Gross - Discounts only (as requested)
+    const netSales = grossSales - totalDiscounts;
+
     const cashSales = completed
       .filter((p) => p.paymentMethod === "cash")
       .reduce((s, p) => s + p.total, 0);
@@ -261,23 +189,13 @@ export default function CashManagementPage() {
       .reduce((s, p) => s + p.total, 0);
 
     const periodCashOuts = (session.cashOuts || [])
-      .filter((c) => {
-        const d = new Date(c.date);
-        return d >= effectiveStart && d <= now;
-      })
+      .filter((c) => new Date(c.date) >= effectiveStart && new Date(c.date) <= now)
       .reduce((s, c) => s + c.amount, 0);
 
-    const expectedCash =
-      session.openingFund + cashSales - cashRefunds - periodCashOuts;
+    // Cash in drawer = starting fund + all cash sales - cash refunds - cash outs
+    const cashInDrawer = session.openingFund + cashSales - cashRefunds - periodCashOuts;
 
-    setDrawer({
-      openingFund: session.openingFund,
-      cashSales,
-      cashRefunds,
-      cashOuts: periodCashOuts,
-      expectedCash,
-    });
-
+    // Hourly sales (today only)
     let hourlySales: Array<{ hour: string; sales: number }> = [];
     if (selectedPeriod === "today") {
       const map = new Map<string, number>();
@@ -294,28 +212,27 @@ export default function CashManagementPage() {
         .filter((h) => h.sales > 0);
     }
 
-    const itemMap = new Map<
-      string,
-      { name: string; qty: number; amount: number }
-    >();
+    // Top items
+    const itemMap = new Map<string, { name: string; qty: number; amount: number }>();
     completed.forEach((p) => {
       p.items.forEach((item: any) => {
         const ex = itemMap.get(item.name);
         if (ex) {
           ex.qty += item.quantity || 1;
           ex.amount += item.price * (item.quantity || 1);
-        } else
+        } else {
           itemMap.set(item.name, {
             name: item.name,
             qty: item.quantity || 1,
             amount: item.price * (item.quantity || 1),
           });
+        }
       });
     });
 
-    setSummary({
-      totalSales,
-      netSales: totalSales - totalDiscounts - totalRefunds,
+    setStats({
+      grossSales,
+      netSales,
       totalDiscounts,
       totalRefunds,
       cashSales,
@@ -323,44 +240,29 @@ export default function CashManagementPage() {
       splitSales,
       transactionCount: completed.length,
       itemCount: completed.reduce((s, p) => s + p.items.length, 0),
+      cashInDrawer,
+      cashOuts: periodCashOuts,
       hourlySales,
-      topItems: Array.from(itemMap.values())
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 5),
+      topItems: Array.from(itemMap.values()).sort((a, b) => b.amount - a.amount).slice(0, 5),
     });
-  };
+  }, [session, payments, selectedPeriod]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    Promise.all([checkSession(), loadPayments()]).finally(() =>
-      setIsRefreshing(false),
-    );
+    Promise.all([checkSession(), loadPayments()]).finally(() => setIsRefreshing(false));
   };
 
   const handleCashOut = async () => {
-    if (!cashOutAmount || cashOutAmount <= 0) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
-    if (!cashOutReason.trim()) {
-      toast.error("Please enter a reason");
-      return;
-    }
-    if (cashOutAmount > drawer.expectedCash) {
-      toast.error("Insufficient cash in drawer");
-      return;
-    }
+    if (!cashOutAmount || cashOutAmount <= 0) { toast.error("Enter a valid amount"); return; }
+    if (!cashOutReason.trim()) { toast.error("Enter a reason"); return; }
+    if (cashOutAmount > stats.cashInDrawer) { toast.error("Insufficient cash in drawer"); return; }
 
     setIsCashingOut(true);
     try {
       const res = await fetch("/api/session", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "cash_out",
-          amount: cashOutAmount,
-          reason: cashOutReason,
-        }),
+        body: JSON.stringify({ action: "cash_out", amount: cashOutAmount, reason: cashOutReason }),
       });
       const result = await res.json();
       if (result.success) {
@@ -383,359 +285,229 @@ export default function CashManagementPage() {
   const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fmtP = (n: number) => `₱${fmt(n)}`;
 
-  // ─── Open Register Gate ───────────────────────────────────────────────────
-  if (!settingsLoading && !loading && !sessionReady) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-card text-card-foreground rounded-2xl shadow-xl border border-border overflow-hidden">
-            {/* Card Header */}
-            <div className="bg-primary text-primary-foreground p-6 text-center">
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-primary-foreground/20 rounded-full mb-3">
-                <Wallet className="h-7 w-7" />
-              </div>
-              <h2 className="text-xl font-bold">Open Register</h2>
-              <p className="text-sm mt-1 opacity-60">
-                Enter the starting fund to begin
-              </p>
-            </div>
 
-            <div className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  Starting Fund Amount
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-lg">
-                    ₱
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    autoFocus
-                    value={startingFundInput}
-                    onChange={(e) => {
-                      setStartingFundInput(e.target.value);
-                      setStartingFundError("");
-                    }}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handleConfirmStartingFund()
-                    }
-                    className={`w-full pl-10 pr-4 py-3 text-xl font-bold border-2 rounded-xl bg-background text-foreground focus:outline-none transition-colors ${
-                      startingFundError
-                        ? "border-destructive focus:border-destructive"
-                        : "border-input focus:border-primary"
-                    }`}
-                  />
-                </div>
-                {startingFundError && (
-                  <p className="mt-2 text-sm text-destructive flex items-center gap-1">
-                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                    {startingFundError}
-                  </p>
-                )}
-              </div>
 
-              {/* Quick amounts section REMOVED */}
-
-              <div className="bg-muted border border-border rounded-xl p-3 text-xs text-muted-foreground flex gap-2">
-                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5 text-foreground" />
-                <span>
-                  The starting fund is the cash in the drawer before sales
-                  begin. You may enter ₱0 if no opening cash is being added.
-                </span>
-              </div>
-
-              <button
-                onClick={handleConfirmStartingFund}
-                disabled={isOpeningSession}
-                className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60"
-              >
-                <CheckCircle className="h-5 w-5" />
-                {isOpeningSession ? "Opening..." : "Open Register"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Loading ──────────────────────────────────────────────────────────────
   if (loading || settingsLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">
-            Loading cash management data...
-          </p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // ─── Main Page ────────────────────────────────────────────────────────────
-  return (
-    <div className="min-h-screen bg-background text-foreground p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-                Register
-              </p>
-              <h1 className="text-2xl font-bold text-foreground">
-                Cash Management
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Starting Fund: {fmtP(session?.openingFund ?? 0)}
-                {session?.openedAt && (
-                  <span className="ml-2 text-xs opacity-60">
-                    · Since {new Date(session.openedAt).toLocaleTimeString()}
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Status pill with live indicator */}
-              <div
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${
-                  session?.status === "open"
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted text-muted-foreground border-border"
-                }`}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full ${isLive ? "bg-green-400 animate-pulse" : "bg-red-400"}`}
-                />
-                {session?.status === "open" ? "OPEN" : "CLOSED"}
-              </div>
-              <button
-                onClick={handleRefresh}
-                className="p-2 border border-border rounded-lg hover:bg-muted transition-colors"
-              >
-                <RefreshCw
-                  className={`h-4 w-4 text-muted-foreground ${isRefreshing ? "animate-spin" : ""}`}
-                />
-              </button>
-            </div>
-          </div>
-        </div>
+  const periodLabel = selectedPeriod === "today" ? "Today" : selectedPeriod === "week" ? "This Week" : "This Month";
 
-        {/* Drawer Summary Card — orange */}
-        <div className="bg-primary text-primary-foreground rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Wallet className="h-8 w-8 opacity-70" />
-              <div>
-                <p className="text-sm opacity-60 uppercase tracking-widest">
-                  Cash in Drawer
-                </p>
-                <p className="text-3xl font-black">
-                  {fmtP(drawer.expectedCash)}
-                </p>
-              </div>
-            </div>
+  // ── Main Page ───────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Register</p>
+            <h1 className="text-2xl font-bold">Cash Management</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Opened {session?.openedAt ? new Date(session.openedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}
+              {" · "}Starting Fund: <span className="font-semibold text-foreground">{fmtP(session?.openingFund ?? 0)}</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+              session?.status === "open"
+                ? "bg-green-500/10 text-green-600 border-green-500/20"
+                : "bg-muted text-muted-foreground border-border"
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isLive ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+              {session?.status === "open" ? "Open" : "Closed"}
+            </span>
             <button
-              onClick={() => setShowDrawerDetails(!showDrawerDetails)}
-              className="px-3 py-1 bg-primary-foreground/20 hover:bg-primary-foreground/30 rounded-lg text-sm transition-colors"
+              onClick={handleRefresh}
+              className="p-2 border border-border rounded-lg hover:bg-muted transition-colors"
             >
-              {showDrawerDetails ? "Hide" : "Details"}
+              <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
-          {showDrawerDetails && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-primary-foreground/20">
-              <div>
-                <p className="text-xs opacity-60">Starting Fund</p>
-                <p className="font-bold text-lg">{fmtP(drawer.openingFund)}</p>
-              </div>
-              <div>
-                <p className="text-xs opacity-60">+ Cash Sales</p>
-                <p className="font-bold text-lg">{fmtP(drawer.cashSales)}</p>
-              </div>
-              <div>
-                <p className="text-xs opacity-60">- Cash Refunds</p>
-                <p className="font-bold text-lg">{fmtP(drawer.cashRefunds)}</p>
-              </div>
-              <div>
-                <p className="text-xs opacity-60">- Cash Outs</p>
-                <p className="font-bold text-lg">{fmtP(drawer.cashOuts)}</p>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Period Selector */}
-        <div className="flex gap-2 mb-6">
-          {[
-            { id: "today", label: "Today" },
-            { id: "week", label: "This Week" },
-            { id: "month", label: "This Month" },
-          ].map((p) => (
+        {/* ── Period Selector ── */}
+        <div className="flex gap-1.5">
+          {(["today", "week", "month"] as const).map((p) => (
             <button
-              key={p.id}
-              onClick={() => setSelectedPeriod(p.id as any)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                selectedPeriod === p.id
+              key={p}
+              onClick={() => setSelectedPeriod(p)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                selectedPeriod === p
                   ? "bg-primary text-primary-foreground"
                   : "border border-border text-muted-foreground hover:bg-muted"
               }`}
             >
-              {p.label}
+              {p === "today" ? "Today" : p === "week" ? "This Week" : "This Month"}
             </button>
           ))}
         </div>
 
-        {/* Sales Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* ── Top Row: Cash Drawer + Action ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {/* Cash in Drawer — primary card */}
+          <div className="md:col-span-2 bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Wallet className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Cash in Drawer</p>
+                  <p className="text-3xl font-black text-foreground leading-tight">{fmtP(stats.cashInDrawer)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCashOutModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-semibold rounded-lg transition-colors"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+                Cash Out
+              </button>
+            </div>
+
+            {/* Drawer breakdown — clean row */}
+            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-0.5">Starting Fund</p>
+                <p className="text-sm font-bold">{fmtP(session?.openingFund ?? 0)}</p>
+              </div>
+              <div className="text-center border-x border-border">
+                <p className="text-xs text-muted-foreground mb-0.5">Cash Sales</p>
+                <p className="text-sm font-bold text-green-600">+{fmtP(stats.cashSales)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-0.5">Cash Outs</p>
+                <p className="text-sm font-bold text-red-500">−{fmtP(stats.cashOuts)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick stats */}
+          <div className="flex flex-col gap-3">
+            <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 flex-1">
+              <div className="p-2 bg-muted rounded-lg">
+                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Transactions</p>
+                <p className="text-xl font-bold">{stats.transactionCount}</p>
+              </div>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 flex-1">
+              <div className="p-2 bg-muted rounded-lg">
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Items Sold</p>
+                <p className="text-xl font-bold">{stats.itemCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Sales Summary ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             {
               label: "Gross Sales",
-              value: summary.totalSales,
+              value: stats.grossSales,
+              sub: "All completed orders",
               icon: TrendingUp,
-              sub: null,
+              color: "text-foreground",
             },
             {
               label: "Net Sales",
-              value: summary.netSales,
-              icon: DollarSign,
-              sub: "After discounts & refunds",
+              value: stats.netSales,
+              sub: "After discounts",
+              icon: BarChart3,
+              color: "text-primary",
             },
             {
-              label: "Total Discounts",
-              value: summary.totalDiscounts,
+              label: "Discounts Given",
+              value: stats.totalDiscounts,
+              sub: "Senior / PWD",
               icon: Percent,
-              sub: null,
+              color: "text-amber-500",
             },
             {
-              label: "Total Refunds",
-              value: summary.totalRefunds,
-              icon: Minus,
-              sub: null,
+              label: "Refunds",
+              value: stats.totalRefunds,
+              sub: "Returned orders",
+              icon: ArrowDownLeft,
+              color: "text-red-500",
             },
-          ].map(({ label, value, icon: Icon, sub }) => (
-            <div
-              key={label}
-              className="bg-card border border-border rounded-lg p-4"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{label}</p>
-                  <p className="text-2xl font-bold text-card-foreground">
-                    {fmtP(value)}
-                  </p>
-                  {sub && (
-                    <p className="text-xs text-muted-foreground mt-1">{sub}</p>
-                  )}
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                </div>
+          ].map(({ label, value, sub, icon: Icon, color }) => (
+            <div key={label} className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                <Icon className={`h-4 w-4 ${color}`} />
               </div>
+              <p className={`text-2xl font-black ${color}`}>{fmtP(value)}</p>
+              <p className="text-xs text-muted-foreground mt-1">{sub}</p>
             </div>
           ))}
         </div>
 
-        {/* Payment Methods */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {[
-            { label: "Cash Sales", value: summary.cashSales, icon: Banknote },
-            {
-              label: "GCash Sales",
-              value: summary.gcashSales,
-              icon: Smartphone,
-            },
-            {
-              label: "Split Payments",
-              value: summary.splitSales,
-              icon: CreditCard,
-            },
-          ].map(({ label, value, icon: Icon }) => (
-            <div
-              key={label}
-              className="bg-card border border-border rounded-lg p-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-muted rounded-full">
-                  <Icon className="h-5 w-5 text-muted-foreground" />
+        {/* ── Payment Method Breakdown ── */}
+        <div className="bg-card border border-border rounded-xl p-5">
+          <h3 className="text-sm font-semibold mb-4">Payment Breakdown</h3>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: "Cash", value: stats.cashSales, icon: Banknote },
+              { label: "GCash", value: stats.gcashSales, icon: Smartphone },
+              { label: "Split", value: stats.splitSales, icon: CreditCard },
+            ].map(({ label, value, icon: Icon }) => {
+              const pct = stats.grossSales > 0 ? (value / stats.grossSales) * 100 : 0;
+              return (
+                <div key={label}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <p className="text-lg font-bold">{fmtP(value)}</p>
+                  <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{pct.toFixed(1)}% of total</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{label}</p>
-                  <p className="text-xl font-bold text-card-foreground">
-                    {fmtP(value)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {((value / (summary.totalSales || 1)) * 100).toFixed(1)}% of
-                    total
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Transaction Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-muted rounded-full">
-                <ShoppingBag className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Transaction Count
-                </p>
-                <p className="text-2xl font-bold text-card-foreground">
-                  {summary.transactionCount}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-muted rounded-full">
-                <Receipt className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Items Sold</p>
-                <p className="text-2xl font-bold text-card-foreground">
-                  {summary.itemCount}
-                </p>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Hourly Sales */}
-        {selectedPeriod === "today" && summary.hourlySales.length > 0 && (
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold text-card-foreground mb-4">
-              Hourly Sales
-            </h3>
-            <div className="space-y-3">
-              {summary.hourlySales.map((hour) => {
-                const max = Math.max(
-                  ...summary.hourlySales.map((h) => h.sales),
-                );
+        {/* ── Hourly Sales ── */}
+        {selectedPeriod === "today" && stats.hourlySales.length > 0 && (
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Hourly Sales</h3>
+            </div>
+            <div className="space-y-2.5">
+              {stats.hourlySales.map((hour) => {
+                const max = Math.max(...stats.hourlySales.map((h) => h.sales));
                 const pct = max > 0 ? (hour.sales / max) * 100 : 0;
                 return (
-                  <div key={hour.hour}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-muted-foreground">{hour.hour}</span>
-                      <span className="font-semibold text-card-foreground">
-                        {fmtP(hour.sales)}
-                      </span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
+                  <div key={hour.hour} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-12 text-right">{hour.hour}</span>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="bg-primary h-2 rounded-full transition-all"
+                        className="h-full bg-primary rounded-full transition-all duration-500"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
+                    <span className="text-xs font-semibold w-20 text-right">{fmtP(hour.sales)}</span>
                   </div>
                 );
               })}
@@ -743,130 +515,95 @@ export default function CashManagementPage() {
           </div>
         )}
 
-        {/* Top Items */}
-        {summary.topItems.length > 0 && (
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold text-card-foreground mb-4">
-              Top Selling Items
-            </h3>
-            <div className="space-y-4">
-              {summary.topItems.map((item, i) => (
-                <div key={item.name} className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-primary text-primary-foreground">
+        {/* ── Top Items ── */}
+        {stats.topItems.length > 0 && (
+          <div className="bg-card border border-border rounded-xl p-5">
+            <h3 className="text-sm font-semibold mb-4">Top Selling Items</h3>
+            <div className="divide-y divide-border">
+              {stats.topItems.map((item, i) => (
+                <div key={item.name} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">
                     {i + 1}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-card-foreground">
-                        {item.name}
-                      </span>
-                      <span className="font-semibold text-card-foreground">
-                        {fmtP(item.amount)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {item.qty} units sold
-                    </p>
-                  </div>
+                  </span>
+                  <span className="flex-1 text-sm font-medium">{item.name}</span>
+                  <span className="text-xs text-muted-foreground">{item.qty} sold</span>
+                  <span className="text-sm font-bold">{fmtP(item.amount)}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Cash Out Modal */}
-        {showCashOutModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md bg-card text-card-foreground rounded-xl shadow-xl border border-border">
-              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                <h3 className="text-lg font-bold text-card-foreground">
-                  Cash Out
-                </h3>
-                <button
-                  onClick={() => setShowCashOutModal(false)}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+      </div>
+
+      {/* ── Cash Out Modal ── */}
+      {showCashOutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-card text-card-foreground rounded-2xl shadow-2xl border border-border">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h3 className="font-bold">Cash Out</h3>
+              <button onClick={() => setShowCashOutModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-muted rounded-lg p-3 text-sm">
+                <span className="text-muted-foreground">Available: </span>
+                <span className="font-bold">{fmtP(stats.cashInDrawer)}</span>
               </div>
 
-              <div className="p-6 space-y-4">
-                <div className="bg-muted border border-border rounded-lg p-3 text-sm text-foreground">
-                  <p>
-                    Available in drawer:{" "}
-                    <span className="font-bold">
-                      {fmtP(drawer.expectedCash)}
-                    </span>
-                  </p>
-                  <p className="text-xs mt-1 text-muted-foreground">
-                    Starting Fund: {fmtP(session?.openingFund ?? 0)}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Amount
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      ₱
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      max={drawer.expectedCash}
-                      value={cashOutAmount}
-                      onChange={(e) =>
-                        setCashOutAmount(
-                          e.target.value === ""
-                            ? ""
-                            : parseFloat(e.target.value),
-                        )
-                      }
-                      placeholder="0.00"
-                      className="w-full pl-8 pr-4 py-2 border border-input rounded-lg bg-background text-foreground focus:border-foreground focus:outline-none transition-colors"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Reason
-                  </label>
-                  <select
-                    value={cashOutReason}
-                    onChange={(e) => setCashOutReason(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:border-foreground focus:outline-none transition-colors"
-                  >
-                    <option value="">Select a reason</option>
-                    <option value="supplies">Purchase Supplies</option>
-                    <option value="change">Change Fund</option>
-                    <option value="expense">Store Expense</option>
-                    <option value="other">Other</option>
-                  </select>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₱</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    max={stats.cashInDrawer}
+                    value={cashOutAmount}
+                    onChange={(e) => setCashOutAmount(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-2.5 border border-input rounded-lg bg-background text-foreground focus:border-primary focus:outline-none transition-colors"
+                  />
                 </div>
               </div>
 
-              <div className="px-6 py-4 border-t border-border flex gap-3">
-                <button
-                  onClick={() => setShowCashOutModal(false)}
-                  className="flex-1 py-2 border border-border text-foreground text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Reason</label>
+                <select
+                  value={cashOutReason}
+                  onChange={(e) => setCashOutReason(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground focus:border-primary focus:outline-none transition-colors"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCashOut}
-                  disabled={isCashingOut}
-                  className="flex-1 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-60 transition-opacity"
-                >
-                  {isCashingOut ? "Saving..." : "Withdraw"}
-                </button>
+                  <option value="">Select reason</option>
+                  <option value="supplies">Purchase Supplies</option>
+                  <option value="change">Change Fund</option>
+                  <option value="expense">Store Expense</option>
+                  <option value="other">Other</option>
+                </select>
               </div>
             </div>
+
+            <div className="px-5 py-4 border-t border-border flex gap-2">
+              <button
+                onClick={() => setShowCashOutModal(false)}
+                className="flex-1 py-2.5 border border-border text-sm font-medium rounded-lg hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCashOut}
+                disabled={isCashingOut}
+                className="flex-1 py-2.5 bg-destructive text-destructive-foreground text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-60 transition-opacity"
+              >
+                {isCashingOut ? "Saving..." : "Withdraw"}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
