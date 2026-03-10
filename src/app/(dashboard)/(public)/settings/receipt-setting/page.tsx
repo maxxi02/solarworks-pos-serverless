@@ -187,20 +187,20 @@ export default function ReceiptSettingsPage() {
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 dark:bg-black/90 p-4">
-        <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[400px]'} rounded-xl bg-white/95 dark:bg-black/95 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
-          <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 shrink-0">
-            <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Receipt Preview</h3>
+        <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[400px]'} rounded-lg bg-background border border-border shadow-md overflow-hidden flex flex-col max-h-[90vh]`}>
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-muted/50 shrink-0">
+            <h3 className="text-xl font-bold text-foreground">Receipt Preview</h3>
             <button
               onClick={() => setShowPreview(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors"
+              className="text-muted-foreground hover:text-foreground p-2 rounded-full hover:bg-muted transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="p-5 overflow-y-auto">
+          <div className="p-5 overflow-y-auto" data-lenis-prevent>
             <div
-              className={`font-mono ${is58mm ? 'text-sm' : 'text-base'} bg-white dark:bg-black p-5 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg`}
+              className={`font-mono ${is58mm ? 'text-sm' : 'text-base'} bg-background p-5 border-2 border-dashed border-border rounded-lg`}
               style={{ lineHeight: '1.6' }}
             >
               {settings.showLogo && settings.logoPreview && (
@@ -363,7 +363,7 @@ export default function ReceiptSettingsPage() {
             <div className="mt-5 flex justify-center shrink-0">
               <button
                 onClick={() => setShowPreview(false)}
-                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-base rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25 active:scale-95"
+                className="px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-sm rounded-md transition-colors shadow-sm"
               >
                 Close Preview
               </button>
@@ -376,19 +376,18 @@ export default function ReceiptSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-background p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading settings...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 relative via-white to-blue-50/50 dark:from-slate-950 dark:via-black dark:to-indigo-950/50 p-4 md:p-6 pb-24">
-      <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.015] pointer-events-none mix-blend-overlay"></div>
-      <div className="max-w-6xl mx-auto relative z-10">
+    <div className="min-h-screen bg-background p-4 md:p-6 pb-24">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Receipt Settings</h1>
@@ -398,21 +397,21 @@ export default function ReceiptSettingsPage() {
           <div className="flex flex-wrap gap-2 justify-center mt-6">
             <button
               onClick={() => setShowPreview(true)}
-              className="flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-black/50 backdrop-blur-sm px-5 py-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:shadow-sm active:scale-95"
+              className="flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               <Eye className="h-4 w-4" />
               Receipt Preview
             </button>
             <button
               onClick={() => setShowZReportPreview(true)}
-              className="flex items-center gap-2 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50/50 dark:bg-orange-950/20 backdrop-blur-sm px-5 py-2.5 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-all hover:shadow-sm active:scale-95"
+              className="flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-orange-600 dark:text-orange-500 hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               <FileText className="h-4 w-4" />
               Z-Report Preview
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/25 active:scale-95 font-medium"
+              className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Save className="h-4 w-4" />
               Save Settings
@@ -489,7 +488,7 @@ export default function ReceiptSettingsPage() {
             {/* General Settings Tab */}
             {activeTab === 'general' && (
               <>
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Information</h3>
 
                   <div className="space-y-4">
@@ -543,7 +542,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Display Settings</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -629,7 +628,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Logo Settings</h3>
 
                   <div className="space-y-4">
@@ -685,7 +684,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Messages</h3>
 
                   <div className="space-y-4">
@@ -721,7 +720,7 @@ export default function ReceiptSettingsPage() {
 
             {/* Sections Tab */}
             {activeTab === 'sections' && (
-              <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Section Positioning</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                   Choose where each section appears on the receipt (Header, Footer, or Disabled)
@@ -774,7 +773,7 @@ export default function ReceiptSettingsPage() {
             {/* Printers Tab */}
             {activeTab === 'printers' && (
               <>
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Printer className="h-5 w-5 text-blue-600" />
@@ -844,7 +843,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Utensils className="h-5 w-5 text-orange-600" />
@@ -1007,7 +1006,7 @@ export default function ReceiptSettingsPage() {
             {activeTab === 'zreading' && (
               <>
                 {/* STARTING FUND CARD */}
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <DollarSign className="h-5 w-5 text-green-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Starting Fund</h3>
@@ -1071,7 +1070,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* VAT Settings Card */}
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <Percent className="h-5 w-5 text-orange-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">VAT Settings</h3>
@@ -1115,7 +1114,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Discount Settings Card */}
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <Receipt className="h-5 w-5 text-green-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Discount Types</h3>
@@ -1230,7 +1229,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Payment Methods Card */}
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <Wallet className="h-5 w-5 text-blue-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment Methods</h3>
@@ -1267,7 +1266,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Additional Sections Card */}
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Additional Sections</h3>
 
                   <div className="space-y-3">
@@ -1365,7 +1364,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Z-Report Footer */}
-                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Z-Report Footer</h3>
 
                   <div className="space-y-4">
@@ -1402,7 +1401,7 @@ export default function ReceiptSettingsPage() {
 
           {/* Right Column - Actions */}
           <div className="space-y-6">
-            <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Output</h3>
 
               <div className="space-y-4">
@@ -1460,7 +1459,7 @@ export default function ReceiptSettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions</h3>
 
               <div className="space-y-3">
