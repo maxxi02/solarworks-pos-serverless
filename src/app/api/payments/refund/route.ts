@@ -23,6 +23,20 @@ const notifySalesUpdate = async () => {
   }
 };
 
+const notifyCashUpdate = async () => {
+  try {
+    await fetch(`${process.env.SOCKET_URL}/internal/cash-updated`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.BETTER_AUTH_SECRET || "",
+      },
+    });
+  } catch {
+    // Non-critical, swallow
+  }
+};
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -89,6 +103,7 @@ export async function POST(req: NextRequest) {
     );
 
     notifySalesUpdate();
+    notifyCashUpdate();
 
     return NextResponse.json({
       success: true,

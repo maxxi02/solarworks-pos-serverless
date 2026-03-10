@@ -8,12 +8,20 @@ export async function GET() {
     
     // Create indexes
     await collection.createIndex({ createdAt: -1 });
-    await collection.createIndex({ orderNumber: 1 }, { unique: true });
+    await collection.createIndex({ timestamp: -1 });
+    await collection.createIndex({ orderNumber: 1 });
+    await collection.createIndex({ status: 1 });
+    await collection.createIndex({ paymentMethod: 1 });
+    await collection.createIndex({ status: 1, paymentMethod: 1, createdAt: -1 });
+    await collection.createIndex({ status: 1, timestamp: -1 });
     
     return NextResponse.json({
       success: true,
       message: 'Payments collection ready',
-      indexes: ['createdAt', 'orderNumber']
+      indexes: [
+        'createdAt', 'timestamp', 'orderNumber', 'status', 'paymentMethod',
+        'status_paymentMethod_createdAt', 'status_timestamp'
+      ]
     });
     
   } catch (error) {

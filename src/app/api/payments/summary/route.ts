@@ -1,216 +1,168 @@
+/**
+ * GET /api/payments/summary?period=today|week|month&sessionStart=ISO_DATE
+ *
+ * Returns aggregated stats for the Cash Management page in a single
+ * MongoDB aggregate pipeline — no more fetching 500 documents to the
+ * frontend and computing everything in JS.
+ *
+ * Expected response time: <200ms with createdAt index in place.
+ */
+
 import { NextResponse } from "next/server";
 import MONGODB from "@/config/db";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const period = searchParams.get("period") || "week"; // today, week, month, year, all
-    const staffId = searchParams.get("staffId");
 
-    // Date filter
+    const period = searchParams.get("period") || "today";
+    const sessionStartParam = searchParams.get("sessionStart");
+
+    // ── Date range ────────────────────────────────────────────────────────────
     const now = new Date();
-    let startDate = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    switch (period) {
-      case "today":
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        break;
-      case "week":
-        startDate = new Date(now.setDate(now.getDate() - 7));
-        break;
-      case "month":
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
-        break;
-      case "year":
-        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-        break;
-      case "all":
-        startDate = new Date(0); // 1970-01-01
-        break;
-      default:
-        startDate = new Date(now.setDate(now.getDate() - 7));
+    let periodStart: Date;
+    if (period === "week") {
+      periodStart = new Date(todayStart.getTime() - 7 * 86_400_000);
+    } else if (period === "month") {
+      periodStart = new Date(todayStart.getTime() - 30 * 86_400_000);
+    } else {
+      periodStart = todayStart;
     }
 
-    console.log(
-      `Fetching payments from ${startDate} to ${new Date()} ${staffId ? `for staff ${staffId}` : ""}`,
-    );
+    // Never go before the session opened
+    const sessionStart = sessionStartParam ? new Date(sessionStartParam) : null;
+    const effectiveStart =
+      sessionStart && sessionStart > periodStart ? sessionStart : periodStart;
 
     const collection = MONGODB.collection("payments");
 
-    // FIX: Use $match with proper date comparison and optional staffId
-    const matchStage = {
-      $match: {
-        createdAt: { $gte: startDate },
-        status: "completed",
-        ...(staffId && { cashierId: staffId }),
-      },
-    };
-
-    // RUN ALL QUERIES IN PARALLEL
-    const [
-      summaryResult,
-      dailyResult,
-      productsResult,
-      methodsResult,
-      recentResult,
-    ] = await Promise.all([
-      // 1. Overall summary
-      collection
-        .aggregate([
-          matchStage,
-          {
-            $group: {
-              _id: null,
-              totalRevenue: { $sum: "$total" },
-              totalTransactions: { $sum: 1 },
-              avgOrderValue: { $avg: "$total" },
-            },
+    // ── Single aggregate pipeline ─────────────────────────────────────────────
+    const [result] = await collection
+      .aggregate([
+        {
+          $match: {
+            createdAt: { $gte: effectiveStart },
           },
-        ])
-        .toArray(),
-
-      // 2. Daily sales breakdown
-      collection
-        .aggregate([
-          matchStage,
-          {
-            $group: {
-              _id: {
-                date: {
-                  $dateToString: {
-                    format: "%Y-%m-%d",
-                    date: "$createdAt",
+        },
+        {
+          $facet: {
+            // ── Overall totals ──
+            totals: [
+              {
+                $group: {
+                  _id: "$status",
+                  count: { $sum: 1 },
+                  totalAmount: { $sum: "$total" },
+                  subtotalAmount: { $sum: { $ifNull: ["$subtotal", "$total"] } },
+                  discountAmount: { $sum: { $ifNull: ["$discountTotal", 0] } },
+                },
+              },
+            ],
+            // ── Payment method breakdown (completed only) ──
+            byMethod: [
+              { $match: { status: "completed" } },
+              {
+                $group: {
+                  _id: "$paymentMethod",
+                  amount: { $sum: "$total" },
+                  count: { $sum: 1 },
+                },
+              },
+            ],
+            // ── Hourly sales (completed, today only) ──
+            hourly: [
+              {
+                $match: {
+                  status: "completed",
+                  createdAt: { $gte: todayStart },
+                },
+              },
+              {
+                $group: {
+                  _id: { $hour: { date: "$createdAt", timezone: "Asia/Manila" } },
+                  sales: { $sum: "$total" },
+                },
+              },
+              { $sort: { _id: 1 } },
+            ],
+            // ── Top items (completed) ──
+            topItems: [
+              { $match: { status: "completed" } },
+              { $unwind: "$items" },
+              {
+                $group: {
+                  _id: "$items.name",
+                  qty: { $sum: { $ifNull: ["$items.quantity", 1] } },
+                  amount: {
+                    $sum: {
+                      $multiply: [
+                        { $ifNull: ["$items.price", 0] },
+                        { $ifNull: ["$items.quantity", 1] },
+                      ],
+                    },
                   },
                 },
               },
-              revenue: { $sum: "$total" },
-              transactions: { $sum: 1 },
-            },
+              { $sort: { amount: -1 } },
+              { $limit: 5 },
+            ],
           },
-          { $sort: { "_id.date": 1 } },
-          {
-            $project: {
-              _id: 0,
-              date: "$_id.date",
-              revenue: 1,
-              transactions: 1,
-            },
-          },
-        ])
-        .toArray(),
+        },
+      ])
+      .toArray();
 
-      // 3. Top products
-      collection
-        .aggregate([
-          matchStage,
-          { $unwind: "$items" },
-          {
-            $group: {
-              _id: {
-                name: "$items.name",
-                category: "$items.category",
-              },
-              quantity: { $sum: "$items.quantity" },
-              revenue: { $sum: "$items.revenue" },
-            },
-          },
-          { $sort: { revenue: -1 } },
-          { $limit: 10 },
-          {
-            $project: {
-              _id: 0,
-              name: "$_id.name",
-              category: "$_id.category",
-              quantity: 1,
-              revenue: { $round: ["$revenue", 2] },
-            },
-          },
-        ])
-        .toArray(),
+    // ── Shape the response ────────────────────────────────────────────────────
+    const totalsMap: Record<string, { count: number; totalAmount: number; subtotalAmount: number; discountAmount: number }> = {};
+    for (const row of result.totals ?? []) {
+      totalsMap[row._id] = row;
+    }
 
-      // 4. Payment methods breakdown - FIXED: Keep _id field
-      collection
-        .aggregate([
-          matchStage,
-          {
-            $group: {
-              _id: "$paymentMethod",
-              total: { $sum: "$total" },
-              count: { $sum: 1 },
-            },
-          },
-          {
-            $project: {
-              _id: 1, // Keep _id para magamit sa frontend
-              total: { $round: ["$total", 2] },
-              count: 1,
-            },
-          },
-        ])
-        .toArray(),
+    const completed = totalsMap["completed"] ?? { count: 0, totalAmount: 0, subtotalAmount: 0, discountAmount: 0 };
+    const refunded = totalsMap["refunded"] ?? { count: 0, totalAmount: 0, subtotalAmount: 0, discountAmount: 0 };
 
-      // 5. Recent transactions
-      collection
-        .aggregate([
-          matchStage,
-          { $sort: { createdAt: -1 } },
-          { $limit: 10 },
-          {
-            $project: {
-              _id: 1,
-              orderNumber: 1,
-              customerName: 1,
-              total: 1,
-              paymentMethod: 1,
-              orderType: 1,
-              createdAt: 1,
-              itemsCount: { $size: "$items" },
-            },
-          },
-        ])
-        .toArray(),
-    ]);
+    const methodMap: Record<string, { amount: number; count: number }> = {};
+    for (const row of result.byMethod ?? []) {
+      methodMap[row._id] = row;
+    }
 
-    // Format the response
-    const summary = summaryResult[0] || {
-      totalRevenue: 0,
-      totalTransactions: 0,
-      avgOrderValue: 0,
-    };
+    const cashSales = methodMap["cash"]?.amount ?? 0;
+    const gcashSales = methodMap["gcash"]?.amount ?? 0;
+    const splitSales = methodMap["split"]?.amount ?? 0;
 
-    console.log("Payment methods data:", methodsResult); // Debug log
+    const hourlySales = (result.hourly ?? []).map((h: { _id: number; sales: number }) => ({
+      hour: `${h._id}:00`,
+      sales: h.sales,
+    }));
+
+    const topItems = (result.topItems ?? []).map((i: { _id: string; qty: number; amount: number }) => ({
+      name: i._id,
+      qty: i.qty,
+      amount: i.amount,
+    }));
 
     return NextResponse.json({
       success: true,
       data: {
-        period,
-        dateRange: {
-          from: startDate,
-          to: new Date(),
-        },
-        summary: {
-          totalRevenue: Math.round(summary.totalRevenue * 100) / 100,
-          totalTransactions: summary.totalTransactions,
-          avgOrderValue: Math.round(summary.avgOrderValue * 100) / 100,
-        },
-        daily: dailyResult.map((d) => ({
-          ...d,
-          revenue: Math.round(d.revenue * 100) / 100,
-        })),
-        topProducts: productsResult,
-        paymentMethods: methodsResult, // Now has _id field
-        recentTransactions: recentResult,
-        totalCount: summary.totalTransactions,
+        grossSales: completed.subtotalAmount,
+        netSales: completed.totalAmount,
+        totalDiscounts: completed.discountAmount,
+        totalRefunds: refunded.totalAmount,
+        cashSales,
+        gcashSales,
+        splitSales,
+        totalCollected: cashSales + gcashSales + splitSales - refunded.totalAmount,
+        transactionCount: completed.count,
+        // itemCount computed from topItems isn't reliable for total — keep a separate facet if needed
+        hourlySales,
+        topItems,
       },
     });
   } catch (error) {
-    console.error("Summary API error:", error);
+    console.error("Payments summary error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to generate summary",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { success: false, error: "Failed to fetch summary" },
       { status: 500 },
     );
   }

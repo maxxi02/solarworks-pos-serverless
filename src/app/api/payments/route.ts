@@ -1,6 +1,24 @@
 import { NextResponse } from "next/server";
 import MONGODB from "@/config/db";
 
+// ── Ensure indexes exist (runs once per cold start) ──────────────────────────
+let indexesEnsured = false;
+async function ensureIndexes() {
+  if (indexesEnsured) return;
+  try {
+    const col = MONGODB.collection("payments");
+    await Promise.all([
+      col.createIndex({ createdAt: -1 }),           // primary sort
+      col.createIndex({ status: 1, createdAt: -1 }), // filtered queries
+      col.createIndex({ paymentMethod: 1 }),
+      col.createIndex({ orderNumber: 1 }),
+    ]);
+    indexesEnsured = true;
+  } catch {
+    // Non-fatal — indexes may already exist
+  }
+}
+
 const notifySalesUpdate = async () => {
   try {
     await fetch(`${process.env.SOCKET_URL}/internal/sales-updated`, {
@@ -12,6 +30,20 @@ const notifySalesUpdate = async () => {
     });
   } catch (err) {
     console.warn("Could not notify socket server:", err);
+  }
+};
+
+const notifyCashUpdate = async () => {
+  try {
+    await fetch(`${process.env.SOCKET_URL}/internal/cash-updated`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": process.env.BETTER_AUTH_SECRET || "",
+      },
+    });
+  } catch (err) {
+    console.warn("Could not notify socket server (cash):", err);
   }
 };
 
@@ -27,6 +59,7 @@ export async function POST(request: Request) {
     }
 
     const collection = MONGODB.collection("payments");
+    await ensureIndexes();
 
     const result = await collection.insertOne({
       ...body,
@@ -37,13 +70,11 @@ export async function POST(request: Request) {
 
     console.log("Payment saved with ID:", result.insertedId);
     notifySalesUpdate();
+    notifyCashUpdate();
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: result.insertedId,
-        ...body,
-      },
+      data: { _id: result.insertedId, ...body },
     });
   } catch (error) {
     console.error("Payment save error:", error);
@@ -56,6 +87,8 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
+    await ensureIndexes();
+
     const { searchParams } = new URL(request.url);
 
     const limit = parseInt(searchParams.get("limit") || "10");
@@ -70,16 +103,11 @@ export async function GET(request: Request) {
     const sortBy = searchParams.get("sortBy") || "date";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
-    // ── Build filter ─────────────────────────────────────────────────────────
+    // ── Build filter ──────────────────────────────────────────────────────────
     const filter: Record<string, any> = {};
 
-    if (status && status !== "all") {
-      filter.status = status;
-    }
-
-    if (paymentMethod && paymentMethod !== "all") {
-      filter.paymentMethod = paymentMethod;
-    }
+    if (status && status !== "all") filter.status = status;
+    if (paymentMethod && paymentMethod !== "all") filter.paymentMethod = paymentMethod;
 
     if (search) {
       filter.$or = [
@@ -90,7 +118,6 @@ export async function GET(request: Request) {
     }
 
     if (startDate || endDate) {
-      // Support both old records (createdAt only) and new records (timestamp field)
       const dateFilter: Record<string, any> = {};
       if (startDate) dateFilter.$gte = new Date(startDate);
       if (endDate) dateFilter.$lte = new Date(endDate);
@@ -101,7 +128,6 @@ export async function GET(request: Request) {
       ];
 
       if (filter.$or) {
-        // Merge with existing $or (from search)
         filter.$and = [{ $or: filter.$or }, { $or: dateConditions }];
         delete filter.$or;
       } else {
@@ -109,21 +135,17 @@ export async function GET(request: Request) {
       }
     }
 
-    // ── Build sort ───────────────────────────────────────────────────────────
-    // Use createdAt — it exists on ALL records (old and new)
+    // ── Build sort ────────────────────────────────────────────────────────────
     const sortField =
-      sortBy === "amount"
-        ? "total"
-        : sortBy === "name"
-          ? "customerName"
-          : "createdAt";
+      sortBy === "amount" ? "total" :
+      sortBy === "name" ? "customerName" :
+      "createdAt";
     const sort: Record<string, 1 | -1> = {
       [sortField]: sortOrder === "asc" ? 1 : -1,
     };
 
     const collection = MONGODB.collection("payments");
 
-    // ── Field projection: Only return what the table needs ───────────────────
     const projection = {
       orderNumber: 1,
       customerName: 1,
@@ -140,65 +162,30 @@ export async function GET(request: Request) {
       refundReason: 1,
     };
 
-    // ── Paginated results + total count ──────────────────────────────────────
-    const [payments, total] = await Promise.all([
-      collection
-        .find(filter, { projection })
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .toArray(),
-      collection.countDocuments(filter),
-    ]);
-
-    // ── Stats (completed only, within same date/search filter) ───────────────
+    // ── Run paginated results + count + stats in parallel ─────────────────────
     const statsFilter = { ...filter, status: "completed" };
 
-    const statsResult = await collection
-      .aggregate([
+    const [payments, total, statsResult] = await Promise.all([
+      collection.find(filter, { projection }).sort(sort).skip(skip).limit(limit).toArray(),
+      collection.countDocuments(filter),
+      collection.aggregate([
         { $match: statsFilter },
         {
           $group: {
             _id: null,
             totalSales: { $sum: "$total" },
             totalTransactions: { $sum: 1 },
-            cashSales: {
-              $sum: {
-                $cond: [{ $eq: ["$paymentMethod", "cash"] }, "$total", 0],
-              },
-            },
-            gcashSales: {
-              $sum: {
-                $cond: [{ $eq: ["$paymentMethod", "gcash"] }, "$total", 0],
-              },
-            },
-            splitSales: {
-              $sum: {
-                $cond: [{ $eq: ["$paymentMethod", "split"] }, "$total", 0],
-              },
-            },
+            cashSales: { $sum: { $cond: [{ $eq: ["$paymentMethod", "cash"] }, "$total", 0] } },
+            gcashSales: { $sum: { $cond: [{ $eq: ["$paymentMethod", "gcash"] }, "$total", 0] } },
+            splitSales: { $sum: { $cond: [{ $eq: ["$paymentMethod", "split"] }, "$total", 0] } },
           },
         },
-      ])
-      .toArray();
+      ]).toArray(),
+    ]);
 
     const summary = statsResult[0] || {
-      totalSales: 0,
-      totalTransactions: 0,
-      cashSales: 0,
-      gcashSales: 0,
-      splitSales: 0,
-    };
-
-    const stats = {
-      totalSales: summary.totalSales,
-      totalTransactions: summary.totalTransactions,
-      averageTransaction: summary.totalTransactions
-        ? summary.totalSales / summary.totalTransactions
-        : 0,
-      cashSales: summary.cashSales,
-      gcashSales: summary.gcashSales,
-      splitSales: summary.splitSales,
+      totalSales: 0, totalTransactions: 0,
+      cashSales: 0, gcashSales: 0, splitSales: 0,
     };
 
     return NextResponse.json({
@@ -211,7 +198,16 @@ export async function GET(request: Request) {
           limit,
           pages: Math.ceil(total / limit),
         },
-        stats,
+        stats: {
+          totalSales: summary.totalSales,
+          totalTransactions: summary.totalTransactions,
+          averageTransaction: summary.totalTransactions
+            ? summary.totalSales / summary.totalTransactions
+            : 0,
+          cashSales: summary.cashSales,
+          gcashSales: summary.gcashSales,
+          splitSales: summary.splitSales,
+        },
       },
     });
   } catch (error) {
