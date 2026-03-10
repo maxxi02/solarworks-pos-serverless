@@ -25,12 +25,12 @@ import { notifyCashUpdated } from "@/lib/notifyServer";
 interface Payment {
   _id: string;
   orderNumber: string;
+  subtotal: number;
+  discountTotal: number;
   total: number;
   paymentMethod: string;
   status: string;
   items: any[];
-  discount?: number;
-  discountTotal?: number;
   createdAt: string;
 }
 
@@ -72,6 +72,7 @@ export default function CashManagementPage() {
     cashSales: 0,
     gcashSales: 0,
     splitSales: 0,
+    totalCollected: 0,
     transactionCount: 0,
     itemCount: 0,
     cashInDrawer: 0,
@@ -161,19 +162,19 @@ export default function CashManagementPage() {
     const completed = filtered.filter((p) => p.status === "completed");
     const refunded = filtered.filter((p) => p.status === "refunded");
 
-    // Gross Sales = all completed orders total
-    const grossSales = completed.reduce((s, p) => s + p.total, 0);
-
-    // Total discounts from orders
+    // Total discounts from orders (senior/PWD)
     const totalDiscounts = completed.reduce(
-      (s, p) => s + (p.discountTotal || p.discount || 0),
+      (s, p) => s + (p.discountTotal || 0),
       0,
     );
 
+    // Gross Sales = original price BEFORE discount (subtotal = pre-discount total)
+    const grossSales = completed.reduce((s, p) => s + (p.subtotal || p.total), 0);
+
     const totalRefunds = refunded.reduce((s, p) => s + p.total, 0);
 
-    // Net Sales = Gross - Discounts only (as requested)
-    const netSales = grossSales - totalDiscounts;
+    // Net Sales = what was actually collected (total = after-discount amount paid)
+    const netSales = completed.reduce((s, p) => s + p.total, 0);
 
     const cashSales = completed
       .filter((p) => p.paymentMethod === "cash")
@@ -230,6 +231,9 @@ export default function CashManagementPage() {
       });
     });
 
+    // Total collected = all completed sales across all payment methods, minus refunds
+    const totalCollected = cashSales + gcashSales + splitSales - totalRefunds;
+
     setStats({
       grossSales,
       netSales,
@@ -238,6 +242,7 @@ export default function CashManagementPage() {
       cashSales,
       gcashSales,
       splitSales,
+      totalCollected,
       transactionCount: completed.length,
       itemCount: completed.reduce((s, p) => s + p.items.length, 0),
       cashInDrawer,
@@ -316,11 +321,10 @@ export default function CashManagementPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-              session?.status === "open"
-                ? "bg-green-500/10 text-green-600 border-green-500/20"
-                : "bg-muted text-muted-foreground border-border"
-            }`}>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${session?.status === "open"
+              ? "bg-green-500/10 text-green-600 border-green-500/20"
+              : "bg-muted text-muted-foreground border-border"
+              }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${isLive ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
               {session?.status === "open" ? "Open" : "Closed"}
             </span>
@@ -339,18 +343,17 @@ export default function CashManagementPage() {
             <button
               key={p}
               onClick={() => setSelectedPeriod(p)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                selectedPeriod === p
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border text-muted-foreground hover:bg-muted"
-              }`}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${selectedPeriod === p
+                ? "bg-primary text-primary-foreground"
+                : "border border-border text-muted-foreground hover:bg-muted"
+                }`}
             >
               {p === "today" ? "Today" : p === "week" ? "This Week" : "This Month"}
             </button>
           ))}
         </div>
 
-        {/* ── Top Row: Cash Drawer + Action ── */}
+        {/* ── Cash Drawer + Quick Stats ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Cash in Drawer — primary card */}

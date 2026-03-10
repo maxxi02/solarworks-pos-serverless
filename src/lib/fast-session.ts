@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import clientPromise from "../config/db";
+import { CLIENT } from "@/config/db";
 import { ObjectId } from "mongodb";
 
 /**
@@ -13,17 +13,17 @@ export async function getFastSession() {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get("pos-system_session_token")?.value
-               || cookieStore.get("__Secure-pos-system_session_token")?.value
-               || cookieStore.get("pos-system.session_token")?.value
-               || cookieStore.get("__Secure-pos-system.session_token")?.value
-               || cookieStore.get("better-auth.session_token")?.value
-               || cookieStore.get("__Secure-better-auth.session_token")?.value;
+      || cookieStore.get("__Secure-pos-system_session_token")?.value
+      || cookieStore.get("pos-system.session_token")?.value
+      || cookieStore.get("__Secure-pos-system.session_token")?.value
+      || cookieStore.get("better-auth.session_token")?.value
+      || cookieStore.get("__Secure-better-auth.session_token")?.value;
 
     if (!token) {
       return null;
     }
 
-    const db = await clientPromise;
+    const db = CLIENT.db();
 
     // In Better Auth, wait does it hash by default? 
     // Let's also check a few potential hashed forms
@@ -40,8 +40,8 @@ export async function getFastSession() {
     }
 
     // Handle cases where Better Auth stores userId as ObjectId or string
-    const userQueryId = typeof session.userId === 'string' 
-      ? new ObjectId(session.userId) 
+    const userQueryId = typeof session.userId === 'string'
+      ? new ObjectId(session.userId)
       : session.userId;
 
     const user = await db.collection("user").findOne({ _id: userQueryId });

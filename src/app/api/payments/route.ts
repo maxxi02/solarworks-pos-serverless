@@ -127,11 +127,13 @@ export async function GET(request: Request) {
     const projection = {
       orderNumber: 1,
       customerName: 1,
+      subtotal: 1,
+      discountTotal: 1,
       total: 1,
       paymentMethod: 1,
       orderType: 1,
       createdAt: 1,
-      items: 1, // Needed for getItemCount and getProductNames in frontend
+      items: 1,
       status: 1,
       refundedAt: 1,
       refundedBy: 1,

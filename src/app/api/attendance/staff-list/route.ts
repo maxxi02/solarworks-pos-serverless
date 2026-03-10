@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFastSession } from "@/lib/fast-session";
 import MONGODB from "@/config/db";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import fs from "fs";
-import { cookies } from "next/headers";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getFastSession();
-    
+
     if (!session?.user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },

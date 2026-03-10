@@ -115,7 +115,6 @@ export const auth = betterAuth({
       issuer: "POS SYSTEM",
       skipVerificationOnEnable: true,
     }),
-    adminClient(),
     nextCookies(),
   ],
 });
