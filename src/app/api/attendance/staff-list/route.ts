@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFastSession } from "@/lib/fast-session";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 import MONGODB from "@/config/db";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getFastSession();
+    const session = await auth.api.getSession({ headers: await headers() });
 
     if (!session?.user) {
       return NextResponse.json(

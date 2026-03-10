@@ -21,12 +21,13 @@ import { toast } from "sonner";
 import { useReceiptSettings } from "@/hooks/useReceiptSettings";
 import { useSocket } from "@/provider/socket-provider";
 import { notifyCashUpdated } from "@/lib/notifyServer";
+import { AdminPinModal } from "@/app/(dashboard)/(staff)/orders/_components/AdminPinModal";
 
 interface Payment {
   _id: string;
   orderNumber: string;
-  subtotal: number;
-  discountTotal: number;
+  subtotal?: number;
+  discountTotal?: number;
   total: number;
   paymentMethod: string;
   status: string;
@@ -83,7 +84,7 @@ export default function CashManagementPage() {
 
   const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [cashOutAmount, setCashOutAmount] = useState<number | "">("");
-  const [cashOutReason, setCashOutReason] = useState("");
+  const [showAdminPin, setShowAdminPin] = useState(false);
   const [isCashingOut, setIsCashingOut] = useState(false);
 
   // ── Socket ──────────────────────────────────────────────────────────────
@@ -125,15 +126,12 @@ export default function CashManagementPage() {
   };
 
   const loadPayments = async () => {
-    setLoading(true);
     try {
-      const res = await fetch("/api/payments");
+      const res = await fetch("/api/payments?limit=500");
       const result = await res.json();
       if (result.success && result.data) setPayments(result.data.payments);
     } catch {
-      toast.error("Failed to load payments");
-    } finally {
-      setLoading(false);
+      /* silent — don't block UI */
     }
   };
 
@@ -168,7 +166,8 @@ export default function CashManagementPage() {
       0,
     );
 
-    // Gross Sales = original price BEFORE discount (subtotal = pre-discount total)
+    // Gross Sales = original price BEFORE discount (subtotal = pre-discount)
+    // Fall back to p.total for older records that don't have subtotal stored
     const grossSales = completed.reduce((s, p) => s + (p.subtotal || p.total), 0);
 
     const totalRefunds = refunded.reduce((s, p) => s + p.total, 0);
@@ -259,7 +258,6 @@ export default function CashManagementPage() {
 
   const handleCashOut = async () => {
     if (!cashOutAmount || cashOutAmount <= 0) { toast.error("Enter a valid amount"); return; }
-    if (!cashOutReason.trim()) { toast.error("Enter a reason"); return; }
     if (cashOutAmount > stats.cashInDrawer) { toast.error("Insufficient cash in drawer"); return; }
 
     setIsCashingOut(true);
@@ -267,7 +265,7 @@ export default function CashManagementPage() {
       const res = await fetch("/api/session", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cash_out", amount: cashOutAmount, reason: cashOutReason }),
+        body: JSON.stringify({ action: "cash_out", amount: cashOutAmount }),
       });
       const result = await res.json();
       if (result.success) {
@@ -275,8 +273,8 @@ export default function CashManagementPage() {
         toast.success(`Cash out of ${fmtP(cashOutAmount as number)} recorded`);
         await notifyCashUpdated();
         setCashOutAmount("");
-        setCashOutReason("");
         setShowCashOutModal(false);
+        setShowAdminPin(false);
       } else {
         toast.error("Failed to record cash out");
       }
@@ -353,6 +351,7 @@ export default function CashManagementPage() {
           ))}
         </div>
 
+
         {/* ── Cash Drawer + Quick Stats ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
@@ -388,7 +387,7 @@ export default function CashManagementPage() {
                 <p className="text-sm font-bold text-green-600">+{fmtP(stats.cashSales)}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-0.5">Cash Outs</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Pay Outs</p>
                 <p className="text-sm font-bold text-red-500">−{fmtP(stats.cashOuts)}</p>
               </div>
             </div>
@@ -572,21 +571,6 @@ export default function CashManagementPage() {
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Reason</label>
-                <select
-                  value={cashOutReason}
-                  onChange={(e) => setCashOutReason(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-foreground focus:border-primary focus:outline-none transition-colors"
-                >
-                  <option value="">Select reason</option>
-                  <option value="supplies">Purchase Supplies</option>
-                  <option value="change">Change Fund</option>
-                  <option value="expense">Store Expense</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
             </div>
 
             <div className="px-5 py-4 border-t border-border flex gap-2">
@@ -597,16 +581,29 @@ export default function CashManagementPage() {
                 Cancel
               </button>
               <button
-                onClick={handleCashOut}
-                disabled={isCashingOut}
+                onClick={() => {
+                  if (!cashOutAmount || cashOutAmount <= 0) { toast.error("Enter a valid amount"); return; }
+                  if (cashOutAmount > stats.cashInDrawer) { toast.error("Insufficient cash in drawer"); return; }
+                  setShowAdminPin(true);
+                }}
+                disabled={isCashingOut || !cashOutAmount || (cashOutAmount as number) <= 0}
                 className="flex-1 py-2.5 bg-destructive text-destructive-foreground text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-60 transition-opacity"
               >
-                {isCashingOut ? "Saving..." : "Withdraw"}
+                Withdraw
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Admin PIN for Cash Out ── */}
+      <AdminPinModal
+        open={showAdminPin}
+        onOpenChange={setShowAdminPin}
+        title="Admin Authorization"
+        description="Enter admin PIN to authorize this cash out."
+        onSuccess={handleCashOut}
+      />
     </div>
   );
 }
