@@ -10,9 +10,10 @@ interface QueueColumnProps {
     color: string;
     orders: CustomerOrder[];
     onOpenChat?: (order: CustomerOrder) => void;
+    onPrintKitchenSlip?: (order: CustomerOrder) => void;
 }
 
-export function QueueColumn({ id, label, color, orders, onOpenChat }: QueueColumnProps) {
+export function QueueColumn({ id, label, color, orders, onOpenChat, onPrintKitchenSlip }: QueueColumnProps) {
     const { setNodeRef, isOver } = useDroppable({ id });
 
     return (
@@ -44,6 +45,7 @@ export function QueueColumn({ id, label, color, orders, onOpenChat }: QueueColum
                             key={order.orderId}
                             order={order}
                             onOpenChat={onOpenChat}
+                            onPrintKitchenSlip={onPrintKitchenSlip}
                         />
                     ))
                 )}

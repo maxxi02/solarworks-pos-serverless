@@ -94,11 +94,12 @@ function Th({
 interface QueueBoardProps {
   onOpenChat?: (order: CustomerOrder) => void;
   onReprintReceipt?: (order: SavedOrder) => void;
+  onPrintKitchenSlip?: (order: CustomerOrder) => void;
 }
 
 type FilterType = "all" | "queueing" | "preparing" | "serving";
 
-export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
+export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }: QueueBoardProps) {
   const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
 
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -161,10 +162,10 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
           return prev.map((o) =>
             o.orderId === data.orderId
               ? {
-                  ...o,
-                  ...data.order,
-                  queueStatus: data.queueStatus as QueueStatus,
-                }
+                ...o,
+                ...data.order,
+                queueStatus: data.queueStatus as QueueStatus,
+              }
               : o,
           );
         }
@@ -205,6 +206,15 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, queueStatus: newStatus }),
       });
+
+      // Kitchen Slip Printing logic: 
+      // check if going to 'preparing' and if the callback onPrintKitchenSlip is provided
+      if (newStatus === "preparing" && onPrintKitchenSlip) {
+        const order = orders.find(o => o.orderId === orderId);
+        if (order) {
+          onPrintKitchenSlip(order);
+        }
+      }
 
       toast.success(
         `Order marked as ${STATUS_CONFIG[newStatus]?.label || newStatus}`,
@@ -319,11 +329,10 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                filter === f
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${filter === f
+                ? "bg-card text-foreground shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               {f === "serving" && <UtensilsCrossed className="w-3.5 h-3.5" />}
               {f === "all" && <Filter className="w-3.5 h-3.5" />}
@@ -334,11 +343,10 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
                 ? "All Active"
                 : f.charAt(0).toUpperCase() + f.slice(1)}
               <span
-                className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${
-                  f === "queueing" && (counts.queueing ?? 0) > 0
-                    ? "bg-sky-500/20 text-sky-400"
-                    : "bg-muted text-muted-foreground"
-                }`}
+                className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${f === "queueing" && (counts.queueing ?? 0) > 0
+                  ? "bg-sky-500/20 text-sky-400"
+                  : "bg-muted text-muted-foreground"
+                  }`}
               >
                 {counts[f] ?? counts.all}
               </span>
@@ -474,17 +482,17 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
                           )}
                           {(order.queueStatus === "pending_payment" ||
                             order.queueStatus === "queueing") && (
-                            <button
-                              onClick={(e) =>
-                                updateStatus(e, order.orderId, "preparing")
-                              }
-                              disabled={isUpdating}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/20 transition-colors disabled:opacity-50"
-                            >
-                              <ChefHat className="w-3 h-3" />
-                              {isUpdating ? "..." : "Start Prep"}
-                            </button>
-                          )}
+                              <button
+                                onClick={(e) =>
+                                  updateStatus(e, order.orderId, "preparing")
+                                }
+                                disabled={isUpdating}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-semibold border border-orange-500/20 transition-colors disabled:opacity-50"
+                              >
+                                <ChefHat className="w-3 h-3" />
+                                {isUpdating ? "..." : "Start Prep"}
+                              </button>
+                            )}
                           {order.queueStatus === "preparing" && (
                             <button
                               onClick={(e) =>
@@ -635,17 +643,17 @@ export function QueueBoard({ onOpenChat, onReprintReceipt }: QueueBoardProps) {
                     )}
                     {(order.queueStatus === "pending_payment" ||
                       order.queueStatus === "queueing") && (
-                      <button
-                        onClick={(e) =>
-                          updateStatus(e, order.orderId, "preparing")
-                        }
-                        disabled={isUpdating}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-bold border border-orange-500/20 transition-colors disabled:opacity-50"
-                      >
-                        <ChefHat className="w-3.5 h-3.5" />
-                        {isUpdating ? "..." : "Prep"}
-                      </button>
-                    )}
+                        <button
+                          onClick={(e) =>
+                            updateStatus(e, order.orderId, "preparing")
+                          }
+                          disabled={isUpdating}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 text-xs font-bold border border-orange-500/20 transition-colors disabled:opacity-50"
+                        >
+                          <ChefHat className="w-3.5 h-3.5" />
+                          {isUpdating ? "..." : "Prep"}
+                        </button>
+                      )}
                     {order.queueStatus === "preparing" && (
                       <button
                         onClick={(e) =>

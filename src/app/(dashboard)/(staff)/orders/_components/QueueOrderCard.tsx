@@ -16,6 +16,7 @@ import { useSocket } from "@/provider/socket-provider";
 interface QueueOrderCardProps {
   order: CustomerOrder;
   onOpenChat?: (order: CustomerOrder) => void;
+  onPrintKitchenSlip?: (order: CustomerOrder) => void;
 }
 
 const qrTypeBadge: Record<
@@ -101,7 +102,7 @@ function getElapsedTime(timestamp: Date | string): string {
   return `${Math.floor(diffMins / 60)}h ${diffMins % 60}m ago`;
 }
 
-export function QueueOrderCard({ order, onOpenChat }: QueueOrderCardProps) {
+export function QueueOrderCard({ order, onOpenChat, onPrintKitchenSlip }: QueueOrderCardProps) {
   const { emitOrderQueueUpdate } = useSocket();
   const [advancing, setAdvancing] = useState(false);
 
@@ -122,6 +123,9 @@ export function QueueOrderCard({ order, onOpenChat }: QueueOrderCardProps) {
     if (!cfg.nextStatus || advancing) return;
     setAdvancing(true);
     try {
+      if (cfg.nextStatus === "preparing" && onPrintKitchenSlip) {
+        onPrintKitchenSlip(order);
+      }
       emitOrderQueueUpdate(order.orderId, cfg.nextStatus);
     } finally {
       setTimeout(() => setAdvancing(false), 800);

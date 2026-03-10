@@ -93,6 +93,7 @@ export default function OrdersPage() {
     onQueueUpdated,
     offQueueUpdated,
     printBoth,
+    printKitchenOrder,
     isConnected,
   } = useSocket();
 
@@ -615,6 +616,48 @@ export default function OrdersPage() {
     [playSuccess, setCart],
   );
 
+  const handlePrintKitchenSlip = async (order: CustomerOrder) => {
+    if (!settings?.kitchenPrinter?.enabled || !isConnected) {
+      toast.warning("Kitchen printer not configured or connected.");
+      return;
+    }
+    const receiptInput = {
+      orderNumber: order.orderNumber || order.orderId.slice(-6).toUpperCase(),
+      customerName: order.customerName || "Walk-in Customer",
+      cashier: staffName,
+      timestamp: new Date(order.timestamp),
+      orderType: order.orderType || "dine-in",
+      tableNumber: order.tableNumber || undefined,
+      orderNote: order.orderNote || undefined,
+      items: order.items.map((item) => ({
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        hasDiscount: false, // Assuming no discount info at this level or not needed for kitchen
+        menuType: item.menuType,
+      })),
+      subtotal: order.subtotal,
+      discountTotal: 0,
+      total: order.total,
+      paymentMethod: "cash" as const, // Placeholder
+      seniorPwdCount: 0,
+      businessName: settings.businessName || "Rendezvous Cafe",
+      businessAddress: settings.locationAddress,
+      businessPhone: settings.phoneNumber,
+      receiptMessage: settings.receiptMessage,
+    };
+
+    try {
+      setIsPrinting(true);
+      await printKitchenOrder(receiptInput);
+      toast.success("Kitchen slip printed");
+    } catch (e) {
+      toast.error("Failed to print kitchen slip");
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const handleReprintReceipt = useCallback(
     (order: SavedOrder) => {
       setCurrentReceipt({
@@ -1058,9 +1101,8 @@ export default function OrdersPage() {
                     value={startingFundInput}
                     onChange={(e) => { setStartingFundInput(e.target.value); setStartingFundError(""); }}
                     onKeyDown={(e) => e.key === "Enter" && handleConfirmStartingFund()}
-                    className={`w-full pl-10 pr-4 py-3.5 text-2xl font-bold border-2 rounded-xl bg-background text-foreground focus:outline-none transition-colors ${
-                      startingFundError ? "border-destructive" : "border-input focus:border-primary"
-                    }`}
+                    className={`w-full pl-10 pr-4 py-3.5 text-2xl font-bold border-2 rounded-xl bg-background text-foreground focus:outline-none transition-colors ${startingFundError ? "border-destructive" : "border-input focus:border-primary"
+                      }`}
                   />
                 </div>
                 {startingFundError && (
@@ -1511,6 +1553,7 @@ export default function OrdersPage() {
                 })
               }
               onReprintReceipt={handleReprintReceipt}
+              onPrintKitchenSlip={handlePrintKitchenSlip}
             />
           </TabsContent>
         </Tabs>
