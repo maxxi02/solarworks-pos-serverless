@@ -187,18 +187,18 @@ export default function ReceiptSettingsPage() {
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 dark:bg-black/90 p-4">
-        <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[400px]'} rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 shadow-xl overflow-hidden`}>
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-900">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Receipt Preview</h3>
+        <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[400px]'} rounded-xl bg-white/95 dark:bg-black/95 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+          <div className="px-5 py-4 border-b border-gray-200/50 dark:border-gray-800/50 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50 shrink-0">
+            <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">Receipt Preview</h3>
             <button
               onClick={() => setShowPreview(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="p-5 bg-white dark:bg-black">
+          <div className="p-5 overflow-y-auto">
             <div
               className={`font-mono ${is58mm ? 'text-sm' : 'text-base'} bg-white dark:bg-black p-5 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg`}
               style={{ lineHeight: '1.6' }}
@@ -360,10 +360,10 @@ export default function ReceiptSettingsPage() {
               Receipt Width: <span className="font-bold text-blue-600">{settings.receiptWidth}</span>
             </div>
 
-            <div className="mt-5 flex justify-center">
+            <div className="mt-5 flex justify-center shrink-0">
               <button
                 onClick={() => setShowPreview(false)}
-                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-base rounded-lg transition-colors shadow-lg"
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-base rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25 active:scale-95"
               >
                 Close Preview
               </button>
@@ -386,32 +386,33 @@ export default function ReceiptSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 relative via-white to-blue-50/50 dark:from-slate-950 dark:via-black dark:to-indigo-950/50 p-4 md:p-6 pb-24">
+      <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.015] pointer-events-none mix-blend-overlay"></div>
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Receipt Settings</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
             Customize your receipt layout and printer settings
           </p>
-          <div className="flex gap-2 justify-center mt-4">
+          <div className="flex flex-wrap gap-2 justify-center mt-6">
             <button
               onClick={() => setShowPreview(true)}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+              className="flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-black/50 backdrop-blur-sm px-5 py-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all hover:shadow-sm active:scale-95"
             >
               <Eye className="h-4 w-4" />
               Receipt Preview
             </button>
             <button
               onClick={() => setShowZReportPreview(true)}
-              className="flex items-center gap-2 rounded-lg border border-orange-300 dark:border-orange-700 px-4 py-2 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+              className="flex items-center gap-2 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50/50 dark:bg-orange-950/20 backdrop-blur-sm px-5 py-2.5 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-all hover:shadow-sm active:scale-95"
             >
               <FileText className="h-4 w-4" />
               Z-Report Preview
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 dark:bg-blue-700 px-4 py-2 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-white hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-500/25 active:scale-95 font-medium"
             >
               <Save className="h-4 w-4" />
               Save Settings
@@ -423,8 +424,8 @@ export default function ReceiptSettingsPage() {
             <button
               onClick={() => setActiveTab('general')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'general'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-500'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-500'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
               General
@@ -432,8 +433,8 @@ export default function ReceiptSettingsPage() {
             <button
               onClick={() => setActiveTab('sections')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'sections'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-500'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-500'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
               Sections
@@ -441,8 +442,8 @@ export default function ReceiptSettingsPage() {
             <button
               onClick={() => setActiveTab('printers')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'printers'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-500'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-500'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
               Printers
@@ -450,8 +451,8 @@ export default function ReceiptSettingsPage() {
             <button
               onClick={() => setActiveTab('zreading')}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'zreading'
-                  ? 'border-orange-600 text-orange-600 dark:text-orange-500'
-                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                ? 'border-orange-600 text-orange-600 dark:text-orange-500'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
               ZReading
@@ -488,7 +489,7 @@ export default function ReceiptSettingsPage() {
             {/* General Settings Tab */}
             {activeTab === 'general' && (
               <>
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Information</h3>
 
                   <div className="space-y-4">
@@ -542,7 +543,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Display Settings</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -628,7 +629,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Logo Settings</h3>
 
                   <div className="space-y-4">
@@ -684,7 +685,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Messages</h3>
 
                   <div className="space-y-4">
@@ -720,7 +721,7 @@ export default function ReceiptSettingsPage() {
 
             {/* Sections Tab */}
             {activeTab === 'sections' && (
-              <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+              <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Section Positioning</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                   Choose where each section appears on the receipt (Header, Footer, or Disabled)
@@ -738,8 +739,8 @@ export default function ReceiptSettingsPage() {
                           <button
                             onClick={() => handleSectionToggle(key, 'header')}
                             className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${value.header
-                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                               }`}
                           >
                             Header
@@ -747,8 +748,8 @@ export default function ReceiptSettingsPage() {
                           <button
                             onClick={() => handleSectionToggle(key, 'footer')}
                             className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${value.footer
-                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                               }`}
                           >
                             Footer
@@ -756,8 +757,8 @@ export default function ReceiptSettingsPage() {
                           <button
                             onClick={() => handleSectionToggle(key, 'disabled')}
                             className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${value.disabled
-                                ? 'border-gray-500 bg-gray-100 text-gray-700 dark:border-gray-500 dark:bg-gray-900/10 dark:text-gray-500'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                              ? 'border-gray-500 bg-gray-100 text-gray-700 dark:border-gray-500 dark:bg-gray-900/10 dark:text-gray-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                               }`}
                           >
                             Disabled
@@ -773,7 +774,7 @@ export default function ReceiptSettingsPage() {
             {/* Printers Tab */}
             {activeTab === 'printers' && (
               <>
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Printer className="h-5 w-5 text-blue-600" />
@@ -797,8 +798,8 @@ export default function ReceiptSettingsPage() {
                         <button
                           onClick={() => updateNestedSetting('customerPrinter', 'connectionType', 'usb')}
                           className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.customerPrinter?.connectionType === 'usb'
-                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                             }`}
                         >
                           USB
@@ -806,8 +807,8 @@ export default function ReceiptSettingsPage() {
                         <button
                           onClick={() => updateNestedSetting('customerPrinter', 'connectionType', 'bluetooth')}
                           className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.customerPrinter?.connectionType === 'bluetooth'
-                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                             }`}
                         >
                           Bluetooth
@@ -823,8 +824,8 @@ export default function ReceiptSettingsPage() {
                         <button
                           onClick={() => updateNestedSetting('customerPrinter', 'paperWidth', '80mm')}
                           className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.customerPrinter?.paperWidth === '80mm'
-                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                             }`}
                         >
                           80mm
@@ -832,8 +833,8 @@ export default function ReceiptSettingsPage() {
                         <button
                           onClick={() => updateNestedSetting('customerPrinter', 'paperWidth', '58mm')}
                           className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.customerPrinter?.paperWidth === '58mm'
-                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                             }`}
                         >
                           58mm
@@ -843,7 +844,7 @@ export default function ReceiptSettingsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Utensils className="h-5 w-5 text-orange-600" />
@@ -879,8 +880,8 @@ export default function ReceiptSettingsPage() {
                           <button
                             onClick={() => updateNestedSetting('kitchenPrinter', 'connectionType', 'bluetooth')}
                             className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.kitchenPrinter?.connectionType === 'bluetooth'
-                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                               }`}
                           >
                             Bluetooth
@@ -888,8 +889,8 @@ export default function ReceiptSettingsPage() {
                           <button
                             onClick={() => updateNestedSetting('kitchenPrinter', 'connectionType', 'usb')}
                             className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.kitchenPrinter?.connectionType === 'usb'
-                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                              : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                               }`}
                           >
                             USB
@@ -1006,7 +1007,7 @@ export default function ReceiptSettingsPage() {
             {activeTab === 'zreading' && (
               <>
                 {/* STARTING FUND CARD */}
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-4">
                     <DollarSign className="h-5 w-5 text-green-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Starting Fund</h3>
@@ -1070,7 +1071,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* VAT Settings Card */}
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-4">
                     <Percent className="h-5 w-5 text-orange-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">VAT Settings</h3>
@@ -1114,7 +1115,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Discount Settings Card */}
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-4">
                     <Receipt className="h-5 w-5 text-green-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Discount Types</h3>
@@ -1193,8 +1194,8 @@ export default function ReceiptSettingsPage() {
                             onChange={(e) => updateZReadingSetting('zreading.soloParentPercentage', parseFloat(e.target.value))}
                             disabled={!settings.zreading?.discountTypes?.soloParent}
                             className={`w-16 text-sm border rounded px-2 py-1 bg-white dark:bg-zinc-800 ${!settings.zreading?.discountTypes?.soloParent
-                                ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-zinc-900 cursor-not-allowed'
-                                : 'border-gray-300 dark:border-gray-600'
+                              ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-zinc-900 cursor-not-allowed'
+                              : 'border-gray-300 dark:border-gray-600'
                               }`}
                           />
                           <span className="text-xs text-gray-500">%</span>
@@ -1229,7 +1230,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Payment Methods Card */}
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-4">
                     <Wallet className="h-5 w-5 text-blue-500" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment Methods</h3>
@@ -1266,7 +1267,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Additional Sections Card */}
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Additional Sections</h3>
 
                   <div className="space-y-3">
@@ -1364,7 +1365,7 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 {/* Z-Report Footer */}
-                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+                <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Z-Report Footer</h3>
 
                   <div className="space-y-4">
@@ -1401,7 +1402,7 @@ export default function ReceiptSettingsPage() {
 
           {/* Right Column - Actions */}
           <div className="space-y-6">
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+            <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Output</h3>
 
               <div className="space-y-4">
@@ -1440,8 +1441,8 @@ export default function ReceiptSettingsPage() {
                   <button
                     onClick={() => handleInputChange('receiptWidth', '80mm')}
                     className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.receiptWidth === '80mm'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                        : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                   >
                     80mm
@@ -1449,8 +1450,8 @@ export default function ReceiptSettingsPage() {
                   <button
                     onClick={() => handleInputChange('receiptWidth', '58mm')}
                     className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${settings.receiptWidth === '58mm'
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
-                        : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/10 dark:text-blue-500'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                   >
                     58mm
@@ -1459,7 +1460,7 @@ export default function ReceiptSettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 p-6">
+            <div className="rounded-2xl bg-white/70 dark:bg-zinc-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 p-6 shadow-sm hover:shadow-md transition-shadow">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions</h3>
 
               <div className="space-y-3">

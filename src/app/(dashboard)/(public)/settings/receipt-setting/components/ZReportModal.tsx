@@ -304,7 +304,7 @@ ${Sep()}
         </div>
 
         {/* Z-Report Content */}
-        <div className="max-h-[70vh] overflow-y-auto">
+        <div className="max-h-[calc(100vh-140px)] overflow-y-auto">
           <div id="zreport-content" className={`font-mono ${is58mm ? 'text-[10px]' : 'text-xs'} bg-white p-4 text-black`}>
 
             {/* Logo */}
