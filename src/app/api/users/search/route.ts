@@ -43,11 +43,6 @@ export async function GET(req: NextRequest) {
       .limit(20)
       .toArray();
 
-    if (results.length > 0) {
-      console.log("🔍 sample user doc fields:", Object.keys(results[0]));
-      console.log("🔍 sample user doc:", JSON.stringify(results[0]));
-    }
-
     const mapped = results
       .map((u) => ({
         id: (u.id as string) || u._id.toString(),
@@ -59,8 +54,6 @@ export async function GET(req: NextRequest) {
         role: (u.role as string) || "staff",
       }))
       .filter((u) => u.id !== session.user.id);
-
-    console.log("🔍 search results mapped:", JSON.stringify(mapped));
 
     return NextResponse.json({ users: mapped });
   } catch (error) {

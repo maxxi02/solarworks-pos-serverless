@@ -8,6 +8,7 @@ import {
   ProductInput,
   FormattedProduct,
 } from "@/types/products";
+import { uploadImage } from "@/lib/cloudinary";
 
 interface ProductQuery {
   categoryId?: string;
@@ -117,7 +118,11 @@ export async function POST(request: NextRequest) {
 
     // MODIFIED: Make ingredients optional
     // Only validate ingredients if they are provided
-    if (body.ingredients && Array.isArray(body.ingredients) && body.ingredients.length > 0) {
+    if (
+      body.ingredients &&
+      Array.isArray(body.ingredients) &&
+      body.ingredients.length > 0
+    ) {
       errors.push(
         ...validateIngredients(body.ingredients as ProductIngredient[]),
       );
@@ -132,14 +137,28 @@ export async function POST(request: NextRequest) {
     }
 
     // MODIFIED: Handle empty ingredients array
-    const ingredients: ProductIngredient[] = body.ingredients && Array.isArray(body.ingredients) 
-      ? (body.ingredients as ProductIngredient[]).map((ing) => ({
-          inventoryItemId: ing.inventoryItemId.trim(),
-          name: ing.name.trim(),
-          quantity: Number(ing.quantity),
-          unit: ing.unit.trim(),
-        }))
-      : []; // Default to empty array if no ingredients
+    const ingredients: ProductIngredient[] =
+      body.ingredients && Array.isArray(body.ingredients)
+        ? (body.ingredients as ProductIngredient[]).map((ing) => ({
+            inventoryItemId: ing.inventoryItemId.trim(),
+            name: ing.name.trim(),
+            quantity: Number(ing.quantity),
+            unit: ing.unit.trim(),
+          }))
+        : []; // Default to empty array if no ingredients
+
+    let finalImageUrl = body.imageUrl?.trim() || "";
+    if (finalImageUrl.startsWith("data:image")) {
+      try {
+        finalImageUrl = await uploadImage(finalImageUrl);
+      } catch (err) {
+        console.error("Cloudinary upload error:", err);
+        return NextResponse.json(
+          { error: "Failed to upload image" },
+          { status: 500 },
+        );
+      }
+    }
 
     const newProduct = {
       name: body.name!.trim(),
@@ -148,7 +167,7 @@ export async function POST(request: NextRequest) {
       ingredients,
       available: body.available !== undefined ? Boolean(body.available) : true,
       categoryId: body.categoryId!,
-      imageUrl: body.imageUrl?.trim() || "",
+      imageUrl: finalImageUrl,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

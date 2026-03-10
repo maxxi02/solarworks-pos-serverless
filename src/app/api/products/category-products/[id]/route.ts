@@ -8,6 +8,7 @@ import {
   ProductInput,
   FormattedProduct,
 } from "@/types/products";
+import { uploadImage } from "@/lib/cloudinary";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -181,10 +182,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Determine imageUrl:
     // - If body.imageUrl is explicitly provided (even as "" to delete it), use that value.
     // - Only fall back to the existing image if imageUrl was NOT included in the request at all.
-    const imageUrl =
+    let imageUrl =
       "imageUrl" in body
         ? (body.imageUrl?.trim() ?? "")
         : existingProduct.imageUrl || "";
+
+    if (imageUrl.startsWith("data:image")) {
+      try {
+        imageUrl = await uploadImage(imageUrl);
+      } catch (err) {
+        console.error("Cloudinary upload error:", err);
+        return NextResponse.json(
+          { error: "Failed to upload image" },
+          { status: 500 },
+        );
+      }
+    }
 
     const updateData = {
       name: body.name!.trim(),
