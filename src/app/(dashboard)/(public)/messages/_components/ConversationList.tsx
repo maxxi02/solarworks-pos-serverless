@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, memo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import type { ConversationWithDetails } from "@/types/messaging.types";
 import { Search, Users, Loader2, X, Check } from "lucide-react";
@@ -30,7 +30,7 @@ interface UserSearchResult {
     role: string;
 }
 
-type PanelMode = "none" | "group";
+type PanelMode = "none" | "group" | "dm";
 
 export function ConversationList({
     conversations,
@@ -59,21 +59,23 @@ export function ConversationList({
     const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
     // Fetch all staff/admins on load
-    useEffect(() => {
-        const fetchUsers = async () => {
-            setIsUsersLoading(true);
-            try {
-                const res = await fetch('/api/users/search?q='); // Empty query returns default list
-                const data = await res.json() as { users: UserSearchResult[] };
-                setAllUsers(data.users || []);
-            } catch (err) {
-                console.error("Failed to fetch users:", err);
-            } finally {
-                setIsUsersLoading(false);
-            }
-        };
-        fetchUsers();
-    }, []);
+    const fetchUsers = async () => {
+        setIsUsersLoading(true);
+        try {
+            const res = await fetch('/api/users/search?q='); // Empty query returns default list
+            const data = await res.json() as { users: UserSearchResult[] };
+            setAllUsers(data.users || []);
+        } catch (err) {
+            console.error("Failed to fetch users:", err);
+        } finally {
+            setIsUsersLoading(false);
+        }
+    };
+
+    const handleOpenDMPanel = async () => {
+        if (allUsers.length === 0) await fetchUsers();
+        setPanelMode("dm");
+    };
 
     // Filter conversations based on search (Memoized to prevent flickering)
     const filteredConversations = useMemo(() => conversations.filter((c) => {
@@ -166,6 +168,13 @@ export function ConversationList({
                 <div className="flex items-center justify-between mb-3">
                     <h2 className="text-base font-semibold tracking-tight">Messages</h2>
                     <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost" size="icon" className="h-8 w-8"
+                            onClick={() => panelMode === "dm" ? closePanel() : (closePanel(), handleOpenDMPanel())}
+                            title="New message"
+                        >
+                            <Search className="h-4 w-4" />
+                        </Button>
                         <Button
                             variant="ghost" size="icon" className="h-8 w-8"
                             onClick={() => panelMode === "group" ? closePanel() : (closePanel(), setPanelMode("group"))}
@@ -264,7 +273,7 @@ export function ConversationList({
                 )}
 
                 {/* Search existing conversations and all users */}
-                {panelMode === "none" && (
+                {(panelMode === "none" || panelMode === "dm") && (
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                         <Input placeholder="Search people or groups..." className="pl-8 h-8 text-sm"
@@ -313,7 +322,7 @@ export function ConversationList({
                         )}
 
                         {/* 2. Available Contacts Section */}
-                        {availableContacts.length > 0 && (
+                        {panelMode === "dm" && availableContacts.length > 0 && (
                             <div className={cn("space-y-0.5", filteredConversations.length > 0 && "mt-4")}>
                                 <div className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Other Contacts</div>
                                 {availableContacts.map((user) => (
@@ -358,7 +367,7 @@ export function ConversationList({
 
 // ─── Single conversation row ──────────────────────────────────────
 
-function ConversationItem({
+const ConversationItem = memo(function ConversationItem({
     conversation,
     isActive,
     currentUserId,
@@ -389,6 +398,11 @@ function ConversationItem({
                 ? `${lastMessage.senderName}: ${lastMessage.content}`
                 : lastMessage.content
         : "Start a conversation";
+
+    const lastMessageTime = useMemo(() => {
+        if (!lastMessage?.sentAt) return null;
+        return formatDistanceToNow(new Date(lastMessage.sentAt), { addSuffix: false });
+    }, [lastMessage?.sentAt]);
 
     return (
         <button onClick={onClick}
@@ -421,9 +435,9 @@ function ConversationItem({
                     <span className={cn("text-sm truncate", hasUnread ? "font-semibold" : "font-medium")}>
                         {displayName}
                     </span>
-                    {lastMessage && (
+                    {lastMessageTime && (
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
-                            {formatDistanceToNow(new Date(lastMessage.sentAt), { addSuffix: false })}
+                            {lastMessageTime}
                         </span>
                     )}
                 </div>
@@ -440,4 +454,4 @@ function ConversationItem({
             </div>
         </button>
     );
-}
+});

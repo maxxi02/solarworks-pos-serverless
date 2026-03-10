@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 import { format, isToday, isYesterday } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, CheckCheck, Clock } from "lucide-react";
@@ -17,7 +19,7 @@ interface MessageBubbleProps {
     otherParticipantImage?: string;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
     message,
     isOwn,
     showAvatar,
@@ -100,7 +102,7 @@ export function MessageBubble({
             </div>
         </div>
     );
-}
+});
 
 // ─── Date separator between messages ─────────────────────────────
 
