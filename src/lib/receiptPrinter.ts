@@ -77,6 +77,8 @@ function toReceiptBuildInput(
     businessName: settings.businessName || "Rendezvous Cafe",
     businessAddress: settings.locationAddress,
     businessPhone: settings.phoneNumber,
+    businessLogo:
+      settings.showLogo && settings.logo ? settings.logo : undefined,
     receiptMessage: settings.receiptMessage,
   };
 }

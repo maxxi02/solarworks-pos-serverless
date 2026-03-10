@@ -177,6 +177,7 @@ export interface ReceiptBuildInput {
   businessName: string;
   businessAddress?: string;
   businessPhone?: string;
+  businessLogo?: string;
   receiptMessage?: string;
 }
 
