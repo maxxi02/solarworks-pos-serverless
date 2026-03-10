@@ -63,14 +63,31 @@ export async function GET() {
 
     const messages = getMessagesCollection(db);
 
-    const unreadCounts = await Promise.all(
-      convDocs.map((conv) =>
-        messages.countDocuments({
-          conversationId: conv._id.toString(),
-          senderId: { $ne: userId },
-          "readBy.userId": { $ne: userId },
-        }),
-      ),
+    const convIds = convDocs.map((c) => c._id.toString());
+    const unreadCountsAgg = await messages
+      .aggregate([
+        {
+          $match: {
+            conversationId: { $in: convIds },
+            senderId: { $ne: userId },
+            "readBy.userId": { $ne: userId },
+          },
+        },
+        {
+          $group: {
+            _id: "$conversationId",
+            count: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray();
+
+    const unreadMap = new Map<string, number>(
+      unreadCountsAgg.map((u) => [u._id as string, u.count as number]),
+    );
+
+    const unreadCounts = convDocs.map(
+      (conv) => unreadMap.get(conv._id.toString()) || 0,
     );
 
     interface StoredParticipant {
