@@ -169,8 +169,8 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
               : o,
           );
         }
-        // New paid order arrived (queueing) — add to top of list
-        return [data.order, ...prev];
+        // New paid order arrived (queueing) — add to top of list, deduplicated
+        return [data.order, ...prev.filter((o) => o.orderId !== data.orderId)];
       });
     };
 
@@ -528,24 +528,7 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
                 })
               )}
             </tbody>
-            {visibleOrders.length > 0 && (
-              <tfoot className="border-t border-border bg-muted/20">
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-3 text-sm font-semibold text-foreground"
-                  >
-                    Total
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-primary">
-                    ₱
-                    {visibleOrders
-                      .reduce((sum, o) => sum + (o.total || 0), 0)
-                      .toFixed(0)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
+
           </table>
         </div>
       </div>
@@ -687,20 +670,7 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
           })
         )}
 
-        {/* Mobile Footer Total */}
-        {visibleOrders.length > 0 && (
-          <div className="bg-muted/10 border border-border border-dashed rounded-xl p-3 flex justify-between items-center">
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-              Page Total
-            </span>
-            <span className="text-primary font-black">
-              ₱
-              {visibleOrders
-                .reduce((sum, o) => sum + (o.total || 0), 0)
-                .toFixed(0)}
-            </span>
-          </div>
-        )}
+
       </div>
 
       {/* Order detail modal */}
