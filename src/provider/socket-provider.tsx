@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -555,20 +556,26 @@ export function SocketProvider({
   const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) =>
     socketRef.current?.off("order:new", cb);
 
-  const onQueueUpdated = (
-    cb: (data: {
-      orderId: string;
-      queueStatus: string;
-      order: CustomerOrder;
-    }) => void,
-  ) => socketRef.current?.on("order:queue:updated", cb);
-  const offQueueUpdated = (
-    cb?: (data: {
-      orderId: string;
-      queueStatus: string;
-      order: CustomerOrder;
-    }) => void,
-  ) => socketRef.current?.off("order:queue:updated", cb);
+  const onQueueUpdated = useCallback(
+    (
+      cb: (data: {
+        orderId: string;
+        queueStatus: string;
+        order: CustomerOrder;
+      }) => void,
+    ) => socketRef.current?.on("order:queue:updated", cb),
+    [],
+  );
+  const offQueueUpdated = useCallback(
+    (
+      cb?: (data: {
+        orderId: string;
+        queueStatus: string;
+        order: CustomerOrder;
+      }) => void,
+    ) => socketRef.current?.off("order:queue:updated", cb),
+    [],
+  );
 
   const onTableUpdated = (cb: (tableData: any) => void) =>
     socketRef.current?.on("table:updated", cb);
