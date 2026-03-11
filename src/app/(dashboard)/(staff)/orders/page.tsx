@@ -626,6 +626,7 @@ export default function OrdersPage() {
       orderType: order.orderType || "dine-in",
       tableNumber: order.tableNumber || undefined,
       orderNote: order.orderNote || undefined,
+      sourceOrderId: order.orderId,
       items: order.items.map((item) => ({
         name: item.name,
         price: item.price,

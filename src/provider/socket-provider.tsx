@@ -30,6 +30,7 @@ export interface ReceiptBuildInput {
   orderType: "dine-in" | "takeaway";
   tableNumber?: string;
   orderNote?: string;
+  sourceOrderId?: string;
   items: ReceiptBuildItem[];
   subtotal: number;
   discountTotal: number;
