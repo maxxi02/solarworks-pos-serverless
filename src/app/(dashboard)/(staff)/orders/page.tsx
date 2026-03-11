@@ -344,11 +344,8 @@ export default function OrdersPage() {
       queueStatus: string;
       order: CustomerOrder;
     }) => {
-      const isNewTableOrder =
-        data.queueStatus === "pending_payment" &&
-        data.order?.orderType === "dine-in";
-
-      if (data.queueStatus === "queueing" || isNewTableOrder) {
+      // Only notify when payment is confirmed (queueing = paid and in queue)
+      if (data.queueStatus === "queueing") {
         if (notifiedOrdersRef.current.has(data.orderId)) return;
         notifiedOrdersRef.current.add(data.orderId);
 
