@@ -193,7 +193,7 @@ export default function KioskPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-black text-foreground tracking-tight">Rendezvous</h1>
-                <p className="text-xs text-muted-foreground font-medium tracking-widest uppercase">Café & Restaurant</p>
+                <p className="text-xs text-muted-foreground font-medium tracking-widest uppercase">Café</p>
               </div>
             </div>
           </div>
