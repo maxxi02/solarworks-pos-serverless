@@ -111,24 +111,6 @@ export default function TablesPage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <button
-            onClick={handleGenerateWalkInQR}
-            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
-                <User className="w-5 h-5" />
-              </div>
-              <div className="text-left">
-                <p className="font-semibold text-sm">Walk-In QR</p>
-                <p className="text-xs text-muted-foreground">
-                  For on-site orders
-                </p>
-              </div>
-            </div>
-            <QrCode className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-          </button>
-
-          <button
             onClick={handleGenerateDriveThruQR}
             className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 transition-all group"
           >
@@ -141,22 +123,6 @@ export default function TablesPage() {
                 <p className="text-xs text-muted-foreground">
                   For vehicle orders
                 </p>
-              </div>
-            </div>
-            <QrCode className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-          </button>
-
-          <button
-            onClick={handleGenerateTakeAwayQR}
-            className="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
-                <Plus className="w-5 h-5" />
-              </div>
-              <div className="text-left">
-                <p className="font-semibold text-sm">Take-Away QR</p>
-                <p className="text-xs text-muted-foreground">For self-pickup</p>
               </div>
             </div>
             <QrCode className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />

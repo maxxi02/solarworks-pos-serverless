@@ -207,11 +207,12 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
         body: JSON.stringify({ orderId, queueStatus: newStatus }),
       });
 
-      // Kitchen Slip Printing logic: 
-      // check if going to 'preparing' and if the callback onPrintKitchenSlip is provided
+      // Kitchen Slip Printing logic:
+      // Only print if going to 'preparing' AND the order contains food items
       if (newStatus === "preparing" && onPrintKitchenSlip) {
         const order = orders.find(o => o.orderId === orderId);
-        if (order) {
+        const hasFoodItems = order?.items?.some((i) => i.menuType === "food");
+        if (order && hasFoodItems) {
           onPrintKitchenSlip(order);
         }
       }
