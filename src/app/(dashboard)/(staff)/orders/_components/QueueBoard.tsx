@@ -92,14 +92,13 @@ function Th({
 // ─── Main component ─────────────────────────────────────────────────────────
 
 interface QueueBoardProps {
-  onOpenChat?: (order: CustomerOrder) => void;
   onReprintReceipt?: (order: SavedOrder) => void;
   onPrintKitchenSlip?: (order: CustomerOrder) => void;
 }
 
 type FilterType = "all" | "queueing" | "preparing" | "serving";
 
-export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }: QueueBoardProps) {
+export function QueueBoard({ onReprintReceipt, onPrintKitchenSlip }: QueueBoardProps) {
   const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
 
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
