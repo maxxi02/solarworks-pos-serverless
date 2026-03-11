@@ -172,7 +172,7 @@ export default function AdminDashboard() {
           break;
       }
 
-      let url = `/api/payments/summary?period=${periodParam}`;
+      let url = `/api/payments/analytics?period=${periodParam}`;
       if (!isAdmin && userId) {
         url += `&staffId=${userId}`;
       }

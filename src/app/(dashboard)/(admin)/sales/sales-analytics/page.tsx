@@ -194,7 +194,7 @@ export default function SalesAnalyticsPage() {
     setError(null);
 
     try {
-      const url = `/api/payments/summary?period=${period}&_=${Date.now()}`;
+      const url = `/api/payments/analytics?period=${period}&_=${Date.now()}`;
       console.log("Fetching from:", url);
 
       const response = await fetch(url);
