@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import MONGODB from '@/config/db';
+import { NextRequest, NextResponse } from "next/server";
+import MONGODB from "@/config/db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface CashOut {
@@ -13,7 +13,7 @@ interface Session {
   cashierName: string;
   registerName: string;
   openedAt: Date;
-  status: 'open' | 'closed';
+  status: "open" | "closed";
   cashOuts: CashOut[];
   createdAt: Date;
   updatedAt: Date;
@@ -26,19 +26,22 @@ interface Session {
   snapshot?: object;
 }
 
-const col = () => MONGODB.collection<Session>('sessions');
+const col = () => MONGODB.collection<Session>("sessions");
 
 // ─── GET /api/sessions ────────────────────────────────────────────────────────
 export async function GET() {
   try {
     const session = await col().findOne(
-      { status: 'open' },
-      { sort: { openedAt: -1 } }
+      { status: "open" },
+      { sort: { openedAt: -1 } },
     );
     return NextResponse.json({ success: true, data: session });
   } catch (error) {
-    console.error('GET /api/sessions error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to fetch session' }, { status: 500 });
+    console.error("GET /api/sessions error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch session" },
+      { status: 500 },
+    );
   }
 }
 
@@ -46,21 +49,25 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { openingFund = 0, cashierName = 'Cashier', registerName = 'Main Register' } = body;
+    const {
+      openingFund = 0,
+      cashierName = "Cashier",
+      registerName = "Main Register",
+    } = body;
 
     await col().updateMany(
-      { status: 'open' },
-      { $set: { status: 'closed', closedAt: new Date() } }
+      { status: "open" },
+      { $set: { status: "closed", closedAt: new Date() } },
     );
 
     const now = new Date();
-    const newSession: Omit<Session, '_id'> = {
+    const newSession: Omit<Session, "_id"> = {
       openingFund,
       cashierName,
       registerName,
-      openedAt:  now,
-      status:    'open',
-      cashOuts:  [],
+      openedAt: now,
+      status: "open",
+      cashOuts: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -70,8 +77,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: session }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/sessions error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to open session' }, { status: 500 });
+    console.error("POST /api/sessions error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to open session" },
+      { status: 500 },
+    );
   }
 }
 
@@ -82,29 +92,32 @@ export async function PATCH(req: NextRequest) {
     const { action } = body;
 
     const openSession = await col().findOne(
-      { status: 'open' },
-      { sort: { openedAt: -1 } }
+      { status: "open" },
+      { sort: { openedAt: -1 } },
     );
     if (!openSession) {
       return NextResponse.json(
-        { success: false, error: 'No open session found' },
-        { status: 404 }
+        { success: false, error: "No open session found" },
+        { status: 404 },
       );
     }
 
     // ── Cash Out ────────────────────────────────────────────────────────────
-    if (action === 'cash_out') {
+    if (action === "cash_out") {
       const { amount, reason } = body;
       if (!amount || amount <= 0) {
-        return NextResponse.json({ success: false, error: 'Invalid amount' }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Invalid amount" },
+          { status: 400 },
+        );
       }
 
       await col().updateOne(
         { _id: openSession._id },
         {
           $push: { cashOuts: { amount, reason, date: new Date() } },
-          $set:  { updatedAt: new Date() },
-        }
+          $set: { updatedAt: new Date() },
+        },
       );
 
       const updated = await col().findOne({ _id: openSession._id });
@@ -112,36 +125,46 @@ export async function PATCH(req: NextRequest) {
     }
 
     // ── Close Register ──────────────────────────────────────────────────────
-    if (action === 'close') {
+    if (action === "close") {
       const {
-        actualCash, expectedCash, difference,
-        closeStatus, closingNotes, snapshot,
+        actualCash,
+        expectedCash,
+        difference,
+        closeStatus,
+        closingNotes,
+        snapshot,
       } = body;
 
       await col().updateOne(
         { _id: openSession._id },
         {
           $set: {
-            status:       'closed',
-            closedAt:     new Date(),
+            status: "closed",
+            closedAt: new Date(),
             actualCash,
             expectedCash,
             difference,
             closeStatus,
-            closingNotes: closingNotes || '',
-            snapshot:     snapshot    || {},
-            updatedAt:    new Date(),
+            closingNotes: closingNotes || "",
+            snapshot: snapshot || {},
+            updatedAt: new Date(),
           },
-        }
+        },
       );
 
       const updated = await col().findOne({ _id: openSession._id });
       return NextResponse.json({ success: true, data: updated });
     }
 
-    return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "Unknown action" },
+      { status: 400 },
+    );
   } catch (error) {
-    console.error('PATCH /api/sessions error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to update session' }, { status: 500 });
+    console.error("PATCH /api/sessions error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to update session" },
+      { status: 500 },
+    );
   }
 }

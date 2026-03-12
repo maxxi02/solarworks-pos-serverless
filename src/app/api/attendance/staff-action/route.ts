@@ -130,10 +130,6 @@ export async function POST(req: NextRequest) {
       }
       console.log(`[staff-action] ${userName} clocked in`);
 
-      // Open the shop: persist to DB + broadcast via socket server
-      await ShopStatusModel.setStatus(true, userName);
-      notifyShopStatus(true, userName); // non-blocking broadcast
-
       return NextResponse.json({
         success: true,
         message: `${userName} clocked in successfully`,

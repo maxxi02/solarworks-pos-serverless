@@ -30,6 +30,8 @@ import {
   Wallet,
   CheckCircle,
   AlertCircle,
+  Lock,
+  PowerOff,
 } from "lucide-react";
 
 // UI
@@ -95,6 +97,8 @@ export default function OrdersPage() {
     printBoth,
     printKitchenOrder,
     isConnected,
+    onShopStatusChanged,
+    offShopStatusChanged,
   } = useSocket();
 
   const { data: session } = useSession();
@@ -145,6 +149,9 @@ export default function OrdersPage() {
   const [startingFundError, setStartingFundError] = useState("");
   const [isOpeningSession, setIsOpeningSession] = useState(false);
 
+  // Register closed state — shown after staff closes register via Close Register page
+  const [isRegisterClosed, setIsRegisterClosed] = useState(false);
+
   const checkSession = useCallback(async () => {
     try {
       const res = await fetch("/api/session");
@@ -155,22 +162,46 @@ export default function OrdersPage() {
     }
   }, []);
 
+  const checkShopOpen = useCallback(async () => {
+    try {
+      const res = await fetch("/api/shop-status");
+      const data = await res.json();
+      return data.isOpen !== false; // default true on error
+    } catch {
+      return true;
+    }
+  }, []);
+
   const handleClockInSuccess = useCallback(async () => {
     const sessionOpen = await checkSession();
     if (sessionOpen) {
       // Session already open – go straight to orders
+      setIsRegisterClosed(false);
       await refreshStatus();
     } else {
-      // Needs to open register first
-      setNeedsOpenRegister(true);
+      // No open session – check if shop was explicitly closed or just never opened
+      const shopOpen = await checkShopOpen();
+      if (!shopOpen) {
+        setIsRegisterClosed(true);
+        setNeedsOpenRegister(false);
+      } else {
+        // Shop is open but no session exists -> Needs to open register first
+        setNeedsOpenRegister(true);
+        // Force the shop to close so customers can't order while staff is opening the register
+        fetch("/api/shop-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
+        }).catch(err => console.error("Failed to sync shop status to closed:", err));
+      }
       await refreshStatus();
     }
-  }, [checkSession, refreshStatus]);
+  }, [checkSession, checkShopOpen, refreshStatus]);
 
   const handleConfirmStartingFund = async () => {
     const amount = parseFloat(startingFundInput);
     if (isNaN(amount) || amount < 0) {
-      setStartingFundError("Please enter a valid amount.");
+      setStartingFundError("Please enter a valid amount (0 or more)");
       return;
     }
     setIsOpeningSession(true);
@@ -184,8 +215,17 @@ export default function OrdersPage() {
       if (result.success) {
         toast.success(`Register opened with ₱${amount.toFixed(2)} starting fund`);
         setNeedsOpenRegister(false);
+        setIsRegisterClosed(false);
         setStartingFundInput("");
         setStartingFundError("");
+
+        // Unlock the shop so customers can order again
+        fetch("/api/shop-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isOpen: true, updatedBy: "staff" }),
+        }).catch(err => console.error("Failed to sync shop status to open:", err));
+        
       } else {
         toast.error("Failed to open register");
       }
@@ -375,13 +415,50 @@ export default function OrdersPage() {
   }, []);
 
   // Whenever the user is clocked in, verify a cash session is open.
-  // If not, gate them to the Open Register screen.
+  // If not, gate them to the Open Register or Register Closed screen.
+  // Also sync the shop status if they are blocked on Open Register.
   useEffect(() => {
     if (!isClockedIn) return;
-    checkSession().then((open) => {
-      setNeedsOpenRegister(!open);
+    Promise.all([checkSession(), checkShopOpen()]).then(([sessionOpen, shopOpen]) => {
+      if (sessionOpen) {
+        setIsRegisterClosed(false);
+        setNeedsOpenRegister(false);
+      } else if (!shopOpen) {
+        // Shop was explicitly closed via Close Register
+        setIsRegisterClosed(true);
+        setNeedsOpenRegister(false);
+      } else {
+        // No session and shop not explicitly closed = needs to open register
+        setIsRegisterClosed(false);
+        setNeedsOpenRegister(true);
+        
+        // Block customer portal if we are stuck on the Open Register screen
+        fetch("/api/shop-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
+        }).catch(err => console.error("Failed to sync shop status to closed:", err));
+      }
     });
-  }, [isClockedIn, checkSession]);
+  }, [isClockedIn, checkSession, checkShopOpen]);
+
+  // Real-time: listen for shop status changes from Close Register
+  useEffect(() => {
+    const handleShopStatus = ({ isOpen }: { isOpen: boolean }) => {
+      if (!isOpen) {
+        setIsRegisterClosed(true);
+        setNeedsOpenRegister(false);
+        toast.warning("Register has been closed.", {
+          description: "Please open the register to continue taking orders.",
+          duration: 6000,
+        });
+      } else {
+        setIsRegisterClosed(false);
+      }
+    };
+    onShopStatusChanged(handleShopStatus);
+    return () => offShopStatusChanged(handleShopStatus);
+  }, [onShopStatusChanged, offShopStatusChanged]);
 
   useEffect(() => {
     if (paymentMethod === "split" && total > 0)
@@ -1063,6 +1140,78 @@ export default function OrdersPage() {
         playSuccess={playSuccess}
         playError={playError}
       />
+    );
+  }
+
+  // Clocked in but register was closed — show Register Closed screen
+  if (isRegisterClosed) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
+            <div className="bg-destructive text-destructive-foreground px-8 py-7 text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-white/15 rounded-2xl mb-4">
+                <Lock className="h-7 w-7" />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">Register Closed</h2>
+              <p className="text-sm mt-1 opacity-70">The register has been closed for this session</p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-muted-foreground text-center">
+                To start taking orders again, you need to open a new register session with a starting fund.
+              </p>
+
+              <div className="bg-muted rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <PowerOff className="h-3.5 w-3.5 text-destructive" />
+                  <span>Register was closed by staff</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Starting Fund
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold text-xl select-none">₱</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    autoFocus
+                    value={startingFundInput}
+                    onChange={(e) => { setStartingFundInput(e.target.value); setStartingFundError(""); }}
+                    onKeyDown={(e) => e.key === "Enter" && handleConfirmStartingFund()}
+                    className={`w-full pl-10 pr-4 py-3.5 text-2xl font-bold border-2 rounded-xl bg-background text-foreground focus:outline-none transition-colors ${startingFundError ? "border-destructive" : "border-input focus:border-primary"
+                      }`}
+                  />
+                </div>
+                {startingFundError && (
+                  <p className="mt-2 text-sm text-destructive flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    {startingFundError}
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2.5">
+                Cash already in the drawer before any sales. Enter ₱0 if starting empty.
+              </p>
+
+              <button
+                onClick={handleConfirmStartingFund}
+                disabled={isOpeningSession}
+                className="w-full py-3.5 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60 text-sm"
+              >
+                <CheckCircle className="h-4 w-4" />
+                {isOpeningSession ? "Opening..." : "Open Register"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 

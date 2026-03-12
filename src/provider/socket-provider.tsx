@@ -182,6 +182,10 @@ interface SocketContextValue {
     }) => void,
   ) => void;
 
+  // Shop Status
+  onShopStatusChanged: (cb: (data: { isOpen: boolean }) => void) => void;
+  offShopStatusChanged: (cb?: (data: { isOpen: boolean }) => void) => void;
+
   // Orders
   emitPosJoin: () => void;
   emitCustomerOrder: (order: CustomerOrder) => void;
@@ -246,6 +250,8 @@ const defaultContext: SocketContextValue = {
   offCashUpdated: () => { },
   onRegisterClosed: () => { },
   offRegisterClosed: () => { },
+  onShopStatusChanged: () => { },
+  offShopStatusChanged: () => { },
   emitPosJoin: () => { },
   emitCustomerOrder: () => { },
   onNewCustomerOrder: () => { },
@@ -513,6 +519,11 @@ export function SocketProvider({
     }) => void,
   ) => socketRef.current?.off("register:closed", cb);
 
+  const onShopStatusChanged = (cb: (d: { isOpen: boolean }) => void) =>
+    socketRef.current?.on("shop:status", cb);
+  const offShopStatusChanged = (cb?: (d: { isOpen: boolean }) => void) =>
+    socketRef.current?.off("shop:status", cb);
+
   const onNewCustomerOrder = (cb: (order: CustomerOrder) => void) =>
     socketRef.current?.on("order:new", cb);
   const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) =>
@@ -632,6 +643,8 @@ export function SocketProvider({
         offCashUpdated,
         onRegisterClosed,
         offRegisterClosed,
+        onShopStatusChanged,
+        offShopStatusChanged,
         emitPosJoin,
         emitCustomerOrder,
         onNewCustomerOrder,
