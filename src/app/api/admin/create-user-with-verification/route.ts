@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { sendVerificationEmail } from "@/lib/email";
 import { headers } from "next/headers";
-import crypto from "crypto";
 import { MONGODB } from "@/config/db";
-import { ObjectId } from "mongodb";
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,80 +30,38 @@ export async function POST(request: NextRequest) {
 
     const emailLower = email.trim().toLowerCase();
 
-    // Use Better Auth's signUpEmail API
-    const signUpResult = await auth.api.signUpEmail({
+    // Use Better Auth's Admin API createUser
+    // This doesn't log the user in (unlike signUpEmail)
+    const result = await auth.api.createUser({
       body: {
         email: emailLower,
         name: name?.trim() || "",
         password,
+        role: role || "staff",
       },
     });
 
-    if (!signUpResult || !signUpResult.user) {
+    if (!result || !result.user) {
       throw new Error("Failed to create user");
     }
 
-    const newUserId = signUpResult.user.id;
+    const newUser = result.user;
 
-    // Update user role and mark as verified
+    // Manually mark as verified if needed, or rely on the fact that admin created it
     await MONGODB.collection("user").updateOne(
-      {
-        _id: {
-          $in: [
-            ObjectId.isValid(newUserId) ? new ObjectId(newUserId) : newUserId,
-            newUserId,
-          ],
-        } as any,
-      },
-      {
-        $set: {
-          role: role || "staff",
-          emailVerified: true,
-          updatedAt: new Date(),
-        },
-      },
+      { id: newUser.id },
+      { $set: { emailVerified: true } }
     );
 
-    // Generate verification token
-    const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
-
-    // Delete any existing tokens for this email
-    await MONGODB.collection("verificationToken").deleteMany({
-      identifier: emailLower,
-    });
-
-    // Create new verification token
-    await MONGODB.collection("verificationToken").insertOne({
-      identifier: emailLower,
-      token,
-      expiresAt,
-    });
-
-    // Create verification URL
-    const verificationUrl = `${process.env.BETTER_AUTH_URL || "http://localhost:3000"}/api/auth/verify-email?token=${token}&callbackURL=/dashboard`;
-
-    // Send verification email with temp password
-    await sendVerificationEmail({
-      user: {
-        email: emailLower,
-        name: name?.trim() || "User",
-      },
-      url: verificationUrl,
-      tempPassword: password,
-    });
-
-    console.log("✅ User created successfully:", emailLower);
-    console.log("✅ User ID:", newUserId);
+    console.log("✅ User created successfully via Admin API:", emailLower);
 
     return NextResponse.json({
       success: true,
       user: {
-        id: newUserId,
+        id: newUser.id,
         email: emailLower,
         name: name?.trim() || "",
-        role: role || "staff",
+        role: role || (newUser.role as string) || "staff",
       },
     });
   } catch (error: unknown) {

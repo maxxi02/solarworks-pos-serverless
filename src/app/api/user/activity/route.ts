@@ -13,12 +13,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // session.user.id is the string ID from Better Auth
     await MONGODB.collection("user").updateOne(
       { id: session.user.id },
       {
         $set: {
           lastSeen: new Date(),
           isOnline: true,
+          updatedAt: new Date(), // Keep updatedAt in sync
         },
       },
     );

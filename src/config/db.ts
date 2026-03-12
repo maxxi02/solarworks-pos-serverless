@@ -67,6 +67,7 @@ export async function initIndexes() {
     await createIdx("payments", { status: 1 });
     await createIdx("payments", { orderNumber: 1 });
     await createIdx("payments", { timestamp: -1 });
+    await createIdx("payments", { cashierId: 1 });
 
     // Inventory
     await createIdx("inventory", { name: 1 });
@@ -90,6 +91,7 @@ export async function initIndexes() {
     // Users & Auth (Better-Auth)
     await createIdx("user", { email: 1 }, { unique: true });
     await createIdx("user", { role: 1 });
+    await createIdx("user", { id: 1 }, { unique: true });
     await createIdx("user", { isOnline: 1 });
     await createIdx("user", { createdAt: -1 });
     await createIdx("session", { userId: 1 });
