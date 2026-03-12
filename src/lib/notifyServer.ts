@@ -26,3 +26,5 @@ export const notifyRegisterClosed = (data: {
   registerName: string;
   closedAt: string;
 }) => notify("register-closed", data);
+export const notifyShopStatus = (isOpen: boolean, updatedBy?: string) =>
+  notify("shop-status", { isOpen, updatedBy });

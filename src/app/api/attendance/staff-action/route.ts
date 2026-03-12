@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
 import { AttendanceModel } from "@/models/attendance.model";
+import { ShopStatusModel } from "@/models/shopStatus.model";
+import { notifyShopStatus } from "@/lib/notifyServer";
 import { ObjectId } from "mongodb";
 import { scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -127,6 +129,11 @@ export async function POST(req: NextRequest) {
         });
       }
       console.log(`[staff-action] ${userName} clocked in`);
+
+      // Open the shop: persist to DB + broadcast via socket server
+      await ShopStatusModel.setStatus(true, userName);
+      notifyShopStatus(true, userName); // non-blocking broadcast
+
       return NextResponse.json({
         success: true,
         message: `${userName} clocked in successfully`,
