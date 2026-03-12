@@ -12,7 +12,6 @@ import bcrypt from "bcryptjs";
 
 const scryptAsync = promisify(scrypt);
 
-// Verifies a better-auth password hash (bcrypt or scrypt)
 async function verifyPassword(hash: string, password: string): Promise<boolean> {
   try {
     if (hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$")) {
@@ -21,7 +20,7 @@ async function verifyPassword(hash: string, password: string): Promise<boolean> 
     const [salt, key] = hash.split(":");
     if (!salt || !key) return false;
     const keyBuffer = Buffer.from(key, "hex");
-    const keyLen = keyBuffer.length; // Either 32 or 64
+    const keyLen = keyBuffer.length;
     const derived = (await scryptAsync(password, salt, keyLen)) as Buffer;
     return timingSafeEqual(keyBuffer, derived);
   } catch {
@@ -29,17 +28,13 @@ async function verifyPassword(hash: string, password: string): Promise<boolean> 
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 export async function POST(req: NextRequest) {
   try {
-    // 1. Require an active session
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Parse body — accept staffId + (pin OR password) + action
     const body = await req.json() as {
       staffId?: string;
       pin?: string;
@@ -57,28 +52,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Find the staff member by ID
     let objId = null;
     try { objId = new ObjectId(staffId); } catch { }
 
     const usersCol = MONGODB.collection("user");
-    // Check both string ID and ObjectId
     const ids: any[] = [staffId];
     if (objId) ids.push(objId);
 
-    const targetUser = await usersCol.findOne({
-      _id: { $in: ids }
-    });
+    const targetUser = await usersCol.findOne({ _id: { $in: ids } });
 
     if (!targetUser) {
       console.error(`[staff-action] Staff not found: ${staffId}`);
-      return NextResponse.json(
-        { success: false, message: "Staff not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ success: false, message: "Staff not found" }, { status: 404 });
     }
 
-    // 4. Verify credential: PIN first, fall back to password
     let verified = false;
 
     if (pin) {
@@ -91,11 +78,22 @@ export async function POST(req: NextRequest) {
       verified = String(targetUser.attendancePin) === String(pin);
     } else if (password) {
       const accountsCol = MONGODB.collection("account");
-      const account = await accountsCol.findOne({
+
+      // DEBUG: Check what's in the account collection
+      const allAccounts = await accountsCol.find({
         userId: { $in: [targetUser._id.toString(), targetUser._id] },
-        providerId: "credential",
-      });
-      
+      }).toArray();
+      console.log("[DEBUG] All accounts for user:", JSON.stringify(allAccounts.map(a => ({
+        providerId: a.providerId,
+        hasPassword: !!a.password,
+        passwordPreview: a.password ? a.password.substring(0, 30) + "..." : null,
+        userId: a.userId,
+      })), null, 2));
+
+      const account = allAccounts.find(a => a.providerId === "credential");
+      console.log("[DEBUG] Found credential account:", !!account);
+      console.log("[DEBUG] Full password hash:", account?.password);
+
       if (!account?.password) {
         console.error(`[staff-action] No password account found for staff: ${staffId}`);
         return NextResponse.json(
@@ -103,8 +101,11 @@ export async function POST(req: NextRequest) {
           { status: 401 },
         );
       }
-      
+
+      console.log("[DEBUG] Attempting to verify password...");
+      console.log("[DEBUG] Hash starts with:", account.password.substring(0, 10));
       verified = await verifyPassword(account.password, password);
+      console.log("[DEBUG] Verification result:", verified);
     }
 
     if (!verified) {
@@ -118,7 +119,6 @@ export async function POST(req: NextRequest) {
     const userId = targetUser._id.toString();
     const userName = targetUser.name as string;
 
-    // 5. Clock in or clock out
     if (action === "clock-in") {
       const attendance = await AttendanceModel.clockIn(userId);
       if (!attendance) {
@@ -129,7 +129,8 @@ export async function POST(req: NextRequest) {
         });
       }
       console.log(`[staff-action] ${userName} clocked in`);
-
+      await ShopStatusModel.setStatus(true, userName);
+      notifyShopStatus(true, userName);
       return NextResponse.json({
         success: true,
         message: `${userName} clocked in successfully`,
@@ -155,14 +156,13 @@ export async function POST(req: NextRequest) {
     }
   } catch (error) {
     console.error("[staff-action] Critical error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      message: error instanceof Error ? error.message : "Internal server error" 
+    return NextResponse.json({
+      success: false,
+      message: error instanceof Error ? error.message : "Internal server error"
     }, { status: 500 });
   }
 }
 
-// GET: status + hasPin by staffId
 export async function GET(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
