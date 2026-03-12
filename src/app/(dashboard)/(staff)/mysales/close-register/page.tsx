@@ -6,7 +6,7 @@ import { Save, DollarSign, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import ZReportModal from '@/app/(dashboard)/(public)/settings/receipt-setting/components/ZReportModal';
 import { useReceiptSettings } from '@/hooks/useReceiptSettings';
-import { notifyRegisterClosed, notifyCashUpdated } from '@/lib/notifyServer';
+import { notifyRegisterClosed, notifyCashUpdated, notifyShopStatus } from '@/lib/notifyServer';
 
 interface Payment {
   _id: string;
@@ -172,6 +172,9 @@ export default function CloseRegisterPage() {
         });
         await notifyCashUpdated();
       }
+
+      // Close the shop regardless of cash balance status
+      notifyShopStatus(false, summary.cashierName); // non-blocking broadcast
 
     } catch {
       toast.error('Failed to close register'); setIsClosing(false); return;
