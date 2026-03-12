@@ -25,7 +25,7 @@ export function RecentReceipts({ receipts, isLoading }: RecentReceiptsProps) {
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                     <ShoppingCart className="h-5 w-5 text-blue-500" />
-                    Recent Receipts
+                    Recent Transactions
                 </CardTitle>
                 <Button variant="ghost" size="sm" asChild>
                     <a href="/sales/all-transactions" className="text-xs">View All</a>
@@ -45,7 +45,7 @@ export function RecentReceipts({ receipts, isLoading }: RecentReceiptsProps) {
                                 <div className="flex flex-col">
                                     <span className="text-sm font-semibold">{r.orderNumber}</span>
                                     <span className="text-xs text-muted-foreground">
-                                        {formatDateTime(r.createdAt)} • {r.cashier}
+                                        {formatDateTime(r.createdAt)} • {r.cashier || 'System'}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-3">

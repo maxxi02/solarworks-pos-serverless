@@ -138,6 +138,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || "";
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
+    const noStats = searchParams.get("noStats") === "true";
 
     const paymentsCol = MONGODB.collection("payments");
     const ordersCol = MONGODB.collection("orders");
@@ -182,7 +183,7 @@ export async function GET(request: Request) {
       portalFilter.$and.push({ $or: [{ paidAt: df }, { createdAt: df }] });
     }
 
-    // ── Fetch in parallel ─────────────────────────────────────────────────────
+    // ── Fetch paginated data in parallel ──────────────────────────────────────
     const [posRaw, portalRaw] = await Promise.all([
       paymentsCol.find(posFilter, {
         projection: {
@@ -190,14 +191,14 @@ export async function GET(request: Request) {
           total: 1, paymentMethod: 1, orderType: 1, createdAt: 1, items: 1,
           status: 1, refundedAt: 1, refundedBy: 1, refundReason: 1, timestamp: 1,
         },
-      }).toArray(),
+      }).sort({ createdAt: -1 }).limit(skip + limit).toArray(),
       includePortal ? ordersCol.find(portalFilter, {
         projection: {
           orderNumber: 1, customerName: 1, customerId: 1, subtotal: 1,
           total: 1, paymentMethod: 1, orderType: 1, paidAt: 1, createdAt: 1,
           items: 1, paymentStatus: 1, paymentReference: 1, queueStatus: 1, updatedAt: 1,
         },
-      }).toArray() : Promise.resolve([]),
+      }).sort({ createdAt: -1 }).limit(skip + limit).toArray() : Promise.resolve([]),
     ]);
 
     // ── Normalize & merge ─────────────────────────────────────────────────────
@@ -213,23 +214,60 @@ export async function GET(request: Request) {
       return bDate - aDate;
     });
 
-    const total = normalized.length;
     const paginatedPayments = normalized.slice(skip, skip + limit);
 
-    // ── Compute stats over full merged set ────────────────────────────────────
-    const completedAll = normalized.filter(
-      (t) => t.status === "completed" || t.status === "paid" || !t.status,
-    );
-    const totalSales = completedAll.reduce((s, t) => s + (t.total || 0), 0);
-    const cashSales = completedAll
-      .filter((t) => (t.paymentMethod || "").toLowerCase() === "cash")
-      .reduce((s, t) => s + (t.total || 0), 0);
-    const gcashSales = completedAll
-      .filter((t) => (t.paymentMethod || "").toLowerCase() === "gcash")
-      .reduce((s, t) => s + (t.total || 0), 0);
-    const splitSales = completedAll
-      .filter((t) => (t.paymentMethod || "").toLowerCase() === "split")
-      .reduce((s, t) => s + (t.total || 0), 0);
+    // ── Compute stats & total ─────────────────────────────────────────────────
+    let total = 0;
+    let stats = {
+      totalSales: 0,
+      totalTransactions: 0,
+      averageTransaction: 0,
+      cashSales: 0,
+      gcashSales: 0,
+      splitSales: 0,
+    };
+
+    if (!noStats) {
+      const [posStatsRaw, portalStatsRaw] = await Promise.all([
+        paymentsCol.find(posFilter, {
+          projection: { status: 1, paymentMethod: 1, total: 1 }
+        }).toArray(),
+        includePortal ? ordersCol.find(portalFilter, {
+          projection: { paymentStatus: 1, paymentMethod: 1, total: 1 }
+        }).toArray() : Promise.resolve([])
+      ]);
+
+      const allStatsData = [
+        ...posStatsRaw.map(normalizePayment),
+        ...portalStatsRaw.map(normalizePortalOrder)
+      ];
+
+      total = allStatsData.length;
+      const completedAll = allStatsData.filter(
+        (t) => t.status === "completed" || t.status === "paid" || !t.status
+      );
+      const totalSales = completedAll.reduce((s, t) => s + (t.total || 0), 0);
+      const cashSales = completedAll
+        .filter((t) => (t.paymentMethod || "").toLowerCase() === "cash")
+        .reduce((s, t) => s + (t.total || 0), 0);
+      const gcashSales = completedAll
+        .filter((t) => (t.paymentMethod || "").toLowerCase() === "gcash")
+        .reduce((s, t) => s + (t.total || 0), 0);
+      const splitSales = completedAll
+        .filter((t) => (t.paymentMethod || "").toLowerCase() === "split")
+        .reduce((s, t) => s + (t.total || 0), 0);
+
+      stats = {
+        totalSales,
+        totalTransactions: completedAll.length,
+        averageTransaction: completedAll.length ? totalSales / completedAll.length : 0,
+        cashSales,
+        gcashSales,
+        splitSales,
+      };
+    } else {
+      total = skip + paginatedPayments.length;
+    }
 
     return NextResponse.json({
       success: true,
@@ -241,14 +279,7 @@ export async function GET(request: Request) {
           limit,
           pages: Math.max(1, Math.ceil(total / limit)),
         },
-        stats: {
-          totalSales,
-          totalTransactions: completedAll.length,
-          averageTransaction: completedAll.length ? totalSales / completedAll.length : 0,
-          cashSales,
-          gcashSales,
-          splitSales,
-        },
+        stats,
       },
     });
   } catch (error) {

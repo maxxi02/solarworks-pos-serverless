@@ -248,17 +248,17 @@ export default function AdminDashboard() {
   async function loadRecentReceipts() {
     setReceiptsLoading(true);
     try {
-      let url = "/api/receipts?limit=5";
+      let url = "/api/payments?limit=5&noStats=true";
       const res = await fetch(url);
       const d = await res.json();
-      if (d.receipts) {
-        const receipts = isAdmin
-          ? d.receipts
-          : d.receipts.filter((r: any) => r.cashierId === userId);
-        setRecentReceipts(receipts);
+      if (d.success && d.data?.payments) {
+        const payments = isAdmin
+          ? d.data.payments
+          : d.data.payments.filter((p: any) => p.cashierId === userId || p.cashier === session?.user?.name);
+        setRecentReceipts(payments);
       }
     } catch (err) {
-      console.error("Receipts error:", err);
+      console.error("Transactions error:", err);
     } finally {
       setReceiptsLoading(false);
     }

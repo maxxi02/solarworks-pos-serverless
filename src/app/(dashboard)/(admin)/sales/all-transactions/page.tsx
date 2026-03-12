@@ -170,10 +170,10 @@ const isWithinDateRange = (date: string, filter: PeriodFilter): boolean => {
 // ============ Main Component ============
 export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("all");
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("today");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit] = useState(15);
 
   // Data states
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
