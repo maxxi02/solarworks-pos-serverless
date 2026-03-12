@@ -22,10 +22,12 @@ interface Customer {
   id: string;
   email: string;
   name: string;
+  image?: string;
   createdAt: string;
   lastLogin: string;
   status: "active" | "inactive" | "new";
-  loginCount: number;
+  orderCount: number;
+  totalSpent: number;
 }
 
 // Static data removed, using useUsers hook below
@@ -65,10 +67,12 @@ export default function CustomerListPage() {
           id: u.id || u._id,
           name: u.name || "Unknown",
           email: u.email,
+          image: u.image,
           createdAt: u.createdAt,
           lastLogin: u.lastActive || u.createdAt,
           status: getFrontendStatus(u),
-          loginCount: 0, // Still placeholder until we have a real login counter
+          orderCount: u.orderCount || 0,
+          totalSpent: u.totalSpent || 0,
         }));
 
         setCustomers((prev) => (append ? [...prev, ...mapped] : mapped));
@@ -240,7 +244,7 @@ export default function CustomerListPage() {
                   <SelectContent>
                     <SelectItem value="newest">Newest</SelectItem>
                     <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="login">Most Logins</SelectItem>
+                    <SelectItem value="orders">Most Orders</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -266,14 +270,20 @@ export default function CustomerListPage() {
                     className="flex items-center justify-between p-4 border rounded-lg"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="font-medium text-primary">
-                          {customer.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </span>
-                      </div>
+                      {customer.image ? (
+                        <div className="h-10 w-10 rounded-full overflow-hidden border">
+                          <img src={customer.image} alt={customer.name} className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <span className="font-medium text-primary">
+                            {customer.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")}
+                          </span>
+                        </div>
+                      )}
                       <div>
                         <div className="font-medium">{customer.name}</div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -295,14 +305,25 @@ export default function CustomerListPage() {
 
                       {getStatusBadge(customer.status)}
 
-                      <div className="text-right">
-                        <div className="font-medium">{customer.loginCount}</div>
+                      <div className="text-right w-24">
+                        <div className="font-medium">{customer.orderCount}</div>
                         <div className="text-xs text-muted-foreground">
-                          logins
+                          orders
                         </div>
                       </div>
 
-                      <Button variant="ghost" size="sm">
+                      <div className="text-right w-24">
+                        <div className="font-medium">₱{customer.totalSpent.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">
+                          spent
+                        </div>
+                      </div>
+
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => window.location.href = `/customer/analytics?id=${customer.id}`}
+                      >
                         View
                       </Button>
                     </div>

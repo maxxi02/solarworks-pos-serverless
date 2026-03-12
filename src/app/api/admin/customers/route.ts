@@ -71,6 +71,7 @@ export async function GET(request: Request) {
       id: 1,
       name: 1,
       email: 1,
+      image: 1,
       createdAt: 1,
       lastActive: 1,
       banned: 1,
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
     };
 
     // 6. Execute in parallel: Paginated Results & Stats
-    const [customers, totalRaw, statsResult] = await Promise.all([
+    const [rawCustomers, totalRaw, statsResult] = await Promise.all([
       collection
         .find(baseFilter, { projection })
         .sort(sort)
@@ -146,6 +147,29 @@ export async function GET(request: Request) {
         ])
         .toArray(),
     ]);
+
+    // 7. Fetch Order Stats for these specific customers
+    const customers = await Promise.all(rawCustomers.map(async (u) => {
+      const userId = u._id.toString();
+      // Match customerId as string (common in this DB)
+      const orderStats = await MONGODB.collection("orders").aggregate([
+        { $match: { customerId: userId, queueStatus: { $ne: "cancelled" } } },
+        {
+          $group: {
+            _id: null,
+            orderCount: { $sum: 1 },
+            totalSpent: { $sum: "$total" }
+          }
+        }
+      ]).toArray();
+
+      const stats = orderStats[0] || { orderCount: 0, totalSpent: 0 };
+      return {
+        ...u,
+        orderCount: stats.orderCount,
+        totalSpent: Math.round(stats.totalSpent * 100) / 100
+      };
+    }));
 
     const stats = statsResult[0] || { total: 0, new: 0, active: 0, today: 0 };
 
