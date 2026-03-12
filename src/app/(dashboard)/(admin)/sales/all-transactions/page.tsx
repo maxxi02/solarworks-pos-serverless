@@ -46,6 +46,15 @@ interface Transaction {
   updatedAt: string;
 }
 
+interface UnifiedStats {
+  totalSales: number;
+  totalTransactions: number;
+  averageTransaction: number;
+  cashSales: number;
+  gcashSales: number;
+  splitSales: number;
+}
+
 interface PaymentsResponse {
   success: boolean;
   data?: {
@@ -56,6 +65,7 @@ interface PaymentsResponse {
       limit: number;
       pages: number;
     };
+    stats?: UnifiedStats;
   };
   error?: string;
 }
@@ -167,7 +177,14 @@ export default function TransactionsPage() {
 
   // Data states
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<SummaryResponse["data"] | null>(null);
+  const [unifiedStats, setUnifiedStats] = useState<UnifiedStats>({
+    totalSales: 0,
+    totalTransactions: 0,
+    averageTransaction: 0,
+    cashSales: 0,
+    gcashSales: 0,
+    splitSales: 0,
+  });
   const [pagination, setPagination] = useState({ total: 0, pages: 0 });
 
   // UI states
@@ -248,6 +265,11 @@ export default function TransactionsPage() {
         });
       }
 
+      // Update stats from the unified API response (includes portal + POS)
+      if (result.data?.stats && !append) {
+        setUnifiedStats(result.data.stats);
+      }
+
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -258,23 +280,9 @@ export default function TransactionsPage() {
     }
   };
 
-  const fetchSummary = async () => {
-    try {
-      const params = new URLSearchParams({
-        period: periodFilter,
-      });
-
-      const url = `/api/payments/summary?${params.toString()}`;
-      const response = await fetch(url);
-      const result: SummaryResponse = await response.json();
-
-      if (result.success && result.data) {
-        setSummary(result.data);
-      }
-    } catch (error) {
-      console.error("Error fetching summary:", error);
-    }
-  };
+  // NOTE: summary stats are now derived from the unified /api/payments response
+  // which includes both POS payments and paid portal orders.
+  // No separate fetchSummary needed.
 
   const fetchRefunded = async () => {
     setRefundedLoading(true);
@@ -294,7 +302,6 @@ export default function TransactionsPage() {
   useEffect(() => {
     setCurrentPage(1);
     fetchTransactions(1, false);
-    fetchSummary();
     fetchRefunded();
   }, [periodFilter, paymentFilter, searchQuery]); // Refetch when filters change
 
@@ -305,7 +312,6 @@ export default function TransactionsPage() {
     const handleSalesUpdated = () => {
       setCurrentPage(1);
       fetchTransactions(1, false);
-      fetchSummary();
     };
 
     socket.on("sales:updated", handleSalesUpdated);
@@ -319,39 +325,38 @@ export default function TransactionsPage() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetchTransactions(1, false);
-      fetchSummary();
     }, 60000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // stats from summary
-  const totalRevenue = summary?.summary?.totalRevenue || 0;
-  const totalTransactionsCount = summary?.summary?.totalTransactions || 0;
-  const avgOrderValue = summary?.summary?.avgOrderValue || 0;
+  // Stats derived directly from the unified /api/payments response (POS + Portal)
+  const totalRevenue = unifiedStats.totalSales;
+  const totalTransactionsCount = unifiedStats.totalTransactions;
+  const avgOrderValue = unifiedStats.averageTransaction;
+  const cashTotal = unifiedStats.cashSales;
+  const gcashTotal = unifiedStats.gcashSales;
 
-  // Today's revenue calculation (might still need local if summary doesn't give today specifically when in "all" mode)
-  // But we can just use the summary data which is more accurate.
-  const todayRevenue =
-    periodFilter === "today"
-      ? totalRevenue
-      : summary?.daily?.find(
-          (d) => d.date === new Date().toISOString().split("T")[0],
-        )?.revenue || 0;
+  // Cash & GCash counts — compute from current page transactions as approximation
+  const cashCount = allTransactions.filter(
+    (t) => (t.paymentMethod || "").toLowerCase() === "cash",
+  ).length;
+  const gcashCount = allTransactions.filter(
+    (t) => (t.paymentMethod || "").toLowerCase() === "gcash",
+  ).length;
 
-  // Payment methods totals from summary
-  const cashTotal =
-    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "cash")
-      ?.total || 0;
-  const gcashTotal =
-    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "gcash")
-      ?.total || 0;
-  const cashCount =
-    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "cash")
-      ?.count || 0;
-  const gcashCount =
-    summary?.paymentMethods?.find((m) => m._id?.toLowerCase() === "gcash")
-      ?.count || 0;
+  // Today's revenue — filter from all transactions on client side
+  const todayRevenue = periodFilter === "today"
+    ? totalRevenue
+    : allTransactions
+        .filter((t) => {
+          const d = new Date(t.createdAt);
+          const today = new Date();
+          return d.getFullYear() === today.getFullYear() &&
+            d.getMonth() === today.getMonth() &&
+            d.getDate() === today.getDate();
+        })
+        .reduce((s, t) => s + (t.total || 0), 0);
 
   // ============ Handlers ============
   const handleLoadMore = () => {
@@ -365,7 +370,6 @@ export default function TransactionsPage() {
   const handleRefresh = () => {
     setCurrentPage(1);
     fetchTransactions(1, false);
-    fetchSummary();
     fetchRefunded();
   };
 
@@ -441,9 +445,13 @@ export default function TransactionsPage() {
                     {isLoading ? "..." : formatCurrency(todayRevenue)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {summary?.daily?.find(
-                      (d) => d.date === new Date().toISOString().split("T")[0],
-                    )?.transactions || 0}{" "}
+                    {allTransactions.filter((t) => {
+                      const d = new Date(t.createdAt);
+                      const today = new Date();
+                      return d.getFullYear() === today.getFullYear() &&
+                        d.getMonth() === today.getMonth() &&
+                        d.getDate() === today.getDate();
+                    }).length}{" "}
                     transactions today
                   </p>
                 </div>
