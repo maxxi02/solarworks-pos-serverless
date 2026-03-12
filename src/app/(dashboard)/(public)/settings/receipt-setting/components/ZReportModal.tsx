@@ -9,6 +9,7 @@ interface Props {
   session: any;
   summary: any;
   settings: any;
+  includeXReceipt?: boolean;
   onClose: () => void;
   onConfirmClose?: () => void;
 }
@@ -23,7 +24,7 @@ const TENDER_LABELS: Record<string, string> = {
   pay_in: 'PAYIN'
 };
 
-export default function ZReportModal({ session, summary, settings, onClose, onConfirmClose }: Props) {
+export default function ZReportModal({ session, summary, settings, includeXReceipt, onClose, onConfirmClose }: Props) {
   const { emitPrintZReport, companionStatus } = useSocket();
   // Format helpers
   const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -136,7 +137,18 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
 
     // If companion is connected, use it
     if (companionStatus.usb || companionStatus.bt) {
-      emitPrintZReport(zReportData);
+      if (includeXReceipt) {
+        const xReportData = {
+          ...zReportData,
+          isXReading: true,
+          openingFund: session?.openingFund || 0,
+          cashEarned: summary.cashSales || summary.cashEarned || 0,
+        };
+        emitPrintZReport(xReportData);
+        setTimeout(() => emitPrintZReport(zReportData), 1500);
+      } else {
+        emitPrintZReport(zReportData);
+      }
       return;
     }
 
@@ -165,9 +177,104 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
         ? `<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:3px 0;color:#000000;">⚠ SHORT: (${fmtP(Math.abs(difference))}) ⚠</div>`
         : `<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:3px 0;color:#000000;">⚠ OVER: +${fmtP(difference)} ⚠</div>`;
 
+    const renderReceiptBody = (isX: boolean) => {
+      const title = isX ? 'X-READING REPORT' : 'Z-READING REPORT';
+      const endTitle = isX ? '*** END OF X-REPORT ***' : '*** END OF Z-REPORT ***';
+      const expectedCashHtml = isX 
+        ? `${Row('Cash Outs:', fmtP((summary.openingFund || 0) + (summary.cashEarned || 0) - expectedCash))}
+           ${Row('EXPECTED CASH:', fmtP(expectedCash), true)}`
+        : `${Row('Expected Cash:', fmtP(expectedCash), true)}
+           ${Row('COUNTED CASH:', fmtP(actualCash), true)}
+           ${Row('DIFFERENCE:', fmtP(difference), true)}`;
+
+      const tendersHtml = getActiveTenders().map(([k, v]) => {
+        const value = typeof v === 'number' ? v : 0;
+        return Row(`${TENDER_LABELS[k] || k.toUpperCase()}:`, fmtP(value));
+      }).join('');
+
+      const discountsHtml = getActiveDiscounts().length > 0
+        ? getActiveDiscounts().map(d => Row(d.label, fmtP(d.value))).join('')
+        : Row('No Discounts', '0.00');
+
+      const discountsBlock = !isX ? `
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">DISCOUNTS</div>
+${discountsHtml}
+${Sep()}
+
+${shortOverHtml}
+${Sep()}
+` : '';
+
+      const managerSignatureBlock = !isX && showCashierSignature ? `
+<div style="display:flex;justify-content:space-between;margin-top:15px;gap:8px">
+  <div style="flex:1;text-align:center;font-size:${fs};color:#000000;">
+    <div style="border-top:2px solid #000000;padding-top:2px;margin-top:15px;color:#000000;">Cashier</div>
+  </div>
+  <div style="flex:1;text-align:center;font-size:${fs};color:#000000;">
+    <div style="border-top:2px solid #000000;padding-top:2px;margin-top:15px;color:#000000;">Manager</div>
+  </div>
+</div>
+` : '';
+
+      return `
+${logoHtml}
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:2px 0;color:#000000;">${settings?.businessName || 'Business Name'}</div>
+${settings?.locationAddress ? `<div style="text-align:center;font-size:${fs};margin:2px 0;color:#000000;">${settings.locationAddress}</div>` : ''}
+${settings?.taxPin ? `<div style="text-align:center;font-size:${fs};margin:2px 0;color:#000000;">TIN: ${settings.taxPin}</div>` : ''}
+
+${Sep()}
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">${title}</div>
+${Sep()}
+
+${Row('Date:', today)}
+${Row('Time:', timeNow)}
+${Row('Cashier:', session?.cashierName || '—')}
+${Row('Register:', session?.registerName || '—')}
+${Row('Opened:', session?.openedAt?.split(',')[0] || '—')}
+${!isX ? Row('Closed:', session?.closedAt?.split(',')[0] || '—') : ''}
+${Sep()}
+
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">${isX ? 'SALES SUMMARY' : "TODAY'S SALES"}</div>
+${Row('Gross Sales:', fmtP(totalSales))}
+${Row('Discounts:', fmtP(totalDiscounts))}
+${showReturnSummary ? Row('Returns:', fmtP(summary.totalRefunds || 0)) : ''}
+${!isX && showVoidSummary ? Row('Voids:', fmtP(summary.totalVoids || 0)) : ''}
+${Row('NET SALES:', fmtP(todayEarnings), true)}
+${Sep()}
+
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">${isX ? 'CASH IN DRAWER' : 'CASH SUMMARY'}</div>
+${Row('Opening Fund:', fmtP(summary.openingFund || 0))}
+${Row('Cash Sales:', fmtP(summary.cashEarned || 0))}
+${showReturnSummary ? Row('Cash Refunds:', fmtP(summary.totalRefunds || 0)) : ''}
+${expectedCashHtml}
+${Sep()}
+
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">PAYMENT BREAKDOWN</div>
+${tendersHtml}
+${Sep()}
+
+${discountsBlock}
+
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">${isX ? 'TRANSACTIONS' : 'DAILY SUMMARY'}</div>
+${Row('Total Transactions:', (summary.transactions || 0).toString())}
+${!isX ? Row('Total Items:', (summary.items || 0).toString()) : ''}
+${!isX ? Row('Net Income:', fmtP(todayEarnings), true) : ''}
+${Sep()}
+
+${settings?.receiptMessage ?
+        `<div style="text-align:center;font-style:italic;font-size:${fs};margin-bottom:3px;color:#000000;">${settings.receiptMessage}</div>` : ''}
+
+${managerSignatureBlock}
+
+${Sep()}
+<div style="text-align:center;font-size:${fs};margin:2px 0;color:#000000;">${settings?.disclaimer || 'Dizlog - RigelSoft PH'}</div>
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin-top:4px;color:#000000;">${endTitle}</div>
+`;
+    };
+
     const html = `<!DOCTYPE html>
 <html>
-<head><title>Z-Report</title>
+<head><title>Report</title>
 <style>
   * { margin:0;padding:0;box-sizing:border-box;color:#000000; }
   body {
@@ -189,81 +296,8 @@ export default function ZReportModal({ session, summary, settings, onClose, onCo
 </style>
 </head>
 <body>
-
-${logoHtml}
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:2px 0;color:#000000;">${settings?.businessName || 'Business Name'}</div>
-${settings?.locationAddress ? `<div style="text-align:center;font-size:${fs};margin:2px 0;color:#000000;">${settings.locationAddress}</div>` : ''}
-${settings?.taxPin ? `<div style="text-align:center;font-size:${fs};margin:2px 0;color:#000000;">TIN: ${settings.taxPin}</div>` : ''}
-
-${Sep()}
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">Z-READING REPORT</div>
-${Sep()}
-
-${Row('Date:', today)}
-${Row('Time:', timeNow)}
-${Row('Cashier:', session?.cashierName || '—')}
-${Row('Register:', session?.registerName || '—')}
-${Row('Opened:', session?.openedAt?.split(',')[0] || '—')}
-${Row('Closed:', session?.closedAt?.split(',')[0] || '—')}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">TODAY'S SALES</div>
-${Row('Gross Sales:', fmtP(totalSales))}
-${Row('Discounts:', fmtP(totalDiscounts))}
-${showReturnSummary ? Row('Returns:', fmtP(summary.totalRefunds || 0)) : ''}
-${showVoidSummary ? Row('Voids:', fmtP(summary.totalVoids || 0)) : ''}
-${Row('NET SALES:', fmtP(todayEarnings), true)}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">CASH SUMMARY</div>
-${Row('Opening Fund:', fmtP(summary.openingFund || 0))}
-${Row('Cash Sales:', fmtP(summary.cashEarned || 0))}
-${showReturnSummary ? Row('Cash Refunds:', fmtP(summary.totalRefunds || 0)) : ''}
-${Row('Expected Cash:', fmtP(expectedCash), true)}
-${Row('COUNTED CASH:', fmtP(actualCash), true)}
-${Row('DIFFERENCE:', fmtP(difference), true)}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">PAYMENT BREAKDOWN</div>
-${getActiveTenders().map(([k, v]) => {
-      const value = typeof v === 'number' ? v : 0;
-      return Row(`${TENDER_LABELS[k]}:`, fmtP(value));
-    }).join('')}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">DISCOUNTS</div>
-${getActiveDiscounts().length > 0
-        ? getActiveDiscounts().map(d => Row(d.label, fmtP(d.value))).join('')
-        : Row('No Discounts', '0.00')}
-${Sep()}
-
-${shortOverHtml}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">DAILY SUMMARY</div>
-${Row('Total Transactions:', (summary.transactions || 0).toString())}
-${Row('Total Items:', (summary.items || 0).toString())}
-${Row('Net Income:', fmtP(todayEarnings), true)}
-${Sep()}
-
-${settings?.receiptMessage ?
-        `<div style="text-align:center;font-style:italic;font-size:${fs};margin-bottom:3px;color:#000000;">${settings.receiptMessage}</div>` : ''}
-
-${showCashierSignature ? `
-<div style="display:flex;justify-content:space-between;margin-top:15px;gap:8px">
-  <div style="flex:1;text-align:center;font-size:${fs};color:#000000;">
-    <div style="border-top:2px solid #000000;padding-top:2px;margin-top:15px;color:#000000;">Cashier</div>
-  </div>
-  <div style="flex:1;text-align:center;font-size:${fs};color:#000000;">
-    <div style="border-top:2px solid #000000;padding-top:2px;margin-top:15px;color:#000000;">Manager</div>
-  </div>
-</div>
-` : ''}
-
-${Sep()}
-<div style="text-align:center;font-size:${fs};margin:2px 0;color:#000000;">${settings?.disclaimer || 'Dizlog - RigelSoft PH'}</div>
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin-top:4px;color:#000000;">*** END OF Z-REPORT ***</div>
-
+${includeXReceipt ? renderReceiptBody(true) + '<br/><br/><br/>' : ''}
+${renderReceiptBody(false)}
 </body>
 </html>`;
 
@@ -288,118 +322,127 @@ ${Sep()}
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-      <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[380px]'} rounded-xl bg-white border shadow-xl overflow-hidden`}>
+  const renderPreviewBlock = (isX: boolean) => {
+    const title = isX ? 'X-READING REPORT' : 'Z-READING REPORT';
+    const endTitle = isX ? '*** END OF X-REPORT ***' : '*** END OF Z-REPORT ***';
 
-        {/* Header */}
-        <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
-          <h3 className="font-bold text-base flex items-center gap-2 text-black">
-            <FileText className="h-5 w-5 text-orange-500" />
-            <span>Z-Report Preview</span>
-          </h3>
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-gray-200" onClick={onClose}>
-            <X className="h-5 w-5 text-black" />
-          </Button>
+    return (
+      <div className={`font-mono ${is58mm ? 'text-[10px]' : 'text-xs'} bg-white p-4 text-black border shadow-sm w-full mx-auto`}>
+        {/* Logo */}
+        {settings.showLogo && settings.logoPreview && (
+          <div className="mb-2 flex justify-center">
+            <img src={settings.logoPreview} alt="Logo" className="h-12 object-contain mx-auto" style={{ maxHeight: settings.logoSize || '48px' }} />
+          </div>
+        )}
+
+        {/* Store Info */}
+        <div className="text-center font-bold mb-1 text-black">{settings.businessName || 'Business Name'}</div>
+        {settings.locationAddress && (
+          <div className="text-center mb-1 text-[10px] text-black">{settings.locationAddress}</div>
+        )}
+        {settings.taxPin && (
+          <div className="text-center mb-1 text-[10px] text-black">TIN: {settings.taxPin}</div>
+        )}
+
+        <div className="text-center mb-1 text-black">{dash}</div>
+        <div className="text-center font-bold text-sm mb-1 text-black">{title}</div>
+        <div className="text-center mb-1 text-black">{dash}</div>
+
+        {/* Date/Time Details */}
+        <div className="mb-1 text-[10px] text-black">
+          <div className="flex justify-between">
+            <span className="text-black">Date:</span>
+            <span className="text-black">{today}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black">Time:</span>
+            <span className="text-black">{timeNow}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black">Cashier:</span>
+            <span className="text-black">{session?.cashierName || '—'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black">Register:</span>
+            <span className="text-black">{session?.registerName || 'Main Register'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black">Opened:</span>
+            <span className="text-black">{session?.openedAt?.split(',')[0] || '—'}</span>
+          </div>
+          {!isX && (
+            <div className="flex justify-between">
+              <span className="text-black">Closed:</span>
+              <span className="text-black">{session?.closedAt?.split(',')[0] || '—'}</span>
+            </div>
+          )}
         </div>
 
-        {/* Z-Report Content */}
-        <div className="max-h-[calc(100vh-140px)] overflow-y-auto" data-lenis-prevent>
-          <div id="zreport-content" className={`font-mono ${is58mm ? 'text-[10px]' : 'text-xs'} bg-white p-4 text-black`}>
+        <div className="text-center mb-1 text-black">{dash}</div>
 
-            {/* Logo */}
-            {settings.showLogo && settings.logoPreview && (
-              <div className="mb-2 flex justify-center">
-                <img src={settings.logoPreview} alt="Logo" className="h-12 object-contain mx-auto" style={{ maxHeight: settings.logoSize || '48px' }} />
-              </div>
-            )}
-
-            {/* Store Info */}
-            <div className="text-center font-bold mb-1 text-black">{settings.businessName || 'Business Name'}</div>
-            {settings.locationAddress && (
-              <div className="text-center mb-1 text-[10px] text-black">{settings.locationAddress}</div>
-            )}
-            {settings.taxPin && (
-              <div className="text-center mb-1 text-[10px] text-black">TIN: {settings.taxPin}</div>
-            )}
-
-            <div className="text-center mb-1 text-black">{dash}</div>
-            <div className="text-center font-bold text-sm mb-1 text-black">Z-READING REPORT</div>
-            <div className="text-center mb-1 text-black">{dash}</div>
-
-            {/* Date/Time Details */}
-            <div className="mb-1 text-[10px] text-black">
-              <div className="flex justify-between">
-                <span className="text-black">Date:</span>
-                <span className="text-black">{today}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black">Time:</span>
-                <span className="text-black">{timeNow}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black">Cashier:</span>
-                <span className="text-black">{session?.cashierName || '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black">Register:</span>
-                <span className="text-black">{session?.registerName || 'Main Register'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black">Opened:</span>
-                <span className="text-black">{session?.openedAt?.split(',')[0] || '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black">Closed:</span>
-                <span className="text-black">{session?.closedAt?.split(',')[0] || '—'}</span>
-              </div>
+        {/* SALES SUMMARY */}
+        <div className="bg-orange-50 p-2 rounded mb-2">
+          <div className="text-center font-bold text-xs mb-1 text-black">{isX ? 'SALES SUMMARY' : "TODAY'S SALES"}</div>
+          <div className="flex justify-between text-[10px]">
+            <span className="text-black">Gross Sales:</span>
+            <span className="font-bold text-black">{fmtP(totalSales)}</span>
+          </div>
+          <div className="flex justify-between text-[10px]">
+            <span className="text-black">Discounts:</span>
+            <span className="text-black">-{fmtP(totalDiscounts)}</span>
+          </div>
+          {showReturnSummary && summary.totalRefunds > 0 && (
+            <div className="flex justify-between text-[10px]">
+              <span className="text-black">Returns:</span>
+              <span className="text-black">-{fmtP(summary.totalRefunds)}</span>
             </div>
-
-            <div className="text-center mb-1 text-black">{dash}</div>
-
-            {/* TODAY'S SALES */}
-            <div className="bg-orange-50 p-2 rounded mb-2">
-              <div className="text-center font-bold text-xs mb-1 text-black">TODAY'S SALES</div>
-              <div className="flex justify-between text-[10px]">
-                <span className="text-black">Gross Sales:</span>
-                <span className="font-bold text-black">{fmtP(totalSales)}</span>
-              </div>
-              <div className="flex justify-between text-[10px]">
-                <span className="text-black">Discounts:</span>
-                <span className="text-black">-{fmtP(totalDiscounts)}</span>
-              </div>
-              {showReturnSummary && summary.totalRefunds > 0 && (
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-black">Returns:</span>
-                  <span className="text-black">-{fmtP(summary.totalRefunds)}</span>
-                </div>
-              )}
-              <div className="border-t border-dashed border-orange-200 my-1" />
-              <div className="flex justify-between font-bold text-xs">
-                <span className="text-black">NET SALES:</span>
-                <span className="text-black">{fmtP(todayEarnings)}</span>
-              </div>
+          )}
+          {!isX && showVoidSummary && summary.totalVoids > 0 && (
+            <div className="flex justify-between text-[10px]">
+              <span className="text-black">Voids:</span>
+              <span className="text-black">-{fmtP(summary.totalVoids)}</span>
             </div>
+          )}
+          <div className="border-t border-dashed border-orange-200 my-1" />
+          <div className="flex justify-between font-bold text-xs">
+            <span className="text-black">NET SALES:</span>
+            <span className="text-black">{fmtP(todayEarnings)}</span>
+          </div>
+        </div>
 
-            <div className="text-center mb-1 text-black">{dash}</div>
+        <div className="text-center mb-1 text-black">{dash}</div>
 
-            {/* CASH SUMMARY */}
-            <div className="mb-1 text-[10px] text-black">
-              <div className="text-center font-bold text-xs mb-1 text-black">CASH SUMMARY</div>
+        {/* CASH SUMMARY */}
+        <div className="mb-1 text-[10px] text-black">
+          <div className="text-center font-bold text-xs mb-1 text-black">{isX ? 'CASH IN DRAWER' : 'CASH SUMMARY'}</div>
+          <div className="flex justify-between">
+            <span className="text-black">Opening Fund:</span>
+            <span className="text-black">{fmtP(summary.openingFund || 0)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-black">Cash Sales:</span>
+            <span className="text-black">{fmtP(summary.cashEarned || 0)}</span>
+          </div>
+          {showReturnSummary && summary.totalRefunds > 0 && (
+            <div className="flex justify-between">
+              <span className="text-black">Cash Refunds:</span>
+              <span className="text-black">-{fmtP(summary.totalRefunds)}</span>
+            </div>
+          )}
+          {isX ? (
+            <>
               <div className="flex justify-between">
-                <span className="text-black">Opening Fund:</span>
-                <span className="text-black">{fmtP(summary.openingFund || 0)}</span>
+                <span className="text-black">Cash Outs:</span>
+                <span className="text-black">-{fmtP((summary.openingFund || 0) + (summary.cashEarned || 0) - expectedCash)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-black">Cash Sales:</span>
-                <span className="text-black">{fmtP(summary.cashEarned || 0)}</span>
+              <div className="border-t border-dashed border-gray-300 my-1" />
+              <div className="flex justify-between font-bold">
+                <span className="text-black">EXPECTED CASH:</span>
+                <span className="text-black">{fmtP(expectedCash)}</span>
               </div>
-              {showReturnSummary && summary.totalRefunds > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-black">Cash Refunds:</span>
-                  <span className="text-black">-{fmtP(summary.totalRefunds)}</span>
-                </div>
-              )}
+            </>
+          ) : (
+            <>
               <div className="border-t border-dashed border-gray-300 my-1" />
               <div className="flex justify-between font-bold">
                 <span className="text-black">EXPECTED CASH:</span>
@@ -415,26 +458,30 @@ ${Sep()}
                   {difference < 0 ? `(${fmtP(Math.abs(difference))})` : fmtP(difference)}
                 </span>
               </div>
-            </div>
+            </>
+          )}
+        </div>
 
-            <div className="text-center mb-1 text-black">{dash}</div>
+        <div className="text-center mb-1 text-black">{dash}</div>
 
-            {/* PAYMENT BREAKDOWN */}
-            <div className="mb-1 text-[10px] text-black">
-              <div className="text-center font-bold text-xs mb-1 text-black">PAYMENT BREAKDOWN</div>
-              {getActiveTenders().map(([k, v]) => {
-                const value = typeof v === 'number' ? v : 0;
-                return (
-                  <div key={k} className="flex justify-between">
-                    <span className="text-black">{TENDER_LABELS[k]}:</span>
-                    <span className="text-black">{fmtP(value)}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* PAYMENT BREAKDOWN */}
+        <div className="mb-1 text-[10px] text-black">
+          <div className="text-center font-bold text-xs mb-1 text-black">PAYMENT BREAKDOWN</div>
+          {getActiveTenders().map(([k, v]) => {
+            const value = typeof v === 'number' ? v : 0;
+            return (
+              <div key={k} className="flex justify-between">
+                <span className="text-black">{TENDER_LABELS[k] || k.toUpperCase()}:</span>
+                <span className="text-black">{fmtP(value)}</span>
+              </div>
+            );
+          })}
+        </div>
 
-            <div className="text-center mb-1 text-black">{dash}</div>
+        <div className="text-center mb-1 text-black">{dash}</div>
 
+        {!isX && (
+          <>
             {/* DISCOUNTS */}
             <div className="mb-1 text-[10px] text-black">
               <div className="text-center font-bold text-xs mb-1 text-black">DISCOUNTS</div>
@@ -458,14 +505,18 @@ ${Sep()}
             </div>
 
             <div className="text-center mb-1 text-black">{dash}</div>
+          </>
+        )}
 
-            {/* DAILY SUMMARY */}
-            <div className="mb-1 text-[10px] text-black">
-              <div className="text-center font-bold text-xs mb-1 text-black">DAILY SUMMARY</div>
-              <div className="flex justify-between">
-                <span className="text-black">Total Transactions:</span>
-                <span className="text-black">{summary.transactions || 0}</span>
-              </div>
+        {/* DAILY SUMMARY */}
+        <div className="mb-1 text-[10px] text-black">
+          <div className="text-center font-bold text-xs mb-1 text-black">{isX ? 'TRANSACTIONS' : 'DAILY SUMMARY'}</div>
+          <div className="flex justify-between">
+            <span className="text-black">Total Transactions:</span>
+            <span className="text-black">{summary.transactions || 0}</span>
+          </div>
+          {!isX && (
+            <>
               <div className="flex justify-between">
                 <span className="text-black">Total Items:</span>
                 <span className="text-black">{summary.items || 0}</span>
@@ -474,32 +525,58 @@ ${Sep()}
                 <span className="text-black">NET INCOME:</span>
                 <span className="text-black">{fmtP(todayEarnings)}</span>
               </div>
+            </>
+          )}
+        </div>
+
+        <div className="text-center mb-1 text-black">{dash}</div>
+
+        {/* Footer Sections */}
+        {settings.receiptMessage && (
+          <div className="mt-2 text-center text-[8px] text-black"><div className="text-black">{settings.receiptMessage}</div></div>
+        )}
+
+        {/* Signatures */}
+        {!isX && showCashierSignature && (
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="text-center text-[8px] text-black">
+              <div className="border-t border-gray-400 pt-1 mt-2 text-black">Cashier</div>
             </div>
+            <div className="text-center text-[8px] text-black">
+              <div className="border-t border-gray-400 pt-1 mt-2 text-black">Manager</div>
+            </div>
+          </div>
+        )}
 
-            <div className="text-center mb-1 text-black">{dash}</div>
+        {settings.disclaimer && (
+          <div className="mt-1 text-center text-[8px] text-black"><div className="text-black">{settings.disclaimer}</div></div>
+        )}
 
-            {/* Footer Sections */}
-            {settings.receiptMessage && (
-              <div className="mt-2 text-center text-[8px] text-black"><div className="text-black">{settings.receiptMessage}</div></div>
-            )}
+        <div className="text-center font-bold text-xs mt-2 text-black">{endTitle}</div>
+      </div>
+    );
+  };
 
-            {/* Signatures */}
-            {showCashierSignature && (
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div className="text-center text-[8px] text-black">
-                  <div className="border-t border-gray-400 pt-1 mt-2 text-black">Cashier</div>
-                </div>
-                <div className="text-center text-[8px] text-black">
-                  <div className="border-t border-gray-400 pt-1 mt-2 text-black">Manager</div>
-                </div>
-              </div>
-            )}
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+      <div className={`w-full ${is58mm ? 'max-w-[320px]' : 'max-w-[380px]'} rounded-xl bg-white border shadow-xl overflow-hidden`}>
 
-            {settings.disclaimer && (
-              <div className="mt-1 text-center text-[8px] text-black"><div className="text-black">{settings.disclaimer}</div></div>
-            )}
+        {/* Header */}
+        <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
+          <h3 className="font-bold text-base flex items-center gap-2 text-black">
+            <FileText className="h-5 w-5 text-orange-500" />
+            <span>Z-Report Preview</span>
+          </h3>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-gray-200" onClick={onClose}>
+            <X className="h-5 w-5 text-black" />
+          </Button>
+        </div>
 
-            <div className="text-center font-bold text-xs mt-2 text-black">*** END OF Z-REPORT ***</div>
+        {/* Reports Content */}
+        <div className="max-h-[calc(100vh-140px)] overflow-y-auto bg-gray-100 p-4" data-lenis-prevent>
+          <div id="reports-container" className="flex flex-col gap-6 items-center">
+            {includeXReceipt && renderPreviewBlock(true)}
+            {renderPreviewBlock(false)}
           </div>
         </div>
 

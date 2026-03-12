@@ -22,6 +22,7 @@ import { useReceiptSettings } from "@/hooks/useReceiptSettings";
 import { useSocket } from "@/provider/socket-provider";
 import { notifyCashUpdated } from "@/lib/notifyServer";
 import { AdminPinModal } from "@/app/(dashboard)/(staff)/orders/_components/AdminPinModal";
+import XReportModal from "./_components/XReportModal";
 
 interface CashOut {
   amount: number;
@@ -68,7 +69,7 @@ const DEFAULT_SUMMARY: SummaryData = {
 };
 
 export default function CashManagementPage() {
-  const { isLoading: settingsLoading } = useReceiptSettings();
+  const { settings, isLoading: settingsLoading } = useReceiptSettings();
   const { socket, isConnected: isLive } = useSocket();
 
   const [loading, setLoading] = useState(true);
@@ -193,6 +194,7 @@ export default function CashManagementPage() {
 
   // ── Cash Out ──────────────────────────────────────────────────────────────
   const [showCashOutModal, setShowCashOutModal] = useState(false);
+  const [showXReportModal, setShowXReportModal] = useState(false);
   const [cashOutAmount, setCashOutAmount] = useState<number | "">("");
   const [showAdminPin, setShowAdminPin] = useState(false);
   const [isCashingOut, setIsCashingOut] = useState(false);
@@ -282,22 +284,6 @@ export default function CashManagementPage() {
           </div>
         </div>
 
-        {/* ── Period Selector ── */}
-        <div className="flex gap-1.5">
-          {(["today", "week", "month"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setSelectedPeriod(p)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                selectedPeriod === p
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {p === "today" ? "Today" : p === "week" ? "This Week" : "This Month"}
-            </button>
-          ))}
-        </div>
 
         {/* ── Cash Drawer + Quick Stats ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -312,13 +298,22 @@ export default function CashManagementPage() {
                   <p className="text-3xl font-black text-foreground leading-tight">{fmtP(drawerBalance)}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowCashOutModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-semibold rounded-lg transition-colors"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                Cash Out
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowXReportModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <Receipt className="h-3.5 w-3.5" />
+                  X-Reading
+                </button>
+                <button
+                  onClick={() => setShowCashOutModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  Pay Out
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
               <div className="text-center">
@@ -445,12 +440,12 @@ export default function CashManagementPage() {
         )}
       </div>
 
-      {/* ── Cash Out Modal ── */}
+      {/* ── Pay Out Modal ── */}
       {showCashOutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-card text-card-foreground rounded-2xl shadow-2xl border border-border">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-              <h3 className="font-bold">Cash Out</h3>
+              <h3 className="font-bold">Pay Out</h3>
               <button onClick={() => setShowCashOutModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -498,9 +493,21 @@ export default function CashManagementPage() {
         open={showAdminPin}
         onOpenChange={setShowAdminPin}
         title="Admin Authorization"
-        description="Enter admin PIN to authorize this cash out."
+        description="Enter admin PIN to authorize this pay out."
         onSuccess={handleCashOut}
       />
+
+      {showXReportModal && (
+        <XReportModal
+          session={session}
+          summary={summary}
+          settings={{
+            ...settings, // We will just mock settings if it's not exported from useReceiptSettings properly, wait, useReceiptSettings returns `settings`. Wait, does useReceiptSettings export settings? Let's check.
+          }}
+          expectedCash={drawerBalance}
+          onClose={() => setShowXReportModal(false)}
+        />
+      )}
     </div>
   );
 }

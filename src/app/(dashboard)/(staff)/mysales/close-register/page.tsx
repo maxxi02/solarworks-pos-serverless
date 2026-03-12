@@ -44,6 +44,7 @@ export default function CloseRegisterPage() {
   const [loading, setLoading]         = useState(true);
   const [isClosing, setIsClosing]     = useState(false);
   const [showZReport, setShowZReport] = useState(false);
+  const [includeXReceipt, setIncludeXReceipt] = useState(false);
 
   const [session, setSession]         = useState<SessionData | null>(null);
   const [summaryData, setSummaryData] = useState<any>({});
@@ -255,7 +256,20 @@ export default function CloseRegisterPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-4 mt-6">
+        <div className="flex items-center gap-3 mt-4 mb-2 px-2">
+          <input
+            type="checkbox"
+            id="include-x"
+            checked={includeXReceipt}
+            onChange={(e) => setIncludeXReceipt(e.target.checked)}
+            className="w-5 h-5 rounded border-2 border-primary accent-primary text-primary"
+          />
+          <label htmlFor="include-x" className="text-base font-medium cursor-pointer">
+            Also print an X-Reading summary
+          </label>
+        </div>
+
+        <div className="flex gap-4 mt-2">
           <button
             onClick={() => router.back()}
             className="flex-1 py-4 border-2 border-border text-foreground text-base font-medium rounded-2xl hover:bg-muted active:bg-muted transition-colors touch-manipulation"
@@ -314,6 +328,7 @@ export default function CloseRegisterPage() {
             expectedCash: summary.expectedCash, difference, closeStatus: status,
           }}
           settings={settings}
+          includeXReceipt={includeXReceipt}
           onClose={handleZReportClose}
           onConfirmClose={handleConfirmClose}
         />
