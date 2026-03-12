@@ -231,6 +231,8 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
     }
   };
 
+
+
   // ─── Map to SavedOrder for printing ─────────────────────────────
   const mapToSavedOrder = (order: CustomerOrder): SavedOrder => {
     return {
@@ -480,6 +482,7 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
                               <Printer className="w-3.5 h-3.5" />
                             </button>
                           )}
+
                           {(order.queueStatus === "pending_payment" ||
                             order.queueStatus === "queueing") && (
                               <button
