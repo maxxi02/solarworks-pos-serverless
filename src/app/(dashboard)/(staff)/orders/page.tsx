@@ -185,7 +185,14 @@ export default function OrdersPage() {
         setIsRegisterClosed(true);
         setNeedsOpenRegister(false);
       } else {
+        // Shop is open but no session exists -> Needs to open register first
         setNeedsOpenRegister(true);
+        // Force the shop to close so customers can't order while staff is opening the register
+        fetch("/api/shop-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
+        }).catch(err => console.error("Failed to sync shop status to closed:", err));
       }
       await refreshStatus();
     }
@@ -194,7 +201,7 @@ export default function OrdersPage() {
   const handleConfirmStartingFund = async () => {
     const amount = parseFloat(startingFundInput);
     if (isNaN(amount) || amount < 0) {
-      setStartingFundError("Please enter a valid amount.");
+      setStartingFundError("Please enter a valid amount (0 or more)");
       return;
     }
     setIsOpeningSession(true);
@@ -211,6 +218,14 @@ export default function OrdersPage() {
         setIsRegisterClosed(false);
         setStartingFundInput("");
         setStartingFundError("");
+
+        // Unlock the shop so customers can order again
+        fetch("/api/shop-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isOpen: true, updatedBy: "staff" }),
+        }).catch(err => console.error("Failed to sync shop status to open:", err));
+        
       } else {
         toast.error("Failed to open register");
       }
@@ -401,6 +416,7 @@ export default function OrdersPage() {
 
   // Whenever the user is clocked in, verify a cash session is open.
   // If not, gate them to the Open Register or Register Closed screen.
+  // Also sync the shop status if they are blocked on Open Register.
   useEffect(() => {
     if (!isClockedIn) return;
     Promise.all([checkSession(), checkShopOpen()]).then(([sessionOpen, shopOpen]) => {
@@ -415,6 +431,13 @@ export default function OrdersPage() {
         // No session and shop not explicitly closed = needs to open register
         setIsRegisterClosed(false);
         setNeedsOpenRegister(true);
+        
+        // Block customer portal if we are stuck on the Open Register screen
+        fetch("/api/shop-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
+        }).catch(err => console.error("Failed to sync shop status to closed:", err));
       }
     });
   }, [isClockedIn, checkSession, checkShopOpen]);
