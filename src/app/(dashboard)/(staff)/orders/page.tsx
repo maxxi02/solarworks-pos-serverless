@@ -62,7 +62,7 @@ import { IncomingOrderModal } from "./_components/IncomingOrderModal";
 import { SavedOrdersPanel } from "./_components/Savedorderspanel";
 import { CategoryFilter } from "./_components/CategoryFilter";
 import { QueueBoard } from "./_components/QueueBoard";
-import { ChatDrawer } from "./_components/ChatDrawer";
+
 import { AttendanceBar } from "./_components/AttendanceBar";
 import { ProductCard } from "./_components/ProductCard";
 import { CartItem } from "./_components/CartItem";
@@ -275,10 +275,7 @@ export default function OrdersPage() {
   const [activeCustomerOrderId, setActiveCustomerOrderId] = useState<
     string | null
   >(null);
-  const [activeChat, setActiveChat] = useState<{
-    sessionId?: string;
-    tableId?: string;
-  } | null>(null);
+
 
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const cartDropZoneRef = useRef<HTMLDivElement>(null);
@@ -344,11 +341,8 @@ export default function OrdersPage() {
       queueStatus: string;
       order: CustomerOrder;
     }) => {
-      const isNewTableOrder =
-        data.queueStatus === "pending_payment" &&
-        data.order?.orderType === "dine-in";
-
-      if (data.queueStatus === "queueing" || isNewTableOrder) {
+      // Only notify when payment is confirmed (queueing = paid and in queue)
+      if (data.queueStatus === "queueing") {
         if (notifiedOrdersRef.current.has(data.orderId)) return;
         notifiedOrdersRef.current.add(data.orderId);
 
@@ -629,6 +623,7 @@ export default function OrdersPage() {
       orderType: order.orderType || "dine-in",
       tableNumber: order.tableNumber || undefined,
       orderNote: order.orderNote || undefined,
+      sourceOrderId: order.orderId,
       items: order.items.map((item) => ({
         name: item.name,
         price: item.price,
@@ -1546,12 +1541,6 @@ export default function OrdersPage() {
 
           <TabsContent value="queue" className="m-0 pb-10">
             <QueueBoard
-              onOpenChat={(order) =>
-                setActiveChat({
-                  sessionId: order.sessionId,
-                  tableId: order.tableNumber,
-                })
-              }
               onReprintReceipt={handleReprintReceipt}
               onPrintKitchenSlip={handlePrintKitchenSlip}
             />
@@ -1648,15 +1637,7 @@ export default function OrdersPage() {
 
         {/* IncomingOrderModal removed: customer orders now go directly into Queue Board */}
 
-        {activeChat && (
-          <ChatDrawer
-            sessionId={activeChat.sessionId}
-            tableId={activeChat.tableId}
-            staffId={session?.user?.id || ""}
-            staffName={staffName}
-            onClose={() => setActiveChat(null)}
-          />
-        )}
+
       </>
     </div>
   );

@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -29,6 +30,7 @@ export interface ReceiptBuildInput {
   orderType: "dine-in" | "takeaway";
   tableNumber?: string;
   orderNote?: string;
+  sourceOrderId?: string;
   items: ReceiptBuildItem[];
   subtotal: number;
   discountTotal: number;
@@ -140,18 +142,6 @@ interface SocketContextValue {
   emitOnline: () => void;
   emitActivity: () => void;
 
-  // Chat
-  emitChatConversationsLoad: () => void;
-  emitChatMessagesLoad: (conversationId: string, cursor?: string) => void;
-  emitChatMessageSend: (conversationId: string, content: string) => void;
-  emitChatDirectGetOrCreate: (
-    targetUserId: string,
-    targetUserName: string,
-    targetUserAvatar?: string,
-  ) => void;
-  emitChatTypingUpdate: (conversationId: string, isTyping: boolean) => void;
-  emitChatMessagesRead: (conversationId: string) => void;
-
   // Status
   onStatusChanged: (cb: (data: UserStatusUpdate) => void) => void;
   offStatusChanged: (cb?: (data: UserStatusUpdate) => void) => void;
@@ -240,12 +230,6 @@ const defaultContext: SocketContextValue = {
   isActive: true,
   emitOnline: () => { },
   emitActivity: () => { },
-  emitChatConversationsLoad: () => { },
-  emitChatMessagesLoad: () => { },
-  emitChatMessageSend: () => { },
-  emitChatDirectGetOrCreate: () => { },
-  emitChatTypingUpdate: () => { },
-  emitChatMessagesRead: () => { },
   onStatusChanged: () => { },
   offStatusChanged: () => { },
   onActivityUpdated: () => { },
@@ -370,7 +354,6 @@ export function SocketProvider({
     socket.on("reconnect", () => {
       setIsConnected(true);
       socket.emit("user:online");
-      socket.emit("chat:conversations:load");
       socket.emit("pos:join"); // Re-join cashiers room after reconnect
     });
 
@@ -467,26 +450,6 @@ export function SocketProvider({
     socketRef.current?.connected && socketRef.current.emit("user:online");
   const emitActivity = () =>
     socketRef.current?.connected && socketRef.current.emit("user:activity");
-  const emitChatConversationsLoad = () =>
-    socketRef.current?.emit("chat:conversations:load");
-  const emitChatMessagesLoad = (conversationId: string, cursor?: string) =>
-    socketRef.current?.emit("chat:messages:load", { conversationId, cursor });
-  const emitChatMessageSend = (conversationId: string, content: string) =>
-    socketRef.current?.emit("chat:message:send", { conversationId, content });
-  const emitChatDirectGetOrCreate = (
-    targetUserId: string,
-    targetUserName: string,
-    targetUserAvatar?: string,
-  ) =>
-    socketRef.current?.emit("chat:direct:get-or-create", {
-      targetUserId,
-      targetUserName,
-      targetUserAvatar: targetUserAvatar ?? "",
-    });
-  const emitChatTypingUpdate = (conversationId: string, isTyping: boolean) =>
-    socketRef.current?.emit("chat:typing:update", { conversationId, isTyping });
-  const emitChatMessagesRead = (conversationId: string) =>
-    socketRef.current?.emit("chat:messages:read", { conversationId });
   const emitPosJoin = () => socketRef.current?.emit("pos:join");
   const emitCustomerOrder = (order: CustomerOrder) =>
     socketRef.current?.emit("order:submit", order);
@@ -555,20 +518,26 @@ export function SocketProvider({
   const offNewCustomerOrder = (cb?: (order: CustomerOrder) => void) =>
     socketRef.current?.off("order:new", cb);
 
-  const onQueueUpdated = (
-    cb: (data: {
-      orderId: string;
-      queueStatus: string;
-      order: CustomerOrder;
-    }) => void,
-  ) => socketRef.current?.on("order:queue:updated", cb);
-  const offQueueUpdated = (
-    cb?: (data: {
-      orderId: string;
-      queueStatus: string;
-      order: CustomerOrder;
-    }) => void,
-  ) => socketRef.current?.off("order:queue:updated", cb);
+  const onQueueUpdated = useCallback(
+    (
+      cb: (data: {
+        orderId: string;
+        queueStatus: string;
+        order: CustomerOrder;
+      }) => void,
+    ) => socketRef.current?.on("order:queue:updated", cb),
+    [],
+  );
+  const offQueueUpdated = useCallback(
+    (
+      cb?: (data: {
+        orderId: string;
+        queueStatus: string;
+        order: CustomerOrder;
+      }) => void,
+    ) => socketRef.current?.off("order:queue:updated", cb),
+    [],
+  );
 
   const onTableUpdated = (cb: (tableData: any) => void) =>
     socketRef.current?.on("table:updated", cb);
@@ -647,12 +616,6 @@ export function SocketProvider({
         isActive,
         emitOnline,
         emitActivity,
-        emitChatConversationsLoad,
-        emitChatMessagesLoad,
-        emitChatMessageSend,
-        emitChatDirectGetOrCreate,
-        emitChatTypingUpdate,
-        emitChatMessagesRead,
         onStatusChanged,
         offStatusChanged,
         onActivityUpdated,

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  MessageSquare,
   Clock,
   Utensils,
   User,
@@ -15,7 +14,6 @@ import { useSocket } from "@/provider/socket-provider";
 
 interface QueueOrderCardProps {
   order: CustomerOrder;
-  onOpenChat?: (order: CustomerOrder) => void;
   onPrintKitchenSlip?: (order: CustomerOrder) => void;
 }
 
@@ -102,7 +100,7 @@ function getElapsedTime(timestamp: Date | string): string {
   return `${Math.floor(diffMins / 60)}h ${diffMins % 60}m ago`;
 }
 
-export function QueueOrderCard({ order, onOpenChat, onPrintKitchenSlip }: QueueOrderCardProps) {
+export function QueueOrderCard({ order, onPrintKitchenSlip }: QueueOrderCardProps) {
   const { emitOrderQueueUpdate } = useSocket();
   const [advancing, setAdvancing] = useState(false);
 
@@ -189,15 +187,6 @@ export function QueueOrderCard({ order, onOpenChat, onPrintKitchenSlip }: QueueO
           <span className="font-bold text-foreground text-xs">
             ₱{order.total?.toFixed(0)}
           </span>
-          {(order.sessionId || order.tableNumber) && onOpenChat && (
-            <button
-              onClick={() => onOpenChat(order)}
-              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
-              title="Chat with customer"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 

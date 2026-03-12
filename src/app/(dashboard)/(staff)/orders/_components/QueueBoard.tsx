@@ -92,14 +92,13 @@ function Th({
 // ─── Main component ─────────────────────────────────────────────────────────
 
 interface QueueBoardProps {
-  onOpenChat?: (order: CustomerOrder) => void;
   onReprintReceipt?: (order: SavedOrder) => void;
   onPrintKitchenSlip?: (order: CustomerOrder) => void;
 }
 
 type FilterType = "all" | "queueing" | "preparing" | "serving";
 
-export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }: QueueBoardProps) {
+export function QueueBoard({ onReprintReceipt, onPrintKitchenSlip }: QueueBoardProps) {
   const { onQueueUpdated, offQueueUpdated, emitOrderQueueUpdate } = useSocket();
 
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
@@ -169,8 +168,8 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
               : o,
           );
         }
-        // New paid order arrived (queueing) — add to top of list
-        return [data.order, ...prev];
+        // New paid order arrived (queueing) — add to top of list, deduplicated
+        return [data.order, ...prev.filter((o) => o.orderId !== data.orderId)];
       });
     };
 
@@ -207,11 +206,12 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
         body: JSON.stringify({ orderId, queueStatus: newStatus }),
       });
 
-      // Kitchen Slip Printing logic: 
-      // check if going to 'preparing' and if the callback onPrintKitchenSlip is provided
+      // Kitchen Slip Printing logic:
+      // Only print if going to 'preparing' AND the order contains food items
       if (newStatus === "preparing" && onPrintKitchenSlip) {
         const order = orders.find(o => o.orderId === orderId);
-        if (order) {
+        const hasFoodItems = order?.items?.some((i) => i.menuType === "food");
+        if (order && hasFoodItems) {
           onPrintKitchenSlip(order);
         }
       }
@@ -531,24 +531,7 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
                 })
               )}
             </tbody>
-            {visibleOrders.length > 0 && (
-              <tfoot className="border-t border-border bg-muted/20">
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-3 text-sm font-semibold text-foreground"
-                  >
-                    Total
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-primary">
-                    ₱
-                    {visibleOrders
-                      .reduce((sum, o) => sum + (o.total || 0), 0)
-                      .toFixed(0)}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
+
           </table>
         </div>
       </div>
@@ -690,20 +673,7 @@ export function QueueBoard({ onOpenChat, onReprintReceipt, onPrintKitchenSlip }:
           })
         )}
 
-        {/* Mobile Footer Total */}
-        {visibleOrders.length > 0 && (
-          <div className="bg-muted/10 border border-border border-dashed rounded-xl p-3 flex justify-between items-center">
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-              Page Total
-            </span>
-            <span className="text-primary font-black">
-              ₱
-              {visibleOrders
-                .reduce((sum, o) => sum + (o.total || 0), 0)
-                .toFixed(0)}
-            </span>
-          </div>
-        )}
+
       </div>
 
       {/* Order detail modal */}
