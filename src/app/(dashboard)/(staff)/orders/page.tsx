@@ -303,6 +303,7 @@ export default function OrdersPage() {
     useState(false);
 
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
   const [isDraggingCategory, setIsDraggingCategory] = useState(false);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
@@ -322,7 +323,7 @@ export default function OrdersPage() {
   const productsContainerRef = useRef<HTMLDivElement>(null);
 
   // ——— Computed ———
-  const isDisabled = isProcessing || isPrinting || attendanceLoading;
+  const isDisabled = isProcessing || isPrinting || attendanceLoading || isPaying;
 
   const canProcessPayment = useMemo(() => {
     if (!cart.length) return false;
@@ -815,6 +816,8 @@ export default function OrdersPage() {
 
   // ——— Process Payment ———
   const processPayment = async () => {
+    if (isPaying) return;
+
     if (!cart.length) {
       toast.error("Cart is empty");
       playError();
@@ -842,6 +845,8 @@ export default function OrdersPage() {
 
 
     try {
+      setIsPaying(true);
+
       const orderItems = cart.map((i) => ({
         productId: i._id,
         productName: i.name,
@@ -977,6 +982,8 @@ export default function OrdersPage() {
         description: error instanceof Error ? error.message : "Unknown error",
       });
       playError();
+    } finally {
+      setIsPaying(false);
     }
   };
 
