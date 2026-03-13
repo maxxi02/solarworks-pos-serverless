@@ -262,7 +262,7 @@ export function MessageInput({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent side="top" align="start" className="p-0 w-auto border-none shadow-xl bg-transparent" sideOffset={8}>
-                        {emojiData && (
+                        {emojiData ? (
                             <EmojiPicker
                                 data={emojiData}
                                 onEmojiSelect={handleEmojiSelect}
@@ -270,7 +270,7 @@ export function MessageInput({
                                 previewPosition="none"
                                 skinTonePosition="none"
                             />
-                        )}
+                        ) : null}
                     </PopoverContent>
                 </Popover>
 
