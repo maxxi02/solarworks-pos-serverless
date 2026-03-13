@@ -185,7 +185,7 @@ export default function ZReportModal({ session, summary, settings, includeXRecei
       const title = isX ? 'X-READING REPORT' : 'Z-READING REPORT';
       const endTitle = isX ? '*** END OF X-REPORT ***' : '*** END OF Z-REPORT ***';
       const expectedCashHtml = isX 
-        ? `${Row('Cash Outs:', fmtP((summary.openingFund || 0) + (summary.cashEarned || 0) - expectedCash))}
+        ? `${Row('Cash Outs:', fmtP((summary.openingFund || 0) + (summary.cashSales || 0) - expectedCash))}
            ${Row('EXPECTED CASH:', fmtP(expectedCash), true)}`
         : `${Row('Expected Cash:', fmtP(expectedCash), true)}
            ${Row('COUNTED CASH:', fmtP(actualCash), true)}
