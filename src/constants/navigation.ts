@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   UserCog,
   Users,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export const PATHS = {
@@ -20,6 +21,7 @@ export const PATHS = {
   PROFILE: "/profile",
   SETTINGS: "/settings",
   MESSAGES: "/messages",
+  STORIES: "/stories",
 
   ADMIN: {
     SALES: "/sales",
@@ -80,6 +82,7 @@ export const adminNavigation: NavItem[] = [
     isActive: true,
   },
   { title: "Messages", url: PATHS.MESSAGES, icon: MessageSquare },
+  { title: "Stories", url: PATHS.STORIES, icon: ImageIcon },
   {
     title: "Sales",
     url: PATHS.ADMIN.SALES,
@@ -151,6 +154,7 @@ export const staffNavigation: NavItem[] = [
     isActive: true,
   },
   { title: "Messages", url: PATHS.MESSAGES, icon: MessageSquare },
+  { title: "Stories", url: PATHS.STORIES, icon: ImageIcon },
   { title: "Orders", url: PATHS.STAFF_NAV.ORDERS, icon: ShoppingCart },
   {
     title: "Tables",
