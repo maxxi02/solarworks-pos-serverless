@@ -1399,7 +1399,7 @@ export default function OrdersPage() {
                       No products found
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
+                    <div className="grid grid-cols-4 gap-3 pb-4">
                       {filteredProducts.map((product) => (
                         <ProductCard
                           key={product._id}
@@ -1507,7 +1507,10 @@ export default function OrdersPage() {
                       {/* Cart Items */}
                       <div>
                         <Label className="text-sm font-semibold">Items</Label>
-                        <div className="space-y-3 mt-3">
+                        <div
+                          className="space-y-3 mt-3 overflow-y-auto pr-1"
+                          style={{ maxHeight: "360px" }}
+                        >
                           {cart.map((item) => (
                             <CartItem
                               key={item._id}
