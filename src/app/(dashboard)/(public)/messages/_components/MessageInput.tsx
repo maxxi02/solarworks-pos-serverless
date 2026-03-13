@@ -1,43 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, KeyboardEvent, Suspense, lazy, useMemo, useEffect } from "react";
+import { useState, useRef, useCallback, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Smile, Paperclip, ImageIcon, X, FileIcon, Loader2 } from "lucide-react";
+import { Send, Paperclip, ImageIcon, X, FileIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import type { MessageAttachment } from "@/types/messaging.types";
-
-// Typed wrapper avoids JSX incompatibility with emoji-mart's exported type
-interface EmojiPickerProps {
-    data?: unknown;
-    onEmojiSelect?: (emoji: { native: string }) => void;
-    theme?: string;
-    previewPosition?: string;
-    skinTonePosition?: string;
-}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const EmojiPickerRaw = lazy(() => import("@emoji-mart/react").then((mod) => ({ default: mod.default as any })));
-function EmojiPicker(props: EmojiPickerProps) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Picker = EmojiPickerRaw as any;
-    return (
-        <Suspense fallback={<div className="h-[350px] w-[350px] flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
-            <Picker {...props} />
-        </Suspense>
-    );
-}
-
-// Preload emoji data once
-let emojiDataCache: unknown = null;
-const loadEmojiData = async () => {
-    if (!emojiDataCache) {
-        const r = await fetch("https://cdn.jsdelivr.net/npm/@emoji-mart/data");
-        emojiDataCache = await r.json();
-    }
-    return emojiDataCache;
-};
 
 interface PendingAttachment {
     file: File;
@@ -63,19 +32,12 @@ export function MessageInput({
     placeholder = "Type a message...",
 }: MessageInputProps) {
     const [content, setContent] = useState("");
-    const [emojiOpen, setEmojiOpen] = useState(false);
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-    const [emojiData, setEmojiData] = useState<unknown>(null);
     const isTypingRef = useRef(false);
     const typingStopTimer = useRef<NodeJS.Timeout>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-    // Preload emoji data on mount
-    useEffect(() => {
-        loadEmojiData().then(setEmojiData);
-    }, []);
 
     const handleTyping = useCallback(
         (value: string) => {
@@ -100,23 +62,6 @@ export function MessageInput({
         },
         [onTypingStart, onTypingStop]
     );
-
-    const handleEmojiSelect = useCallback((emoji: { native: string }) => {
-        const ta = textareaRef.current;
-        if (ta) {
-            const start = ta.selectionStart ?? content.length;
-            const end = ta.selectionEnd ?? content.length;
-            const newContent = content.slice(0, start) + emoji.native + content.slice(end);
-            setContent(newContent);
-            setTimeout(() => {
-                ta.setSelectionRange(start + emoji.native.length, start + emoji.native.length);
-                ta.focus();
-            }, 0);
-        } else {
-            setContent((prev) => prev + emoji.native);
-        }
-        setEmojiOpen(false);
-    }, [content]);
 
     const uploadFile = useCallback(async (file: File, idx: number) => {
         const formData = new FormData();
@@ -254,27 +199,7 @@ export function MessageInput({
 
             {/* Input Row */}
             <div className="flex items-end gap-2">
-                {/* Emoji Picker */}
-                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-                    <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0 text-muted-foreground hover:text-foreground" disabled={disabled}>
-                            <Smile className="h-4 w-4" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent side="top" align="start" className="p-0 w-auto border-none shadow-xl bg-transparent" sideOffset={8}>
-                        {emojiData ? (
-                            <EmojiPicker
-                                data={emojiData}
-                                onEmojiSelect={handleEmojiSelect}
-                                theme="auto"
-                                previewPosition="none"
-                                skinTonePosition="none"
-                            />
-                        ) : null}
-                    </PopoverContent>
-                </Popover>
-
-                {/* Image attach */}
+                {/* Image attach */
                 <Button
                     variant="ghost" size="icon"
                     className="h-9 w-9 flex-shrink-0 text-muted-foreground hover:text-foreground"
