@@ -205,7 +205,6 @@ export function MessageInput({
 
             {/* Input Row */}
             <div className="flex items-end gap-2">
-                {/* Image attach */
                 <Button
                     variant="ghost" size="icon"
                     className="h-9 w-9 flex-shrink-0 text-muted-foreground hover:text-foreground"
@@ -216,7 +215,6 @@ export function MessageInput({
                     <ImageIcon className="h-4 w-4" />
                 </Button>
 
-                {/* File attach */}
                 <Button
                     variant="ghost" size="icon"
                     className="h-9 w-9 flex-shrink-0 text-muted-foreground hover:text-foreground"
@@ -228,21 +226,23 @@ export function MessageInput({
                 </Button>
 
                 {/* Hidden file inputs */}
-                <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handleFiles(e.target.files)}
-                />
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handleFiles(e.target.files)}
-                />
+                <>
+                    <input
+                        ref={imageInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => handleFiles(e.target.files)}
+                    />
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => handleFiles(e.target.files)}
+                    />
+                </>
 
                 <Textarea
                     ref={textareaRef}
