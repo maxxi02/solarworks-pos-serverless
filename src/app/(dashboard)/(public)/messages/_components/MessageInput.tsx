@@ -69,7 +69,10 @@ export function MessageInput({
 
         try {
             const res = await fetch("/api/messages/upload", { method: "POST", body: formData });
-            if (!res.ok) throw new Error("Upload failed");
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({ error: "Upload failed" }));
+                throw new Error(errorData.error || "Upload failed");
+            }
             const data = (await res.json()) as MessageAttachment;
 
             setPendingAttachments((prev) =>
@@ -77,13 +80,16 @@ export function MessageInput({
                     i === idx ? { ...a, uploading: false, uploaded: data } : a
                 )
             );
-        } catch {
+            toast.success(`${file.name} uploaded successfully`);
+        } catch (error) {
+            console.error("Upload error:", error);
+            const errorMessage = error instanceof Error ? error.message : "Upload failed";
             setPendingAttachments((prev) =>
                 prev.map((a, i) =>
-                    i === idx ? { ...a, uploading: false, error: "Upload failed" } : a
+                    i === idx ? { ...a, uploading: false, error: errorMessage } : a
                 )
             );
-            toast.error(`Failed to upload ${file.name}`);
+            toast.error(`Failed to upload ${file.name}: ${errorMessage}`);
         }
     }, []);
 

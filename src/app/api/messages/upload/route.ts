@@ -30,6 +30,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check Cloudinary config
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.error("Cloudinary configuration missing");
+      return NextResponse.json(
+        { error: "Upload service not configured" },
+        { status: 500 }
+      );
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
@@ -54,6 +63,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Upload error:", error);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Upload failed";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
