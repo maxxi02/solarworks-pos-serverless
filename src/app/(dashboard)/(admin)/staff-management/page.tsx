@@ -84,15 +84,15 @@ export default function AccessControlPage() {
   const columns = getColumns({ onRefresh: refreshUsers });
 
   return (
-    <div className="container py-6 px-4">
+    <div className="container max-w-7xl mx-auto py-8 px-4 space-y-8">
       <Header isAdmin={isAdmin} onRefresh={refreshUsers} />
 
-      <Tabs defaultValue="users">
+      <Tabs defaultValue="users" className="w-full">
         <TabsList>
           <TabsTrigger value="users">Staff ({users.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="users" className="mt-6">
+        <TabsContent value="users" className="pt-4">
           {selectedUsers.length > 0 && (
             <BulkActions
               selectedUsers={selectedUsers}

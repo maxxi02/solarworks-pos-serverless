@@ -29,12 +29,14 @@ export function getColumns({ onRefresh }: GetColumnsProps): ColumnDef<TableUser>
             cell: ({ row }) => (
                 <UserEditDrawer user={row.original} onRefresh={onRefresh} />
             ),
+            size: 200,
         },
-        { accessorKey: "email", header: "Email" },
+        { accessorKey: "email", header: "Email", size: 250 },
         {
             id: "role",
             header: "Role",
             cell: ({ row }) => <RoleBadge role={row.original.role} />,
+            size: 120,
         },
         {
             id: "online",
@@ -45,20 +47,25 @@ export function getColumns({ onRefresh }: GetColumnsProps): ColumnDef<TableUser>
                     lastActive={row.original.lastActive}
                 />
             ),
+            size: 140,
         },
         // ── Pay Range column removed ───────────────────────────────────────
         {
             id: "status",
             header: "Account",
             cell: ({ row }) => <StatusBadge status={row.original.status} />,
+            size: 120,
         },
         {
             id: "joined",
-            header: "Joined",
+            header: () => <div className="text-right pr-4">Joined</div>,
             cell: ({ row }) =>
-                formatDistanceToNow(new Date(row.original.createdAt), {
-                    addSuffix: true,
-                }),
+                <div className="text-right pr-4 text-muted-foreground">
+                    {formatDistanceToNow(new Date(row.original.createdAt), {
+                        addSuffix: true,
+                    })}
+                </div>,
+            size: 180,
         },
         {
             id: "actions",

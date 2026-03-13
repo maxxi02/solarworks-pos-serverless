@@ -1,4 +1,3 @@
-import React from "react";
 import { CreateStaffDialog } from "./create-staff-dialog";
 
 interface HeaderProps {
@@ -8,10 +7,10 @@ interface HeaderProps {
 
 export function Header({ isAdmin, onRefresh }: HeaderProps) {
     return (
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between">
             <div>
-                <h1 className="text-3xl font-bold">Access Control</h1>
-                <p className="text-sm text-muted-foreground mt-1">
+                <h1 className="text-4xl font-extrabold tracking-tight">Access Control</h1>
+                <p className="text-muted-foreground mt-2">
                     Manage staff members and user permissions
                 </p>
             </div>
