@@ -77,8 +77,13 @@ export default function CloseRegisterPage() {
       const sessionCashOuts = (dbSession.cashOuts || []).filter(c => new Date(c.date) >= sessionStart);
       const totalCashOuts  = sessionCashOuts.reduce((s, c) => s + c.amount, 0);
 
-      const paymentsRes    = await fetch('/api/payments');
+      // Fetch all recent payments (for session) + a separate stat call for lifetime accumulated sales
+      const [paymentsRes, accuRes] = await Promise.all([
+        fetch('/api/payments?limit=10000'),
+        fetch('/api/payments?noStats=false&limit=1'),
+      ]);
       const paymentsResult = await paymentsRes.json();
+      const accuResult     = await accuRes.json();
 
       if (!paymentsResult.success || !paymentsResult.data) {
         toast.error('Failed to load payments');
@@ -102,6 +107,10 @@ export default function CloseRegisterPage() {
       const itemCount    = completed.reduce((s: number, p: Payment) => s + (p.items?.length || 0), 0);
       const openedAtStr  = typeof dbSession.openedAt === 'string' ? dbSession.openedAt : new Date(dbSession.openedAt).toLocaleString();
 
+      // Accumulated Sales: lifetime total from stats, previous = lifetime - today's gross
+      const presentAccumulatedSales  = accuResult?.data?.stats?.totalSales || totalSales;
+      const previousAccumulatedSales = Math.max(0, presentAccumulatedSales - totalSales);
+
       setSummary({
         openingFund: dbSession.openingFund, cashSales, refunds, cashOuts: totalCashOuts,
         expectedCash, totalSales, totalDiscounts, gcashSales, splitSales,
@@ -120,6 +129,8 @@ export default function CloseRegisterPage() {
         tenders: { cash: cashSales, gcash: gcashSales, split: splitSales, credit_card: 0, pay_later: 0, online: 0, invoice: 0, e_wallet: 0, pay_in: 0 },
         discounts: { sc: completed.reduce((s: number, p: Payment) => s + (p.discountTotal || 0), 0), pwd: 0, naac: 0, solo_parent: 0, other: 0 },
         openingFund: dbSession.openingFund, actualCash: 0,
+        presentAccumulatedSales, previousAccumulatedSales,
+        gcashSales, splitSales,
       });
     } catch (error) {
       console.error('loadData error:', error);

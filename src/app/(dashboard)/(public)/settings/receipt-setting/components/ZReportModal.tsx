@@ -35,6 +35,10 @@ export default function ZReportModal({ session, summary, settings, includeXRecei
   const totalSales = summary.totalSales || 0;
   const totalDiscounts = summary.totalDiscounts || 0;
 
+  // Accumulated Sales
+  const presentAccumulatedSales  = summary.presentAccumulatedSales || totalSales;
+  const previousAccumulatedSales = summary.previousAccumulatedSales || Math.max(0, presentAccumulatedSales - totalSales);
+
   // Get actual cash from summary
   const actualCash = summary.actualCash || 0;
   const expectedCash = summary.expectedCash || summary.cashEarned || 0;
@@ -234,6 +238,14 @@ ${Row('Opened:', session?.openedAt?.split(',')[0] || '—')}
 ${!isX ? Row('Closed:', session?.closedAt?.split(',')[0] || '—') : ''}
 ${Sep()}
 
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">Z-COUNTER NO.</div>
+${Row('Present Accumulated', '')}
+${Row('Sales:', fmtP(presentAccumulatedSales))}
+${Row('Previous Accumulated', '')}
+${Row('Sales:', fmtP(previousAccumulatedSales))}
+${Row('Sales for the Day:', fmtP(totalSales))}
+${Sep()}
+
 <div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;color:#000000;">${isX ? 'SALES SUMMARY' : "TODAY'S SALES"}</div>
 ${Row('Gross Sales:', fmtP(totalSales))}
 ${Row('Discounts:', fmtP(totalDiscounts))}
@@ -377,6 +389,27 @@ ${renderReceiptBody(false)}
             </div>
           )}
         </div>
+
+        <div className="text-center mb-1 text-black">{dash}</div>
+
+        {/* Z-COUNTER / ACCUMULATED SALES */}
+        {!isX && (
+          <div className="mb-1 text-[10px] text-black">
+            <div className="text-center font-bold text-xs mb-1 text-black">Z-COUNTER NO.</div>
+            <div className="flex justify-between">
+              <span className="text-black">Present Accumulated Sales:</span>
+              <span className="font-bold text-black">{fmtP(presentAccumulatedSales)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-black">Previous Accumulated Sales:</span>
+              <span className="text-black">{fmtP(previousAccumulatedSales)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-black">Sales for the Day:</span>
+              <span className="font-bold text-black">{fmtP(totalSales)}</span>
+            </div>
+          </div>
+        )}
 
         <div className="text-center mb-1 text-black">{dash}</div>
 

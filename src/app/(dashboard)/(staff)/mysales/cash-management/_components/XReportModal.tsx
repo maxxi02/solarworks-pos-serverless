@@ -49,12 +49,17 @@ export default function XReportModal({ session, summary, settings, expectedCash,
   const zreading = settings?.zreading || {};
   const showReturnSummary = zreading.showReturnSummary !== false;
 
-  // Filter active tenders
+  // Filter active tenders — include all nonzero
   const tenders = {
     cash: summary.cashSales || 0,
     gcash: summary.gcashSales || 0,
     split: summary.splitSales || 0,
   };
+
+  // Revenue totals
+  const totalTendered = todayEarnings; // net sales = total tendered
+  const cashOuts      = summary.cashOuts || 0;
+  const totalRefunds  = summary.totalRefunds || 0;
   
   const getActiveTenders = () => {
     return Object.entries(tenders)
@@ -157,27 +162,27 @@ ${Row('Register:', session?.registerName || '—')}
 ${Row('Opened:', session?.openedAt ? new Date(session.openedAt).toLocaleString() : '—')}
 ${Sep()}
 
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">SALES SUMMARY</div>
-${Row('Gross Sales:', fmtP(totalSales))}
-${Row('Discounts:', fmtP(totalDiscounts))}
-${showReturnSummary ? Row('Returns:', fmtP(summary.totalRefunds || 0)) : ''}
-${Row('NET SALES:', fmtP(todayEarnings), true)}
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">Cash</div>
+${Row('Opening Amount:', fmtP(session?.openingFund || 0))}
+${Row('Cash Sales:', fmtP(tenders.cash))}
+${showReturnSummary ? Row('Cash Refunds:', fmtP(totalRefunds)) : ''}
+${Row('Pay-Ins:', fmtP(0))}
+${Row('Pay-Outs:', fmtP(cashOuts))}
+${Row('Previous Closing Amount:', fmtP(expectedCash), true)}
 ${Sep()}
 
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">CASH IN DRAWER</div>
-${Row('Opening Fund:', fmtP(session?.openingFund || 0))}
-${Row('Cash Sales:', fmtP(summary.cashSales || 0))}
-${showReturnSummary ? Row('Cash Refunds:', fmtP(summary.totalRefunds || 0)) : ''}
-${Row('Cash Outs:', fmtP((session?.openingFund || 0) + (summary.cashSales || 0) - expectedCash))}
-${Row('EXPECTED CASH:', fmtP(expectedCash), true)}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">PAYMENT BREAKDOWN</div>
-${getActiveTenders().map(([k, v]) => Row(`${TENDER_LABELS[k] || k.toUpperCase()}:`, fmtP(v as number))).join('')}
-${Sep()}
-
-<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">TRANSACTIONS</div>
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">Revenue</div>
 ${Row('Total Transactions:', (summary.transactionCount || 0).toString())}
+${Row('Sales:', fmtP(totalSales))}
+${Row('Discounts:', fmtP(totalDiscounts))}
+${showReturnSummary ? Row('Refunds:', fmtP(totalRefunds)) : ''}
+${Row('Service Charge:', fmtP(0))}
+${Row('Net Sales:', fmtP(todayEarnings))}
+${Row('Total Tendered:', fmtP(totalTendered), true)}
+${Sep()}
+
+<div style="text-align:center;font-weight:bold;font-size:${fsL};margin:4px 0;">Breakdown of Sales</div>
+${getActiveTenders().map(([k, v]) => Row(`${TENDER_LABELS[k] || k.toUpperCase()}:`, fmtP(v as number))).join('')}
 ${Sep()}
 
 ${settings?.receiptMessage ? `<div style="text-align:center;font-style:italic;font-size:${fs};margin-bottom:3px;">${settings.receiptMessage}</div>` : ''}
@@ -264,65 +269,81 @@ ${settings?.disclaimer ? `<div style="text-align:center;font-size:${fs};margin:2
 
             <div className="text-center mb-1 text-black">{dash}</div>
 
-            {/* SALES SUMMARY */}
-            <div className="bg-blue-50 p-2 rounded mb-2">
-              <div className="text-center font-bold text-xs mb-1 text-black">SALES SUMMARY</div>
-              <div className="flex justify-between text-[10px]">
-                <span className="text-black">Gross Sales:</span>
-                <span className="font-bold text-black">{fmtP(totalSales)}</span>
-              </div>
-              <div className="flex justify-between text-[10px]">
-                <span className="text-black">Discounts:</span>
-                <span className="text-black">-{fmtP(totalDiscounts)}</span>
-              </div>
-              {showReturnSummary && summary.totalRefunds > 0 && (
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-black">Returns:</span>
-                  <span className="text-black">-{fmtP(summary.totalRefunds)}</span>
-                </div>
-              )}
-              <div className="border-t border-dashed border-blue-200 my-1" />
-              <div className="flex justify-between font-bold text-xs">
-                <span className="text-black">NET SALES:</span>
-                <span className="text-black">{fmtP(todayEarnings)}</span>
-              </div>
-            </div>
-
-            <div className="text-center mb-1 text-black">{dash}</div>
-
-            {/* CASH SUMMARY */}
+            {/* CASH SECTION */}
             <div className="mb-1 text-[10px] text-black">
-              <div className="text-center font-bold text-xs mb-1 text-black">CASH IN DRAWER</div>
+              <div className="text-center font-bold text-xs mb-1 text-black">Cash</div>
               <div className="flex justify-between">
-                <span className="text-black">Opening Fund:</span>
+                <span className="text-black">Opening Amount:</span>
                 <span className="text-black">{fmtP(session?.openingFund || 0)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-black">Cash Sales:</span>
-                <span className="text-black">{fmtP(summary.cashSales || 0)}</span>
+                <span className="text-black">{fmtP(tenders.cash)}</span>
               </div>
-              {showReturnSummary && summary.totalRefunds > 0 && (
+              {showReturnSummary && totalRefunds > 0 && (
                 <div className="flex justify-between">
                   <span className="text-black">Cash Refunds:</span>
-                  <span className="text-black">-{fmtP(summary.totalRefunds)}</span>
+                  <span className="text-black">-{fmtP(totalRefunds)}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-black">Cash Outs:</span>
-                <span className="text-black">-{fmtP((session?.openingFund || 0) + (summary.cashSales || 0) - expectedCash)}</span>
+                <span className="text-black">Pay-Ins:</span>
+                <span className="text-black">{fmtP(0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-black">Pay-Outs:</span>
+                <span className="text-black">-{fmtP(cashOuts)}</span>
               </div>
               <div className="border-t border-dashed border-gray-300 my-1" />
               <div className="flex justify-between font-bold">
-                <span className="text-black">EXPECTED CASH:</span>
+                <span className="text-black">Previous Closing Amount:</span>
                 <span className="text-black">{fmtP(expectedCash)}</span>
               </div>
             </div>
 
             <div className="text-center mb-1 text-black">{dash}</div>
 
-            {/* PAYMENT BREAKDOWN */}
+            {/* REVENUE SECTION */}
             <div className="mb-1 text-[10px] text-black">
-              <div className="text-center font-bold text-xs mb-1 text-black">PAYMENT BREAKDOWN</div>
+              <div className="text-center font-bold text-xs mb-1 text-black">Revenue</div>
+              <div className="flex justify-between">
+                <span className="text-black">Total Transactions:</span>
+                <span className="text-black">{summary.transactionCount || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-black">Sales:</span>
+                <span className="text-black">{fmtP(totalSales)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-black">Discounts:</span>
+                <span className="text-black">-{fmtP(totalDiscounts)}</span>
+              </div>
+              {showReturnSummary && totalRefunds > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-black">Refunds:</span>
+                  <span className="text-black">-{fmtP(totalRefunds)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-black">Service Charge:</span>
+                <span className="text-black">{fmtP(0)}</span>
+              </div>
+              <div className="border-t border-dashed border-gray-300 my-1" />
+              <div className="flex justify-between">
+                <span className="text-black">Net Sales:</span>
+                <span className="text-black">{fmtP(todayEarnings)}</span>
+              </div>
+              <div className="flex justify-between font-bold">
+                <span className="text-black">Total Tendered:</span>
+                <span className="text-black">{fmtP(totalTendered)}</span>
+              </div>
+            </div>
+
+            <div className="text-center mb-1 text-black">{dash}</div>
+
+            {/* TENDER BREAKDOWN */}
+            <div className="mb-1 text-[10px] text-black">
+              <div className="text-center font-bold text-xs mb-1 text-black">Breakdown of Sales</div>
               {getActiveTenders().map(([k, v]) => {
                 const value = typeof v === 'number' ? v : 0;
                 return (
@@ -332,17 +353,6 @@ ${settings?.disclaimer ? `<div style="text-align:center;font-size:${fs};margin:2
                   </div>
                 );
               })}
-            </div>
-
-            <div className="text-center mb-1 text-black">{dash}</div>
-
-            {/* TRANSACTIONS */}
-            <div className="mb-1 text-[10px] text-black">
-              <div className="text-center font-bold text-xs mb-1 text-black">TRANSACTIONS</div>
-              <div className="flex justify-between">
-                <span className="text-black">Total Transactions:</span>
-                <span className="text-black">{summary.transactionCount || 0}</span>
-              </div>
             </div>
 
             <div className="text-center mb-1 text-black">{dash}</div>
