@@ -71,6 +71,17 @@ export async function GET(request: Request) {
                 },
               },
             ],
+            // ── Split payment breakdown ──
+            splitBreakdown: [
+              { $match: { status: "completed", paymentMethod: "split" } },
+              {
+                $group: {
+                  _id: null,
+                  cash: { $sum: { $ifNull: ["$splitPayment.cash", 0] } },
+                  gcash: { $sum: { $ifNull: ["$splitPayment.gcash", 0] } },
+                },
+              },
+            ],
             // ── Hourly sales (completed, today only) ──
             hourly: [
               {
@@ -127,9 +138,11 @@ export async function GET(request: Request) {
       methodMap[row._id] = row;
     }
 
-    const cashSales = methodMap["cash"]?.amount ?? 0;
-    const gcashSales = methodMap["gcash"]?.amount ?? 0;
-    const splitSales = methodMap["split"]?.amount ?? 0;
+    const splitData = result.splitBreakdown?.[0] ?? { cash: 0, gcash: 0 };
+
+    // Fold split amounts directly into cash and gcash variables
+    const cashSales = (methodMap["cash"]?.amount ?? 0) + splitData.cash;
+    const gcashSales = (methodMap["gcash"]?.amount ?? 0) + splitData.gcash;
 
     const hourlySales = (result.hourly ?? []).map((h: { _id: number; sales: number }) => ({
       hour: `${h._id}:00`,
@@ -151,8 +164,7 @@ export async function GET(request: Request) {
         totalRefunds: refunded.totalAmount,
         cashSales,
         gcashSales,
-        splitSales,
-        totalCollected: cashSales + gcashSales + splitSales - refunded.totalAmount,
+        totalCollected: cashSales + gcashSales - refunded.totalAmount,
         transactionCount: completed.count,
         // itemCount computed from topItems isn't reliable for total — keep a separate facet if needed
         hourlySales,

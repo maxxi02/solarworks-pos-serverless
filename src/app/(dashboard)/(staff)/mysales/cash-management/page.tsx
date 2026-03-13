@@ -47,7 +47,6 @@ interface SummaryData {
   totalRefunds: number;
   cashSales: number;
   gcashSales: number;
-  splitSales: number;
   totalCollected: number;
   transactionCount: number;
   hourlySales: Array<{ hour: string; sales: number }>;
@@ -61,7 +60,6 @@ const DEFAULT_SUMMARY: SummaryData = {
   totalRefunds: 0,
   cashSales: 0,
   gcashSales: 0,
-  splitSales: 0,
   totalCollected: 0,
   transactionCount: 0,
   hourlySales: [],
@@ -375,7 +373,6 @@ export default function CashManagementPage() {
             {[
               { label: "Cash", value: summary.cashSales, icon: Banknote },
               { label: "GCash", value: summary.gcashSales, icon: Smartphone },
-              { label: "Split", value: summary.splitSales, icon: CreditCard },
             ].map(({ label, value, icon: Icon }) => {
               const pct = summary.grossSales > 0 ? (value / summary.grossSales) * 100 : 0;
               return (

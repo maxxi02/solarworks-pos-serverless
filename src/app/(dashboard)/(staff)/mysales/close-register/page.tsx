@@ -18,6 +18,10 @@ interface Payment {
   discount?: number;
   discountTotal?: number;
   createdAt: string;
+  splitPayment?: {
+    cash: number;
+    gcash: number;
+  };
 }
 
 interface CashOut {
@@ -53,7 +57,7 @@ export default function CloseRegisterPage() {
     openingFund: 0, cashSales: 0, refunds: 0, cashOuts: 0, expectedCash: 0,
     transactions: 0, items: 0, openedAt: '', cashierName: 'Cashier',
     registerName: 'Main Register', totalSales: 0, totalDiscounts: 0,
-    gcashSales: 0, splitSales: 0,
+    gcashSales: 0,
   });
 
   useEffect(() => { loadData(); }, []);
@@ -97,9 +101,19 @@ export default function CloseRegisterPage() {
 
       const totalSales     = completed.reduce((s: number, p: Payment) => s + p.total, 0);
       const totalDiscounts = completed.reduce((s: number, p: Payment) => s + (p.discountTotal || p.discount || 0), 0);
-      const cashSales      = completed.filter((p: Payment) => p.paymentMethod === 'cash').reduce((s: number, p: Payment) => s + p.total, 0);
-      const gcashSales     = completed.filter((p: Payment) => p.paymentMethod === 'gcash').reduce((s: number, p: Payment) => s + p.total, 0);
-      const splitSales     = completed.filter((p: Payment) => p.paymentMethod === 'split').reduce((s: number, p: Payment) => s + p.total, 0);
+
+      // Cash-only payments
+      const cashSalesDirect  = completed.filter((p: Payment) => p.paymentMethod === 'cash').reduce((s: number, p: Payment) => s + p.total, 0);
+      const gcashSalesDirect = completed.filter((p: Payment) => p.paymentMethod === 'gcash').reduce((s: number, p: Payment) => s + p.total, 0);
+
+      // Split payments
+      const splitPayments   = completed.filter((p: Payment) => p.paymentMethod === 'split');
+      const cashFromSplit   = splitPayments.reduce((s: number, p: Payment) => s + (p.splitPayment?.cash  ?? 0), 0);
+      const gcashFromSplit  = splitPayments.reduce((s: number, p: Payment) => s + (p.splitPayment?.gcash ?? 0), 0);
+
+      const cashSales  = cashSalesDirect  + cashFromSplit;
+      const gcashSales = gcashSalesDirect + gcashFromSplit;
+
       const refunds        = refunded.filter((p: Payment) => p.paymentMethod === 'cash').reduce((s: number, p: Payment) => s + p.total, 0);
 
       const expectedCash = dbSession.openingFund + cashSales - refunds - totalCashOuts;
@@ -113,7 +127,7 @@ export default function CloseRegisterPage() {
 
       setSummary({
         openingFund: dbSession.openingFund, cashSales, refunds, cashOuts: totalCashOuts,
-        expectedCash, totalSales, totalDiscounts, gcashSales, splitSales,
+        expectedCash, totalSales, totalDiscounts, gcashSales,
         transactions: txCount, items: itemCount, openedAt: openedAtStr,
         cashierName: dbSession.cashierName || 'Cashier',
         registerName: dbSession.registerName || 'Main Register',
@@ -123,14 +137,14 @@ export default function CloseRegisterPage() {
 
       setSummaryData({
         totalSales, netSales: totalSales - totalDiscounts - refunds,
-        totalDiscounts, totalRefunds: refunds, cashEarned: cashSales,
+        totalDiscounts, totalRefunds: refunds, cashSales,
         cashInDrawer: expectedCash, cashOuts: totalCashOuts,
         transactions: txCount, items: itemCount,
-        tenders: { cash: cashSales, gcash: gcashSales, split: splitSales, credit_card: 0, pay_later: 0, online: 0, invoice: 0, e_wallet: 0, pay_in: 0 },
+        tenders: { cash: cashSales, gcash: gcashSales, credit_card: 0, pay_later: 0, online: 0, invoice: 0, e_wallet: 0, pay_in: 0 },
         discounts: { sc: completed.reduce((s: number, p: Payment) => s + (p.discountTotal || 0), 0), pwd: 0, naac: 0, solo_parent: 0, other: 0 },
         openingFund: dbSession.openingFund, actualCash: 0,
         presentAccumulatedSales, previousAccumulatedSales,
-        gcashSales, splitSales,
+        gcashSales,
       });
     } catch (error) {
       console.error('loadData error:', error);
@@ -168,7 +182,7 @@ export default function CloseRegisterPage() {
           snapshot: {
             totalSales: summary.totalSales, netSales: summary.totalSales - summary.totalDiscounts - summary.refunds,
             totalDiscounts: summary.totalDiscounts, totalRefunds: summary.refunds,
-            cashSales: summary.cashSales, gcashSales: summary.gcashSales, splitSales: summary.splitSales,
+            cashSales: summary.cashSales, gcashSales: summary.gcashSales,
             transactions: summary.transactions, items: summary.items,
           },
         }),
@@ -196,7 +210,7 @@ export default function CloseRegisterPage() {
       ...summaryData, actualCash: counted, expectedCash: summary.expectedCash,
       difference, closeStatus: status, openingFund: summary.openingFund,
       cashSales: summary.cashSales, refunds: summary.refunds, cashOuts: summary.cashOuts,
-      gcashSales: summary.gcashSales, splitSales: summary.splitSales,
+      gcashSales: summary.gcashSales,
       totalSales: summary.totalSales, totalDiscounts: summary.totalDiscounts,
       transactions: summary.transactions, items: summary.items,
       cashierName: summary.cashierName, openedAt: summary.openedAt,
