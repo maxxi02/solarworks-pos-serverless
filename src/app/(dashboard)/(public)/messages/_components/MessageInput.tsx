@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, KeyboardEvent, Suspense, lazy } from "react";
+import { useState, useRef, useCallback, KeyboardEvent, Suspense, lazy, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Smile, Paperclip, ImageIcon, X, FileIcon, Loader2 } from "lucide-react";
@@ -29,6 +29,16 @@ function EmojiPicker(props: EmojiPickerProps) {
     );
 }
 
+// Preload emoji data once
+let emojiDataCache: unknown = null;
+const loadEmojiData = async () => {
+    if (!emojiDataCache) {
+        const r = await fetch("https://cdn.jsdelivr.net/npm/@emoji-mart/data");
+        emojiDataCache = await r.json();
+    }
+    return emojiDataCache;
+};
+
 interface PendingAttachment {
     file: File;
     preview?: string; // for images
@@ -55,11 +65,17 @@ export function MessageInput({
     const [content, setContent] = useState("");
     const [emojiOpen, setEmojiOpen] = useState(false);
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+    const [emojiData, setEmojiData] = useState<unknown>(null);
     const isTypingRef = useRef(false);
     const typingStopTimer = useRef<NodeJS.Timeout>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Preload emoji data on mount
+    useEffect(() => {
+        loadEmojiData().then(setEmojiData);
+    }, []);
 
     const handleTyping = useCallback(
         (value: string) => {
@@ -204,7 +220,6 @@ export function MessageInput({
                         <div key={idx} className="relative group">
                             {a.preview ? (
                                 <div className={cn("h-16 w-16 rounded-lg overflow-hidden border border-border", a.uploading && "opacity-60")}>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={a.preview} alt={a.file.name} className="h-full w-full object-cover" />
                                     {a.uploading && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-background/50">
@@ -247,16 +262,15 @@ export function MessageInput({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent side="top" align="start" className="p-0 w-auto border-none shadow-xl bg-transparent" sideOffset={8}>
-                        <EmojiPicker
-                            data={async () => {
-                                const r = await fetch("https://cdn.jsdelivr.net/npm/@emoji-mart/data");
-                                return r.json();
-                            }}
-                            onEmojiSelect={handleEmojiSelect}
-                            theme="auto"
-                            previewPosition="none"
-                            skinTonePosition="none"
-                        />
+                        {emojiData && (
+                            <EmojiPicker
+                                data={emojiData}
+                                onEmojiSelect={handleEmojiSelect}
+                                theme="auto"
+                                previewPosition="none"
+                                skinTonePosition="none"
+                            />
+                        )}
                     </PopoverContent>
                 </Popover>
 

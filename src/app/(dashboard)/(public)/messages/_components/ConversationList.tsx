@@ -58,22 +58,24 @@ export function ConversationList({
     const [isCreating, setIsCreating] = useState(false);
     const searchTimer = useRef<NodeJS.Timeout | null>(null);
 
-    // Fetch all staff/admins on load
-    const fetchUsers = async () => {
-        setIsUsersLoading(true);
-        try {
-            const res = await fetch('/api/users/search?q='); // Empty query returns default list
-            const data = await res.json() as { users: UserSearchResult[] };
-            setAllUsers(data.users || []);
-        } catch (err) {
-            console.error("Failed to fetch users:", err);
-        } finally {
-            setIsUsersLoading(false);
-        }
-    };
+    // Fetch all staff/admins on mount
+    useEffect(() => {
+        const fetchUsers = async () => {
+            setIsUsersLoading(true);
+            try {
+                const res = await fetch('/api/users/search?q=');
+                const data = await res.json() as { users: UserSearchResult[] };
+                setAllUsers(data.users || []);
+            } catch (err) {
+                console.error("Failed to fetch users:", err);
+            } finally {
+                setIsUsersLoading(false);
+            }
+        };
+        fetchUsers();
+    }, []);
 
-    const handleOpenDMPanel = async () => {
-        if (allUsers.length === 0) await fetchUsers();
+    const handleOpenDMPanel = () => {
         setPanelMode("dm");
     };
 
@@ -104,9 +106,12 @@ export function ConversationList({
 
     // Search logic for Group Panel ONLY
     useEffect(() => {
-        if (panelMode !== "group") return;
+        if (panelMode !== "group" || !groupSearch.trim()) {
+            setGroupResults([]);
+            return;
+        }
 
-        if (groupSearch.length === 1) {
+        if (groupSearch.length < 2) {
             setGroupResults([]);
             return;
         }
