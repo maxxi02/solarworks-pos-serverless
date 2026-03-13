@@ -52,6 +52,14 @@ export async function POST(req: NextRequest) {
       ...(isImage && { transformation: [{ quality: "auto", fetch_format: "auto" }] }),
     });
 
+    if (!result.secure_url) {
+      console.error("Cloudinary upload result missing secure_url:", result);
+      return NextResponse.json(
+        { error: "Upload failed: Invalid response from upload service" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       url: result.secure_url,
       name: file.name,

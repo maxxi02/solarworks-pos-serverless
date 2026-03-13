@@ -71,9 +71,13 @@ export function MessageInput({
             const res = await fetch("/api/messages/upload", { method: "POST", body: formData });
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({ error: "Upload failed" }));
-                throw new Error(errorData.error || "Upload failed");
+                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
             }
             const data = (await res.json()) as MessageAttachment;
+
+            if (!data.url) {
+                throw new Error("Upload response missing URL");
+            }
 
             setPendingAttachments((prev) =>
                 prev.map((a, i) =>
