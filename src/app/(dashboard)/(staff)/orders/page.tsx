@@ -225,7 +225,7 @@ export default function OrdersPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ isOpen: true, updatedBy: "staff" }),
         }).catch(err => console.error("Failed to sync shop status to open:", err));
-        
+
       } else {
         toast.error("Failed to open register");
       }
@@ -432,7 +432,7 @@ export default function OrdersPage() {
         // No session and shop not explicitly closed = needs to open register
         setIsRegisterClosed(false);
         setNeedsOpenRegister(true);
-        
+
         // Block customer portal if we are stuck on the Open Register screen
         fetch("/api/shop-status", {
           method: "PATCH",
@@ -1284,7 +1284,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="bg-background overflow-x-hidden ">
       <AttendanceBar
         attendance={attendance}
         attendanceLoading={attendanceLoading}
