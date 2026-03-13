@@ -43,9 +43,7 @@ export const PATHS = {
     REPORTS_INVENTORY: "/reports-and-analytics/inventory-reports",
     REPORTS_CUSTOM: "/reports-and-analytics/custom-reports",
 
-    SETTINGS_STORE: "/settings/store-setting",
     SETTINGS_RECEIPT: "/settings/receipt-setting",
-    SETTINGS_PAYMENTS: "/settings/payments-methods",
     SETTINGS_PROFILE: "/settings/profile",
   },
 
@@ -139,9 +137,7 @@ export const adminNavigation: NavItem[] = [
     url: PATHS.SETTINGS,
     icon: Settings,
     items: [
-      { title: "Store Settings", url: PATHS.ADMIN.SETTINGS_STORE },
       { title: "Receipt Settings", url: PATHS.ADMIN.SETTINGS_RECEIPT },
-      { title: "Payment Methods", url: PATHS.ADMIN.SETTINGS_PAYMENTS },
       { title: "Profile", url: PATHS.ADMIN.SETTINGS_PROFILE },
     ],
   },
