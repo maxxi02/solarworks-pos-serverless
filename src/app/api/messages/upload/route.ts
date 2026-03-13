@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       size: file.size,
       mimeType: file.type,
       thumbnailUrl: isImage
-        ? cloudinary.url(result.public_id, { width: 400, crop: "limit", quality: "auto", fetch_format: "auto", secure: true })
+        ? result.secure_url.replace('/upload/', '/upload/w_400,c_limit,q_auto,f_auto/')
         : undefined,
     });
   } catch (error) {
