@@ -216,10 +216,14 @@ export function useMessages(
 
   // ── Send a message (optimistic) ───────────────────────────────
   const sendMessage = useCallback(
-    (content: string, senderName: string, senderImage?: string) => {
-      if (!conversationId || !content.trim() || !socket?.connected) return;
+    (content: string, senderName: string, senderImage?: string, attachments?: Message["attachments"]) => {
+      if (!conversationId || !socket?.connected) return;
+      if (!content.trim() && (!attachments || attachments.length === 0)) return;
 
       const tempId = `temp-${Date.now()}-${Math.random()}`;
+      const msgType = attachments && attachments.length > 0
+        ? (attachments[0].mimeType.startsWith("image/") ? "image" : "file")
+        : "text";
 
       const optimistic: OptimisticMessage = {
         _id: tempId,
@@ -228,8 +232,9 @@ export function useMessages(
         senderId: currentUserId,
         senderName,
         senderImage,
-        content: content.trim(),
-        type: "text",
+        content: content.trim() || " ",
+        type: msgType,
+        attachments: attachments || [],
         readBy: [{ userId: currentUserId, readAt: new Date() }],
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -240,8 +245,10 @@ export function useMessages(
 
       socket.emit("dm:send", {
         conversationId,
-        content: content.trim(),
+        content: content.trim() || " ",
         tempId,
+        attachments: attachments || [],
+        type: msgType,
       });
     },
     [conversationId, currentUserId, socket],

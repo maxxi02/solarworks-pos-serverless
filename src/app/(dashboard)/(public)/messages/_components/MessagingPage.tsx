@@ -22,7 +22,7 @@ export function MessagingPage({
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
-    const { conversations, isLoading, startConversation, createGroup } =
+    const { conversations, isLoading, startConversation, createGroup, refetch } =
         useConversations(currentUserId);
 
     const activeConversation = conversations.find(
@@ -78,6 +78,7 @@ export function MessagingPage({
                         currentUserName={currentUserName}
                         currentUserImage={currentUserImage}
                         onBack={() => setMobileView("list")}
+                        onRefresh={() => refetch()}
                     />
                 ) : (
                     <EmptyState />

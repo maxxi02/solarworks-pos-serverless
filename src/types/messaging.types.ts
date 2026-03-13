@@ -31,6 +31,14 @@ export interface MessagePreview {
   sentAt: Date;
 }
 
+export interface MessageAttachment {
+  url: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  thumbnailUrl?: string;
+}
+
 export interface Message {
   _id: ObjectId | string;
   conversationId: string;
@@ -38,7 +46,8 @@ export interface Message {
   senderName: string;
   senderImage?: string;
   content: string;
-  type: "text" | "system";
+  type: "text" | "image" | "file" | "link" | "system";
+  attachments?: MessageAttachment[];
   readBy: ReadReceipt[];
   createdAt: Date;
   updatedAt: Date;

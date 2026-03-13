@@ -157,7 +157,8 @@ export async function insertMessage(
     senderName: string;
     senderImage?: string;
     content: string;
-    type?: "text" | "system";
+    type?: "text" | "image" | "file" | "link" | "system";
+    attachments?: Array<{ url: string; name: string; size: number; mimeType: string; thumbnailUrl?: string }>;
   },
 ) {
   const messages = getMessagesCollection(db);
@@ -171,6 +172,7 @@ export async function insertMessage(
     senderImage: data.senderImage || null,
     content: data.content,
     type: data.type ?? "text",
+    attachments: data.attachments || [],
     readBy: [{ userId: data.senderId, readAt: now }],
     createdAt: now,
     updatedAt: now,

@@ -267,3 +267,89 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// ─── PATCH /api/conversations ─────────────────────────────────────
+// Update group name, image, or add members
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = (await req.json()) as {
+      conversationId: string;
+      groupName?: string;
+      groupImage?: string;
+      addMemberIds?: string[];
+    };
+
+    const { conversationId, groupName, groupImage, addMemberIds } = body;
+    if (!conversationId)
+      return NextResponse.json({ error: "conversationId required" }, { status: 400 });
+
+    const db = MONGODB;
+    const conversations = getConversationsCollection(db);
+
+    let convObjectId: ObjectId;
+    try {
+      convObjectId = new ObjectId(conversationId);
+    } catch {
+      return NextResponse.json({ error: "Invalid conversationId" }, { status: 400 });
+    }
+
+    const conv = await conversations.findOne({ _id: convObjectId });
+    if (!conv)
+      return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+
+    if (!conv.isGroup)
+      return NextResponse.json({ error: "Not a group conversation" }, { status: 400 });
+
+    const userId = session.user.id;
+    const isAdmin = (conv.adminIds as string[] || []).includes(userId);
+    const isMember = (conv.participants as string[]).includes(userId);
+
+    if (!isMember)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const $set: Record<string, unknown> = { updatedAt: new Date() };
+    const $push: Record<string, unknown> = {};
+
+    if ((groupName !== undefined || groupImage !== undefined) && !isAdmin)
+      return NextResponse.json({ error: "Only admins can update group settings" }, { status: 403 });
+
+    if (groupName !== undefined) $set.groupName = groupName.trim();
+    if (groupImage !== undefined) $set.groupImage = groupImage;
+
+    // Add members
+    if (addMemberIds && addMemberIds.length > 0) {
+      const existing = new Set(conv.participants as string[]);
+      const newIds = addMemberIds.filter((id) => !existing.has(id));
+      if (newIds.length > 0) {
+        const users = getUsersCollection(db);
+        const newUsers = await users
+          .find({ $or: [{ id: { $in: newIds } }, { _id: { $in: newIds.map((id) => { try { return new ObjectId(id); } catch { return null; } }).filter(Boolean) as ObjectId[] } }] })
+          .project({ id: 1, name: 1, image: 1 })
+          .toArray();
+
+        $push.participants = { $each: newIds };
+        $push.participantDetails = {
+          $each: newIds.map((nid) => {
+            const u = newUsers.find((u) => (u.id as string) === nid || u._id.toString() === nid);
+            return { userId: nid, name: (u?.name as string) || "Unknown", image: (u?.image as string) || null };
+          }),
+        };
+      }
+    }
+
+    const update: Record<string, unknown> = { $set };
+    if (Object.keys($push).length > 0) update.$push = $push;
+
+    await conversations.updateOne({ _id: convObjectId }, update as any);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("PATCH /api/conversations error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
