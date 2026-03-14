@@ -21,9 +21,11 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
     "receipt",
   );
   useEffect(() => {
-    if (companionStatus.bt && !companionStatus.usb) {
+    // Default to whichever printer is actually available.
+    // Don't assume USB=receipt or BT=kitchen — the companion assigns roles independently.
+    if (!companionStatus.usb && companionStatus.bt) {
       setPrintTarget("kitchen");
-    } else if (companionStatus.usb && !companionStatus.bt) {
+    } else {
       setPrintTarget("receipt");
     }
   }, [companionStatus.usb, companionStatus.bt]);
@@ -90,32 +92,29 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
       return;
     }
 
-    if (!companionStatus.usb && !companionStatus.bt) {
+    // Guard: need at least one printer connected
+    const anyPrinterConnected = companionStatus.usb || companionStatus.bt;
+    if (!anyPrinterConnected) {
       toast.error("No printers detected", {
         description: "Connect a USB or Bluetooth printer in the companion app.",
       });
       return;
     }
 
+    // Determine the actual target — prefer the selected one,
+    // but fallback to whichever is available since the companion
+    // handles role assignment regardless of connection type.
     let actualTarget = printTarget;
 
-    const targetOnline =
-      actualTarget === "receipt" ? companionStatus.usb : companionStatus.bt;
-    
-    if (!targetOnline) {
-      const fallbackTarget = actualTarget === "receipt" ? "kitchen" : "receipt";
-      const fallbackOnline =
-        fallbackTarget === "receipt" ? companionStatus.usb : companionStatus.bt;
+    // If the selected target's typical connection type isn't available,
+    // try the other target role.
+    const receiptAvailable = companionStatus.usb || companionStatus.bt;
+    const kitchenAvailable = companionStatus.bt || companionStatus.usb;
 
-      if (fallbackOnline) {
-        setPrintTarget(fallbackTarget);
-        actualTarget = fallbackTarget;
-      } else {
-        toast.error("Selected printer is offline", {
-          description: "Check your printer connection in the companion app.",
-        });
-        return;
-      }
+    if (actualTarget === "receipt" && !receiptAvailable) {
+      actualTarget = "kitchen";
+    } else if (actualTarget === "kitchen" && !kitchenAvailable) {
+      actualTarget = "receipt";
     }
 
     setIsPrinting(true);
