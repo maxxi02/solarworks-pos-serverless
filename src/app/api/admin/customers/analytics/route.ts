@@ -82,19 +82,7 @@ export async function GET(request: Request) {
       }
       const frequentOrders = [...itemFrequency.values()].sort((a, b) => b.orderCount - a.orderCount).slice(0, 5);
 
-      // Rated orders details
-      const ratedOrders = userRatings.slice(0, 5).map(r => {
-        const linkedOrder = orders.find(o => String(o.orderId || o._id?.toString()) === String(r.orderId));
-        return {
-          orderId: String(r.orderId),
-          orderNumber: linkedOrder?.orderNumber || "—",
-          rating: r.rating,
-          comment: r.comment || null,
-          ratedAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
-          total: linkedOrder?.total || 0,
-          summary: linkedOrder && Array.isArray(linkedOrder.items) ? linkedOrder.items.map((i: any) => i.name).join(", ") : "—"
-        };
-      });
+
 
       return NextResponse.json({
         success: true,
@@ -107,7 +95,6 @@ export async function GET(request: Request) {
           orderCount: orders.length,
           latestOrders,
           frequentOrders,
-          ratedOrders,
           orderingFrequency: computeFrequency(orders.length, orders)
         }
       });

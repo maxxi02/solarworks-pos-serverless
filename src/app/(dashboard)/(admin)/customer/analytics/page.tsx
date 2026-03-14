@@ -28,16 +28,6 @@ interface FrequentOrder {
   lastOrdered: string;
 }
 
-interface RatedOrder {
-  orderId: string;
-  orderNumber: string;
-  rating: number;
-  comment: string | null;
-  ratedAt: string | null;
-  total: number;
-  summary: string;
-}
-
 interface CustomerAnalytics {
   customerId: string;
   name: string;
@@ -49,7 +39,6 @@ interface CustomerAnalytics {
   orderingFrequency: 'daily' | 'weekly' | 'bi-weekly' | 'monthly' | 'rare';
   latestOrders: LatestOrder[];
   frequentOrders: FrequentOrder[];
-  ratedOrders: RatedOrder[];
 }
 
 interface AnalyticsStats {
@@ -460,59 +449,7 @@ export default function CustomerAnalyticsDashboard() {
                     </Card>
                   </div>
 
-                  {/* Rated Orders */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Star className="h-4 w-4" />
-                        Rated Orders
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {!currentCustomer.ratedOrders ? (
-                        <div className="flex justify-center py-8">
-                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : currentCustomer.ratedOrders.length === 0 ? (
-                        <div className="text-center py-6">
-                          <Star className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
-                          <p className="text-sm text-muted-foreground">No rated orders yet</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {currentCustomer.ratedOrders.map((rated) => (
-                            <div key={rated.orderId} className="p-4 border rounded-lg">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-xs font-mono text-muted-foreground">
-                                      {rated.orderNumber}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">·</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {formatDate(rated.ratedAt)}
-                                    </span>
-                                  </div>
-                                  <p className="text-sm truncate text-muted-foreground" title={rated.summary}>
-                                    {rated.summary}
-                                  </p>
-                                  {rated.comment && (
-                                    <p className="text-sm mt-1 italic">"{rated.comment}"</p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1 shrink-0">
-                                  <div className="flex items-center gap-0.5">
-                                    {renderStars(rated.rating)}
-                                  </div>
-                                  <span className="text-xs font-semibold">₱{rated.total.toLocaleString()}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+
                 </>
               ) : null}
             </div>
