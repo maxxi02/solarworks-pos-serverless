@@ -28,9 +28,18 @@ const SAMPLE_SUMMARY = {
   netSales: 4987.65,
   totalDiscounts: 444.45,
   totalRefunds: 125.00,
-  cashEarned: 3500.00,
+  cashSales: 3500.00,
+  gcashSales: 300.00,
+  splitSales: 0,
   cashInDrawer: 5500.00,
+  expectedCash: 5500.00,
+  difference: 0,
+  closeStatus: 'balanced' as const,
+  openingFund: 2000,
   cashOuts: 500.00,
+  transactions: 45,
+  items: 120,
+  actualCash: 5500.00,
   tenders: {
     cash: 3500.00,
     credit_card: 1200.00,
@@ -38,7 +47,8 @@ const SAMPLE_SUMMARY = {
     online: 432.10,
     invoice: 0,
     e_wallet: 300.00,
-    pay_in: 0
+    pay_in: 0,
+    gcash: 300.00
   },
   discounts: {
     sc: 250.00,
