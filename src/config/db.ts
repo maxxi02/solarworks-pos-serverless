@@ -89,13 +89,13 @@ export async function initIndexes() {
     await createIdx("stockAdjustments", { transactionId: 1 });
 
     // Users & Auth (Better-Auth)
-    await createIdx("user", { email: 1 }, { unique: true });
+    await createIdx("user", { email: 1 }, { unique: true, sparse: true });
     await createIdx("user", { role: 1 });
-    await createIdx("user", { id: 1 }, { unique: true });
+    await createIdx("user", { id: 1 }, { unique: true, sparse: true });
     await createIdx("user", { isOnline: 1 });
     await createIdx("user", { createdAt: -1 });
     await createIdx("session", { userId: 1 });
-    await createIdx("session", { token: 1 }, { unique: true });
+    await createIdx("session", { token: 1 }, { unique: true, sparse: true });
     await createIdx("account", { userId: 1 });
 
     console.log("✅ Database indexes checked/initialized");

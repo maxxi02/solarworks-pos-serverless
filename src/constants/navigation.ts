@@ -43,7 +43,7 @@ export const PATHS = {
     REPORTS: "/reports",
     REPORTS_FINANCIAL: "/reports-and-analytics/financial-reports",
     REPORTS_INVENTORY: "/reports-and-analytics/inventory-reports",
-    REPORTS_CUSTOM: "/reports-and-analytics/custom-reports",
+    REPORTS_CUSTOMER: "/reports-and-analytics/custom-reports",
 
     SETTINGS_RECEIPT: "/settings/receipt-setting",
     SETTINGS_PROFILE: "/settings/profile",
@@ -132,7 +132,7 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "Financial Reports", url: PATHS.ADMIN.REPORTS_FINANCIAL },
       { title: "Inventory Reports", url: PATHS.ADMIN.REPORTS_INVENTORY },
-      { title: "Custom Reports", url: PATHS.ADMIN.REPORTS_CUSTOM },
+      { title: "Customer Reports", url: PATHS.ADMIN.REPORTS_CUSTOMER },
     ],
   },
   {
