@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { AttendanceWithUser } from "@/types/attendance";
 import {
@@ -23,6 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   CheckCircle,
   XCircle,
@@ -34,6 +37,10 @@ import {
   Calendar as CalendarIcon,
   AlertCircle,
   RefreshCw,
+  PlusCircle,
+  Trash2,
+  FileText,
+  CalendarDays,
 } from "lucide-react";
 import {
   Line,
@@ -52,6 +59,9 @@ import {
 } from "@/utils/export-attendance";
 import { DataTable } from "@/components/data-table";
 import { ColumnDef } from "@tanstack/react-table";
+import { AttendanceModal } from "@/components/attendance/AttendanceModal";
+import type { LeaveRequest } from "@/models/leave-request.model";
+import type { ShiftSchedule } from "@/models/shift-schedule.model";
 
 interface StaffMember {
   id: string;
@@ -94,6 +104,27 @@ const AdminAttendancePage = () => {
   // ── UI state ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("pending");
 
+  // ── Leave Requests tab ─────────────────────────────────────────────────────
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [leaveModal, setLeaveModal] = useState<{ open: boolean; id: string; action: "approved" | "rejected" } | null>(null);
+  const [leaveReviewNote, setLeaveReviewNote] = useState("");
+  const [leaveProcessing, setLeaveProcessing] = useState(false);
+
+  // ── Schedule tab ───────────────────────────────────────────────────────────
+  const [schedules, setSchedules] = useState<ShiftSchedule[]>([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleWeekStart, setScheduleWeekStart] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay()); // start of this week (Sunday)
+    d.setHours(0 ,0, 0, 0);
+    return d;
+  });
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [shiftForm, setShiftForm] = useState({ staffId: "", date: "", startTime: "08:00", endTime: "17:00", notes: "" });
+  const [shiftSubmitting, setShiftSubmitting] = useState(false);
+  const [deleteShiftId, setDeleteShiftId] = useState<string | null>(null);
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetchStaffList();
@@ -114,6 +145,95 @@ const AdminAttendancePage = () => {
       return () => clearInterval(interval);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "leave") fetchLeaveRequests();
+  }, [activeTab]);
+
+  const weekEnd = new Date(scheduleWeekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  const fetchSchedules = useCallback(async () => {
+    setScheduleLoading(true);
+    try {
+      const start = scheduleWeekStart.toISOString().split("T")[0];
+      const end = weekEnd.toISOString().split("T")[0];
+      const res = await fetch(`/api/attendance/admin/schedules?startDate=${start}&endDate=${end}`);
+      const data = await res.json();
+      if (data.success) setSchedules(data.schedules || []);
+    } catch { toast.error("Failed to load schedules"); }
+    finally { setScheduleLoading(false); }
+  }, [scheduleWeekStart]);
+
+  useEffect(() => {
+    if (activeTab === "schedule") fetchSchedules();
+  }, [activeTab, fetchSchedules]);
+
+  const fetchLeaveRequests = async () => {
+    setLeaveLoading(true);
+    try {
+      const res = await fetch("/api/attendance/admin/leave");
+      const data = await res.json();
+      if (data.success) setLeaveRequests(data.records || []);
+    } catch { toast.error("Failed to load leave requests"); }
+    finally { setLeaveLoading(false); }
+  };
+
+  const handleLeaveReview = async () => {
+    if (!leaveModal) return;
+    setLeaveProcessing(true);
+    try {
+      const res = await fetch("/api/attendance/admin/leave/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leaveId: leaveModal.id, status: leaveModal.action, reviewNote: leaveReviewNote }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Leave request ${leaveModal.action}`);
+        setLeaveRequests(prev => prev.map(r => r._id === leaveModal.id ? { ...r, status: leaveModal.action } : r));
+        setLeaveModal(null);
+        setLeaveReviewNote("");
+      } else { toast.error(data.message); }
+    } catch { toast.error("Network error"); }
+    finally { setLeaveProcessing(false); }
+  };
+
+  const handleCreateShift = async () => {
+    const selectedMember = staff.find(s => s.id === shiftForm.staffId);
+    if (!shiftForm.staffId || !shiftForm.date || !shiftForm.startTime || !shiftForm.endTime) {
+      toast.error("Please fill all required fields"); return;
+    }
+    setShiftSubmitting(true);
+    try {
+      const res = await fetch("/api/attendance/admin/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...shiftForm, staffName: selectedMember?.name ?? "" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Shift assigned successfully");
+        setShowShiftModal(false);
+        setShiftForm({ staffId: "", date: "", startTime: "08:00", endTime: "17:00", notes: "" });
+        fetchSchedules();
+      } else { toast.error(data.message); }
+    } catch { toast.error("Network error"); }
+    finally { setShiftSubmitting(false); }
+  };
+
+  const handleDeleteShift = async () => {
+    if (!deleteShiftId) return;
+    try {
+      const res = await fetch(`/api/attendance/admin/schedules/${deleteShiftId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Shift removed");
+        setSchedules(prev => prev.filter(s => s._id !== deleteShiftId));
+        setDeleteShiftId(null);
+      } else { toast.error(data.message); }
+    } catch { toast.error("Network error"); }
+  };
 
   const fetchPendingAttendance = async (silent = false) => {
     if (!silent) setPendingLoading(true);
@@ -142,12 +262,21 @@ const AdminAttendancePage = () => {
 
   const fetchStaffList = async () => {
     try {
-      const res = await fetch("/api/attendance/admin/staff-list");
+      // Use the same endpoint as staff-management which is confirmed to work
+      const res = await fetch("/api/admin/staff");
       if (!res.ok) return;
 
       const data = await res.json();
       if (data.success) {
-        setStaff(data.staff || []);
+        // /api/admin/staff returns `data` array with _id field
+        setStaff(
+          (data.data || []).map((u: { _id?: string; id?: string; name: string; email: string; role: string }) => ({
+            id: u.id || u._id?.toString() || "",
+            name: u.name,
+            email: u.email,
+            role: u.role,
+          }))
+        );
       }
     } catch (err) {
       console.error("Failed to load staff list", err);
@@ -398,7 +527,7 @@ const AdminAttendancePage = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-3xl grid-cols-4">
           <TabsTrigger value="pending" className="gap-2">
             <Clock className="h-4 w-4" />
             Pending
@@ -411,6 +540,19 @@ const AdminAttendancePage = () => {
           <TabsTrigger value="dashboard" className="gap-2">
             <TrendingUp className="h-4 w-4" />
             Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="schedule" className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            Schedule
+          </TabsTrigger>
+          <TabsTrigger value="leave" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Leave Requests
+            {leaveRequests.filter(r => r.status === "pending").length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
+                {leaveRequests.filter(r => r.status === "pending").length}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -788,7 +930,194 @@ const AdminAttendancePage = () => {
             </>
           )}
         </TabsContent>
+
+        {/* ── Schedule Tab ───────────────────────────────────────────────────── */}
+        <TabsContent value="schedule" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => {
+                const d = new Date(scheduleWeekStart);
+                d.setDate(d.getDate() - 7);
+                setScheduleWeekStart(new Date(d));
+              }}>← Prev</Button>
+              <span className="text-sm font-medium">
+                {scheduleWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                {" – "}
+                {weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => {
+                const d = new Date(scheduleWeekStart);
+                d.setDate(d.getDate() + 7);
+                setScheduleWeekStart(new Date(d));
+              }}>Next →</Button>
+            </div>
+            <Button size="sm" className="gap-2" onClick={() => setShowShiftModal(true)}>
+              <PlusCircle className="h-4 w-4" /> Assign Shift
+            </Button>
+          </div>
+
+          {scheduleLoading ? (
+            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+          ) : schedules.length === 0 ? (
+            <EmptyState icon={CalendarDays} title="No shifts this week" description="Use 'Assign Shift' to schedule staff for this week" />
+          ) : (
+            <div className="space-y-3">
+              {schedules.map(s => (
+                <Card key={s._id}>
+                  <CardContent className="flex items-center gap-4 py-4">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <CalendarDays className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{s.staffName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                        {" · "}{s.startTime} – {s.endTime}
+                        {s.notes && <span className="ml-2 text-xs italic">({s.notes})</span>}
+                      </p>
+                    </div>
+                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteShiftId(s._id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Leave Requests Tab ─────────────────────────────────────────────── */}
+        <TabsContent value="leave" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {leaveRequests.filter(r => r.status === "pending").length} pending review
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchLeaveRequests} disabled={leaveLoading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${leaveLoading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
+
+          {leaveLoading ? (
+            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+          ) : leaveRequests.length === 0 ? (
+            <EmptyState icon={FileText} title="No leave requests" description="No staff have submitted leave requests yet" />
+          ) : (
+            <div className="space-y-3">
+              {leaveRequests.map(req => (
+                <Card key={req._id}>
+                  <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold">{req.userName}</p>
+                        {req.status === "pending" && <Badge className="bg-yellow-500 hover:bg-yellow-500">Pending</Badge>}
+                        {req.status === "approved" && <Badge className="bg-green-600 hover:bg-green-600">Approved</Badge>}
+                        {req.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {req.startDate} {req.startDate !== req.endDate ? `→ ${req.endDate}` : ""}
+                      </p>
+                      <p className="text-sm">{req.reason}</p>
+                      {req.reviewNote && <p className="text-xs text-muted-foreground italic">Note: {req.reviewNote}</p>}
+                    </div>
+                    {req.status === "pending" && (
+                      <div className="flex gap-2 shrink-0">
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700"
+                          onClick={() => { setLeaveModal({ open: true, id: req._id, action: "approved" }); setLeaveReviewNote(""); }}>
+                          <CheckCircle className="mr-1.5 h-4 w-4" /> Approve
+                        </Button>
+                        <Button size="sm" variant="destructive"
+                          onClick={() => { setLeaveModal({ open: true, id: req._id, action: "rejected" }); setLeaveReviewNote(""); }}>
+                          <XCircle className="mr-1.5 h-4 w-4" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {/* ── Assign Shift Modal ────────────────────────────────────────────────── */}
+      <AttendanceModal
+        open={showShiftModal}
+        title="Assign Shift"
+        description="Schedule a shift for a staff member"
+        confirmLabel="Assign Shift"
+        isLoading={shiftSubmitting}
+        onConfirm={handleCreateShift}
+        onCancel={() => { setShowShiftModal(false); }}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Staff Member *</Label>
+            <Select value={shiftForm.staffId} onValueChange={v => setShiftForm(f => ({ ...f, staffId: v }))}>
+              <SelectTrigger><SelectValue placeholder="Select staff" /></SelectTrigger>
+              <SelectContent>
+                {staff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="shift-date">Date *</Label>
+            <Input id="shift-date" type="date" value={shiftForm.date}
+              onChange={e => setShiftForm(f => ({ ...f, date: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="shift-start">Start Time *</Label>
+              <Input id="shift-start" type="time" value={shiftForm.startTime}
+                onChange={e => setShiftForm(f => ({ ...f, startTime: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shift-end">End Time *</Label>
+              <Input id="shift-end" type="time" value={shiftForm.endTime}
+                onChange={e => setShiftForm(f => ({ ...f, endTime: e.target.value }))} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="shift-notes">Notes (Optional)</Label>
+            <Input id="shift-notes" placeholder="e.g., Cover counter, kitchen duty" value={shiftForm.notes}
+              onChange={e => setShiftForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+        </div>
+      </AttendanceModal>
+
+      {/* ── Delete Shift Confirmation Modal ──────────────────────────────────── */}
+      <AttendanceModal
+        open={!!deleteShiftId}
+        title="Remove Shift"
+        description="Are you sure you want to remove this shift? This action cannot be undone."
+        confirmLabel="Remove Shift"
+        confirmVariant="destructive"
+        onConfirm={handleDeleteShift}
+        onCancel={() => setDeleteShiftId(null)}
+      />
+
+      {/* ── Leave Review Modal ────────────────────────────────────────────────── */}
+      <AttendanceModal
+        open={!!leaveModal?.open}
+        title={leaveModal?.action === "approved" ? "Approve Leave Request" : "Reject Leave Request"}
+        description={leaveModal?.action === "approved" ? "The staff member will be notified that their leave has been approved." : "The staff member will be notified that their request was rejected."}
+        confirmLabel={leaveModal?.action === "approved" ? "Approve" : "Reject"}
+        confirmVariant={leaveModal?.action === "approved" ? "default" : "destructive"}
+        isLoading={leaveProcessing}
+        onConfirm={handleLeaveReview}
+        onCancel={() => { setLeaveModal(null); setLeaveReviewNote(""); }}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="review-note">Note for Staff (Optional)</Label>
+          <Textarea
+            id="review-note"
+            placeholder="Add a note for the staff member..."
+            value={leaveReviewNote}
+            onChange={e => setLeaveReviewNote(e.target.value)}
+            rows={3}
+          />
+        </div>
+      </AttendanceModal>
     </div>
   );
 };
