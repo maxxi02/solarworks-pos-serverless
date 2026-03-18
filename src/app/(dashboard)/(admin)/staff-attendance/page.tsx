@@ -17,6 +17,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DialogHeader,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -71,6 +75,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { AttendanceModal } from "@/components/attendance/AttendanceModal";
 import type { LeaveRequest } from "@/models/leave-request.model";
 import type { ShiftSchedule } from "@/models/shift-schedule.model";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface StaffMember {
   id: string;
@@ -162,7 +167,7 @@ const AdminAttendancePage = () => {
   const [scheduleWeekStart, setScheduleWeekStart] = useState<Date>(() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay()); // start of this week (Sunday)
-    d.setHours(0 ,0, 0, 0);
+    d.setHours(0, 0, 0, 0);
     return d;
   });
   const [showShiftModal, setShowShiftModal] = useState(false);
@@ -711,7 +716,7 @@ const AdminAttendancePage = () => {
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
             <h2 className="text-2xl font-bold tracking-tight">Staff Roster</h2>
-            
+
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
@@ -757,12 +762,12 @@ const AdminAttendancePage = () => {
                             s.status === "present"
                               ? { badge: "bg-green-600 hover:bg-green-600", dot: "bg-green-500" }
                               : s.status === "late"
-                              ? { badge: "bg-amber-500 hover:bg-amber-500", dot: "bg-amber-500" }
-                              : { badge: "bg-rose-600 hover:bg-rose-600", dot: "bg-gray-300" };
+                                ? { badge: "bg-amber-500 hover:bg-amber-500", dot: "bg-amber-500" }
+                                : { badge: "bg-rose-600 hover:bg-rose-600", dot: "bg-gray-300" };
 
                           return (
-                            <tr 
-                              key={s.staffId} 
+                            <tr
+                              key={s.staffId}
                               className="hover:bg-accent/50 transition-colors cursor-pointer"
                               onClick={() => {
                                 setSelectedStaff(s.staffId);
@@ -771,10 +776,6 @@ const AdminAttendancePage = () => {
                                   name: s.name,
                                   email: "",
                                   role: s.role,
-                                  image: null,
-                                  hasPin: false,
-                                  isClockedIn: s.isCurrentlyIn,
-                                  clockInTime: s.clockInTime || null,
                                 });
                               }}
                             >
@@ -848,23 +849,23 @@ const AdminAttendancePage = () => {
                   </Button>
                 </div>
                 <div className="flex flex-col justify-end">
-                   <Button variant="outline" onClick={() => {
-                        const filename = selectedStaffModal?.name?.replace(/\s+/g, "-") + "-attendance.csv";
-                        const csvHeaders = ["Staff Name","Email","Date","Clock In","Clock Out","Hours Worked","Status"];
-                        const rows = records.map((r) => [
-                          r.user?.name || "Unknown",
-                          r.user?.email || "",
-                          formatDate(r.date),
-                          formatTime(r.clockInTime),
-                          r.clockOutTime ? formatTime(r.clockOutTime) : "Not clocked out",
-                          r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
-                          r.status,
-                        ]);
-                        exportToCSV([csvHeaders, ...rows], filename);
-                        toast.success("Attendance exported as CSV");
-                   }} disabled={dashboardLoading || records.length === 0}>
-                     <Download className="mr-2 h-4 w-4" /> Export CSV
-                   </Button>
+                  <Button variant="outline" onClick={() => {
+                    const filename = selectedStaffModal?.name?.replace(/\s+/g, "-") + "-attendance.csv";
+                    const csvHeaders = ["Staff Name", "Email", "Date", "Clock In", "Clock Out", "Hours Worked", "Status"];
+                    const rows = records.map((r) => [
+                      r.user?.name || "Unknown",
+                      r.user?.email || "",
+                      formatDate(r.date),
+                      formatTime(r.clockInTime),
+                      r.clockOutTime ? formatTime(r.clockOutTime) : "Not clocked out",
+                      r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
+                      r.status,
+                    ]);
+                    exportToCSV([csvHeaders, ...rows], filename);
+                    toast.success("Attendance exported as CSV");
+                  }} disabled={dashboardLoading || records.length === 0}>
+                    <Download className="mr-2 h-4 w-4" /> Export CSV
+                  </Button>
                 </div>
               </div>
 
@@ -911,7 +912,7 @@ const AdminAttendancePage = () => {
                 setScheduleWeekStart(new Date(d));
               }}>Next →</Button>
             </div>
-            
+
             <div className="flex items-center gap-3">
               <Select value={scheduleStaffFilter} onValueChange={setScheduleStaffFilter}>
                 <SelectTrigger className="w-[180px]">
@@ -935,42 +936,43 @@ const AdminAttendancePage = () => {
           ) : schedules.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No shifts this week" description="Use 'Assign Shift' to schedule staff for this week" />
           ) : (
-            <div className="overflow-hidden rounded-lg border border-border bg-card">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-border bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Staff</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Notes</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {schedules.map(s => (
-                      <tr key={s._id} className="hover:bg-muted/50 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-foreground">{s.staffName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-foreground">
-                          {s.startTime} – {s.endTime}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={s.notes}>
-                          {s.notes || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => setDeleteShiftId(s._id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+              {Array.from({ length: 7 }).map((_, i) => {
+                const date = new Date(scheduleWeekStart);
+                date.setDate(date.getDate() + i);
+                const dateStr = date.toISOString().split("T")[0];
+                const daySchedules = schedules.filter((s: any) => s.date === dateStr);
+                const isToday = new Date().toISOString().split("T")[0] === dateStr;
+
+                return (
+                  <div key={dateStr} className={`flex flex-col rounded-xl border bg-card overflow-hidden shadow-sm ${isToday ? 'ring-2 ring-primary/50 border-transparent' : 'border-border'}`}>
+                    <div className={`py-2 text-center border-b ${isToday ? 'bg-primary text-primary-foreground' : 'bg-muted/50'}`}>
+                      <div className="text-xs font-semibold uppercase tracking-wider opacity-80">{date.toLocaleDateString("en-US", { weekday: "short" })}</div>
+                      <div className="text-xl font-bold leading-tight">{date.getDate()}</div>
+                    </div>
+                    <div className="flex-1 p-2 space-y-2 min-h-[140px]">
+                      {daySchedules.length === 0 ? (
+                        <div className="flex h-full items-center justify-center">
+                          <span className="text-xs text-muted-foreground/60 italic">No shifts</span>
+                        </div>
+                      ) : (
+                        daySchedules.map((s: any) => (
+                          <div key={s._id} className="relative group text-left text-xs bg-background rounded-md border p-2 shadow-sm hover:border-primary/50 transition-colors">
+                            <Button size="icon" variant="ghost" 
+                              className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setDeleteShiftId(s._id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                            <div className="font-semibold text-foreground pr-5 truncate">{s.staffName}</div>
+                            <div className="text-primary/80 font-medium mt-0.5">{s.startTime} – {s.endTime}</div>
+                            {s.notes && <div className="text-muted-foreground text-[10px] mt-1 line-clamp-2" title={s.notes}>{s.notes}</div>}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </TabsContent>
