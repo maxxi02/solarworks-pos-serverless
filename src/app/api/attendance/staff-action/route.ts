@@ -40,9 +40,10 @@ export async function POST(req: NextRequest) {
       pin?: string;
       password?: string;
       action?: "clock-in" | "clock-out";
+      confirmOvertime?: boolean; // true = staff acknowledged overtime
     };
 
-    const { staffId, pin, password, action } = body;
+    const { staffId, pin, password, action, confirmOvertime } = body;
     console.log(`[staff-action] Action: ${action}, StaffId: ${staffId}, Method: ${pin ? 'PIN' : 'Password'}`);
 
     if (!staffId || !action || (!pin && !password)) {
@@ -138,6 +139,25 @@ export async function POST(req: NextRequest) {
         isClockedIn: true,
       });
     } else {
+      // Before clocking out, check if they've already hit 8 hours
+      // and haven't explicitly confirmed overtime yet
+      const todayAttendance = await AttendanceModel.getTodayAttendance(userId);
+      if (todayAttendance && !todayAttendance.clockOutTime && !confirmOvertime) {
+        const elapsed =
+          (Date.now() - new Date(todayAttendance.clockInTime).getTime()) /
+          (1000 * 60 * 60);
+        if (elapsed >= 8) {
+          const otHours = Math.max(0, elapsed - 8);
+          return NextResponse.json({
+            success: false,
+            overtimeReached: true,
+            hoursWorked: Math.round(elapsed * 100) / 100,
+            overtimeHours: Math.round(otHours * 100) / 100,
+            message: `You have worked ${elapsed.toFixed(2)}h (${otHours.toFixed(2)}h overtime). Do you want to log overtime or clock out now?`,
+          });
+        }
+      }
+
       const attendance = await AttendanceModel.clockOut(userId);
       if (!attendance) {
         return NextResponse.json({
@@ -146,11 +166,15 @@ export async function POST(req: NextRequest) {
         });
       }
       console.log(`[staff-action] ${userName} clocked out`);
+      const otHours = Math.max(0, (attendance.hoursWorked ?? 0) - 8);
       return NextResponse.json({
         success: true,
-        message: `${userName} clocked out. Hours worked: ${attendance.hoursWorked?.toFixed(2)}h`,
+        message: `${userName} clocked out. Hours worked: ${attendance.hoursWorked?.toFixed(2)}h${
+          otHours > 0 ? ` (incl. ${otHours.toFixed(2)}h overtime)` : ""
+        }`,
         attendance,
         hoursWorked: attendance.hoursWorked,
+        overtimeHours: otHours > 0 ? Math.round(otHours * 100) / 100 : 0,
         isClockedIn: false,
       });
     }

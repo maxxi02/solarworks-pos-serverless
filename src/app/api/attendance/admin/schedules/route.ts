@@ -37,23 +37,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { staffId, staffName, date, startTime, endTime, notes } = body;
+    const { staffId, staffName, date, dateTo, startTime, endTime, notes } = body;
 
     if (!staffId || !staffName || !date || !startTime || !endTime) {
       return NextResponse.json({ success: false, message: "Missing required fields" }, { status: 400 });
     }
 
-    const schedule = await ShiftScheduleModel.create({
+    const endDate = dateTo || date; // Support single day or range
+
+    const count = await ShiftScheduleModel.createMany({
       staffId,
       staffName,
-      date,
+      dateFrom: date,
+      dateTo: endDate,
       startTime,
       endTime,
       notes,
       createdBy: session.user.id,
     });
 
-    return NextResponse.json({ success: true, schedule }, { status: 201 });
+    return NextResponse.json({ success: true, message: `Created ${count} shifts` }, { status: 201 });
   } catch (error) {
     console.error("Create schedule error:", error);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

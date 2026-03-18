@@ -46,6 +46,12 @@ export class LeaveRequestModel {
     return { ...doc, _id: result.insertedId.toString() };
   }
 
+  static async getById(leaveId: string): Promise<LeaveRequest | null> {
+    const record = await this.getCollection().findOne({ _id: new ObjectId(leaveId) });
+    if (!record) return null;
+    return { ...record, _id: record._id.toString() } as LeaveRequest;
+  }
+
   static async getByUser(userId: string): Promise<LeaveRequest[]> {
     const records = await this.getCollection()
       .find({ userId })

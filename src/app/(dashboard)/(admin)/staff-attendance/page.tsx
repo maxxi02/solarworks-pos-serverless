@@ -41,6 +41,15 @@ import {
   Trash2,
   FileText,
   CalendarDays,
+  UserCheck,
+  UserX,
+  Timer,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
+  LogIn,
+  LogOut,
+  Zap,
 } from "lucide-react";
 import {
   Line,
@@ -77,6 +86,31 @@ interface DashboardStats {
   averageHours: number;
 }
 
+interface DailyStaffStatus {
+  staffId: string;
+  name: string;
+  email: string;
+  role: string;
+  image: string | null;
+  status: "present" | "absent" | "late";
+  clockInTime: string | null;
+  clockOutTime: string | null;
+  hoursWorked: number | null;
+  attendanceStatus: "confirmed" | "pending" | null;
+  isCurrentlyIn: boolean;
+  shift: string | null;
+  overtimeHours: number;
+}
+
+interface DailySummary {
+  date: string;
+  totalStaff: number;
+  present: number;
+  absent: number;
+  late: number;
+  currentlyIn: number;
+}
+
 const AdminAttendancePage = () => {
   // ── Pending tab ────────────────────────────────────────────────────────────
   const [pendingRecords, setPendingRecords] = useState<AttendanceWithUser[]>([]);
@@ -93,6 +127,15 @@ const AdminAttendancePage = () => {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [dashboardLastRefresh, setDashboardLastRefresh] = useState(new Date());
 
+  // ── Daily View state ───────────────────────────────────────────────────────
+  const [dailyDate, setDailyDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [dailyStaff, setDailyStaff] = useState<DailyStaffStatus[]>([]);
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyFilter, setDailyFilter] = useState<"all" | "present" | "absent" | "late">("all");
+
   // ── Shared filters ─────────────────────────────────────────────────────────
   const [selectedStaff, setSelectedStaff] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date | undefined>(
@@ -103,6 +146,7 @@ const AdminAttendancePage = () => {
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("pending");
+  const [selectedStaffModal, setSelectedStaffModal] = useState<StaffMember | null>(null);
 
   // ── Leave Requests tab ─────────────────────────────────────────────────────
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -114,6 +158,7 @@ const AdminAttendancePage = () => {
   // ── Schedule tab ───────────────────────────────────────────────────────────
   const [schedules, setSchedules] = useState<ShiftSchedule[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleStaffFilter, setScheduleStaffFilter] = useState<string>("all");
   const [scheduleWeekStart, setScheduleWeekStart] = useState<Date>(() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay()); // start of this week (Sunday)
@@ -121,7 +166,7 @@ const AdminAttendancePage = () => {
     return d;
   });
   const [showShiftModal, setShowShiftModal] = useState(false);
-  const [shiftForm, setShiftForm] = useState({ staffId: "", date: "", startTime: "08:00", endTime: "17:00", notes: "" });
+  const [shiftForm, setShiftForm] = useState({ staffId: "", date: "", dateTo: "", startTime: "08:00", endTime: "17:00", notes: "" });
   const [shiftSubmitting, setShiftSubmitting] = useState(false);
   const [deleteShiftId, setDeleteShiftId] = useState<string | null>(null);
 
@@ -131,11 +176,19 @@ const AdminAttendancePage = () => {
     fetchPendingAttendance();
   }, []);
 
+  // Fetch daily view whenever tab is active or date changes
+  useEffect(() => {
+    if (activeTab === "dashboard") {
+      fetchDailyData();
+      fetchDashboardData();
+      const interval = setInterval(() => fetchDailyData(), 30000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, dailyDate]);
+
   useEffect(() => {
     if (activeTab === "dashboard") {
       fetchDashboardData();
-      const interval = setInterval(() => fetchDashboardData(true), 30000);
-      return () => clearInterval(interval);
     }
   }, [activeTab, selectedStaff, startDate, endDate]);
 
@@ -158,12 +211,16 @@ const AdminAttendancePage = () => {
     try {
       const start = scheduleWeekStart.toISOString().split("T")[0];
       const end = weekEnd.toISOString().split("T")[0];
-      const res = await fetch(`/api/attendance/admin/schedules?startDate=${start}&endDate=${end}`);
+      let url = `/api/attendance/admin/schedules?startDate=${start}&endDate=${end}`;
+      if (scheduleStaffFilter !== "all") {
+        url += `&staffId=${scheduleStaffFilter}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) setSchedules(data.schedules || []);
     } catch { toast.error("Failed to load schedules"); }
     finally { setScheduleLoading(false); }
-  }, [scheduleWeekStart]);
+  }, [scheduleWeekStart, scheduleStaffFilter]);
 
   useEffect(() => {
     if (activeTab === "schedule") fetchSchedules();
@@ -215,7 +272,7 @@ const AdminAttendancePage = () => {
       if (data.success) {
         toast.success("Shift assigned successfully");
         setShowShiftModal(false);
-        setShiftForm({ staffId: "", date: "", startTime: "08:00", endTime: "17:00", notes: "" });
+        setShiftForm({ staffId: "", date: "", dateTo: "", startTime: "08:00", endTime: "17:00", notes: "" });
         fetchSchedules();
       } else { toast.error(data.message); }
     } catch { toast.error("Network error"); }
@@ -280,6 +337,22 @@ const AdminAttendancePage = () => {
       }
     } catch (err) {
       console.error("Failed to load staff list", err);
+    }
+  };
+
+  const fetchDailyData = async () => {
+    setDailyLoading(true);
+    try {
+      const res = await fetch(`/api/attendance/admin/daily?date=${dailyDate}`);
+      const data = await res.json();
+      if (data.success) {
+        setDailyStaff(data.staff || []);
+        setDailySummary(data.summary || null);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setDailyLoading(false);
     }
   };
 
@@ -632,308 +705,195 @@ const AdminAttendancePage = () => {
           </Card>
         </TabsContent>
 
-        {/* ── Dashboard Tab ──────────────────────────────────────────────────── */}
+
+        {/* ── Dashboard/Staff Roster Tab ──────────────────────────────────────── */}
         <TabsContent value="dashboard" className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="text-xs text-muted-foreground">
-              Last updated:{" "}
-              {Math.round((Date.now() - dashboardLastRefresh.getTime()) / 60000)} min ago
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+            <h2 className="text-2xl font-bold tracking-tight">Staff Roster</h2>
+            
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchDailyData}
+                disabled={dailyLoading}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${dailyLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (records.length === 0) {
-                  toast.warning("No records to export");
-                  return;
-                }
-
-                const filename = generateFilename(
-                  startDate?.toISOString().split("T")[0],
-                  endDate?.toISOString().split("T")[0],
-                  selectedStaff !== "all"
-                    ? staff.find((s) => s.id === selectedStaff)?.name?.replace(/\s+/g, "-") || "filtered"
-                    : "all-staff"
-                );
-
-                const headers = [
-                  "Staff Name",
-                  "Email",
-                  "Date",
-                  "Clock In",
-                  "Clock Out",
-                  "Hours Worked",
-                  "Status",
-                ];
-
-                const rows = records.map((r) => [
-                  r.user?.name || "Unknown",
-                  r.user?.email || "",
-                  formatDate(r.date),
-                  formatTime(r.clockInTime),
-                  r.clockOutTime ? formatTime(r.clockOutTime) : "Not clocked out",
-                  r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
-                  r.status,
-                ]);
-
-                exportToCSV([headers, ...rows], filename);
-                toast.success("Attendance exported as CSV");
-              }}
-              disabled={dashboardLoading || records.length === 0}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
-            </Button>
           </div>
 
-          {dashboardError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{dashboardError}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Filters */}
-          {/* Filters */}
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
+            <CardHeader className="pb-3 border-b border-border/50">
+              <CardTitle>All Staff Members</CardTitle>
+              <CardDescription>
+                Click on a staff member to view their complete attendance history.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {/* ← New: Active range summary */}
-              <div className="mb-5 text-sm text-muted-foreground">
-                {startDate && endDate ? (
-                  <>
-                    Showing records from{" "}
-                    <span className="font-medium text-foreground">
-                      {startDate.toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </span>{" "}
-                    to{" "}
-                    <span className="font-medium text-foreground">
-                      {endDate.toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </>
-                ) : (
-                  "Select a date range to filter records"
-                )}
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Staff</label>
-                  <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All staff" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Staff</SelectItem>
-                      {staff.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <CardContent className="pt-4">
+              {dailyLoading ? (
+                <div className="grid gap-3">
+                  {Array(6).fill(0).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                  ))}
                 </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b border-border bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12">Avatar</th>
+                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Staff Name</th>
+                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
+                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Today's Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {dailyStaff.map(s => {
+                          const statusColor =
+                            s.status === "present"
+                              ? { badge: "bg-green-600 hover:bg-green-600", dot: "bg-green-500" }
+                              : s.status === "late"
+                              ? { badge: "bg-amber-500 hover:bg-amber-500", dot: "bg-amber-500" }
+                              : { badge: "bg-rose-600 hover:bg-rose-600", dot: "bg-gray-300" };
 
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Start Date</label>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                    onClick={() => setShowDatePicker((prev) => !prev)}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? startDate.toLocaleDateString() : "Pick start date"}
-                  </Button>
-                  {/* ← New: small helper text */}
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    First day of the period to include
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">End Date</label>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                    onClick={() => setShowDatePicker((prev) => !prev)}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? endDate.toLocaleDateString() : "Pick end date"}
-                  </Button>
-                  {/* ← New: small helper text */}
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    Last day of the period to include
-                  </p>
-                </div>
-              </div>
-
-              {showDatePicker && (
-                <div className="mt-6 flex flex-wrap justify-center gap-10 border-t pt-6">
-                  <div>
-                    <p className="mb-2 text-sm font-medium text-center">Start Date</p>
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      className="rounded-md border"
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-sm font-medium text-center">End Date</p>
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      className="rounded-md border"
-                    />
+                          return (
+                            <tr 
+                              key={s.staffId} 
+                              className="hover:bg-accent/50 transition-colors cursor-pointer"
+                              onClick={() => {
+                                setSelectedStaff(s.staffId);
+                                setSelectedStaffModal({
+                                  id: s.staffId,
+                                  name: s.name,
+                                  email: "",
+                                  role: s.role,
+                                  image: null,
+                                  hasPin: false,
+                                  isClockedIn: s.isCurrentlyIn,
+                                  clockInTime: s.clockInTime || null,
+                                });
+                              }}
+                            >
+                              <td className="px-4 py-3">
+                                <div className="relative inline-block">
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                    {s.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${statusColor.dot}`} />
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-foreground">
+                                {s.name}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground capitalize">
+                                {s.role}
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge className={`text-[10px] px-2 py-0.5 ${statusColor.badge}`}>
+                                  {s.status === "present" ? "Present" : s.status === "late" ? "Late" : "Absent"}
+                                </Badge>
+                                {s.isCurrentlyIn && (
+                                  <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-blue-400 text-blue-600 ml-2">
+                                    On Floor
+                                  </Badge>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {dashboardLoading && records.length === 0 ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {Array(4)
-                .fill(0)
-                .map((_, i) => (
-                  <Skeleton key={i} className="h-32 rounded-xl" />
-                ))}
-            </div>
-          ) : (
-            <>
-              {/* Stats */}
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard
-                  title="Total Records"
-                  value={stats?.totalRecords ?? 0}
-                  icon={Clock}
-                  desc="All entries"
-                />
-                <StatCard
-                  title="Total Hours"
-                  value={`${stats?.totalHours?.toFixed(1) ?? "0.0"} h`}
-                  icon={Clock}
-                  desc="Tracked time"
-                />
-                <StatCard
-                  title="Unique Staff"
-                  value={stats?.uniqueStaff ?? 0}
-                  icon={Users}
-                  desc="Employees"
-                />
-                <StatCard
-                  title="Avg Hours / Record"
-                  value={`${stats?.averageHours?.toFixed(1) ?? "0.0"} h`}
-                  icon={TrendingUp}
-                  desc="Per entry"
-                />
+          {/* Modal for viewing specific staff records */}
+          <Dialog open={!!selectedStaffModal} onOpenChange={(open) => {
+            if (!open) {
+              setSelectedStaffModal(null);
+            }
+          }}>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-6 border-0 shadow-2xl overflow-hidden bg-background sm:rounded-2xl">
+              <DialogHeader className="shrink-0 mb-4">
+                <DialogTitle className="text-xl font-bold flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                    {selectedStaffModal?.name?.charAt(0).toUpperCase()}
+                  </div>
+                  {selectedStaffModal?.name}'s Attendance Records
+                </DialogTitle>
+                <DialogDescription>
+                  Detailed log of clock in and clock out times
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex gap-4 mb-4 shrink-0 flex-col sm:flex-row">
+                <div className="flex flex-col gap-1.5 flex-1">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Start Date</label>
+                  <Button variant="outline" className="justify-start font-normal bg-muted/30 border-muted-foreground/20 hover:bg-muted" onClick={() => setShowDatePicker((prev) => !prev)}>
+                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                    {startDate ? startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Select start date"}
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-1.5 flex-1">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">End Date</label>
+                  <Button variant="outline" className="justify-start font-normal bg-muted/30 border-muted-foreground/20 hover:bg-muted" onClick={() => setShowDatePicker((prev) => !prev)}>
+                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                    {endDate ? endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Select end date"}
+                  </Button>
+                </div>
+                <div className="flex flex-col justify-end">
+                   <Button variant="outline" onClick={() => {
+                        const filename = selectedStaffModal?.name?.replace(/\s+/g, "-") + "-attendance.csv";
+                        const csvHeaders = ["Staff Name","Email","Date","Clock In","Clock Out","Hours Worked","Status"];
+                        const rows = records.map((r) => [
+                          r.user?.name || "Unknown",
+                          r.user?.email || "",
+                          formatDate(r.date),
+                          formatTime(r.clockInTime),
+                          r.clockOutTime ? formatTime(r.clockOutTime) : "Not clocked out",
+                          r.hoursWorked ? r.hoursWorked.toFixed(2) : "—",
+                          r.status,
+                        ]);
+                        exportToCSV([csvHeaders, ...rows], filename);
+                        toast.success("Attendance exported as CSV");
+                   }} disabled={dashboardLoading || records.length === 0}>
+                     <Download className="mr-2 h-4 w-4" /> Export CSV
+                   </Button>
+                </div>
               </div>
 
-              {/* Charts */}
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Daily Hours Trend</CardTitle>
-                    <CardDescription>Last 14 days</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-80">
-                    {getDailyHoursTrend().length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={getDailyHoursTrend()}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
-                          <YAxis />
-                          <Tooltip />
-                          <Line
-                            type="monotone"
-                            dataKey="hours"
-                            stroke="#3b82f6"
-                            strokeWidth={2}
-                            dot={{ r: 4 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full grid place-items-center text-muted-foreground">
-                        No data for selected period
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Top Staff by Hours</CardTitle>
-                    <CardDescription>Top 10</CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-80">
-                    {getTopStaffByHours().length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={getTopStaffByHours()} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" />
-                          <YAxis dataKey="name" type="category" width={160} />
-                          <Tooltip />
-                          <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 4, 4]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full grid place-items-center text-muted-foreground">
-                        No data for selected period
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+              <div className="flex-1 overflow-auto min-h-0 min-w-0 rounded-xl border border-border/50 bg-card">
+                {records.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-12 text-center h-full">
+                    <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                    <h3 className="text-lg font-semibold">No records found</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">No attendance records were found for this staff member in the selected date range.</p>
+                  </div>
+                ) : (
+                  <DataTable
+                    columns={dashboardColumns}
+                    data={records}
+                    enablePagination
+                    enableSorting
+                    emptyMessage="No records match the current filters"
+                    loading={dashboardLoading}
+                    loadingMessage="Loading attendance records..."
+                  />
+                )}
               </div>
-
-              {/* Table */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Attendance Records</CardTitle>
-                  <CardDescription>Filtered results</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-1">
-                  {records.length === 0 ? (
-                    <EmptyState
-                      icon={AlertCircle}
-                      title="No records found"
-                      description="Adjust filters or wait for new entries"
-                    />
-                  ) : (
-                    <DataTable
-                      columns={dashboardColumns}
-                      data={records}
-                      enablePagination
-                      enableSorting
-                      emptyMessage="No records match the current filters"
-                      loading={dashboardLoading}
-                      loadingMessage="Loading attendance records..."
-                    />
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ── Schedule Tab ───────────────────────────────────────────────────── */}
         <TabsContent value="schedule" className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={() => {
                 const d = new Date(scheduleWeekStart);
@@ -951,9 +911,23 @@ const AdminAttendancePage = () => {
                 setScheduleWeekStart(new Date(d));
               }}>Next →</Button>
             </div>
-            <Button size="sm" className="gap-2" onClick={() => setShowShiftModal(true)}>
-              <PlusCircle className="h-4 w-4" /> Assign Shift
-            </Button>
+            
+            <div className="flex items-center gap-3">
+              <Select value={scheduleStaffFilter} onValueChange={setScheduleStaffFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All Staff" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Staff</SelectItem>
+                  {staff.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="gap-2 shrink-0" onClick={() => setShowShiftModal(true)}>
+                <PlusCircle className="h-4 w-4" /> Assign Shift
+              </Button>
+            </div>
           </div>
 
           {scheduleLoading ? (
@@ -961,28 +935,42 @@ const AdminAttendancePage = () => {
           ) : schedules.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No shifts this week" description="Use 'Assign Shift' to schedule staff for this week" />
           ) : (
-            <div className="space-y-3">
-              {schedules.map(s => (
-                <Card key={s._id}>
-                  <CardContent className="flex items-center gap-4 py-4">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <CalendarDays className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{s.staffName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
-                        {" · "}{s.startTime} – {s.endTime}
-                        {s.notes && <span className="ml-2 text-xs italic">({s.notes})</span>}
-                      </p>
-                    </div>
-                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeleteShiftId(s._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="overflow-hidden rounded-lg border border-border bg-card">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-border bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Staff</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Notes</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {schedules.map(s => (
+                      <tr key={s._id} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-foreground">{s.staffName}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          {s.startTime} – {s.endTime}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={s.notes}>
+                          {s.notes || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteShiftId(s._id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </TabsContent>
@@ -1060,10 +1048,18 @@ const AdminAttendancePage = () => {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="shift-date">Date *</Label>
-            <Input id="shift-date" type="date" value={shiftForm.date}
-              onChange={e => setShiftForm(f => ({ ...f, date: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="shift-start-date">Start Date *</Label>
+              <Input id="shift-start-date" type="date" value={shiftForm.date}
+                onChange={e => setShiftForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="shift-end-date">End Date (Optional)</Label>
+              <Input id="shift-end-date" type="date" value={shiftForm.dateTo}
+                min={shiftForm.date} // End date shouldn't be before start date
+                onChange={e => setShiftForm(f => ({ ...f, dateTo: e.target.value }))} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">

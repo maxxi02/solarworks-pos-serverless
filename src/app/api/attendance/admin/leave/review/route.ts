@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { LeaveRequestModel } from "@/models/leave-request.model";
+import { ShiftScheduleModel } from "@/models/shift-schedule.model";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +21,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Invalid request data" }, { status: 400 });
     }
 
+    const leaveRequest = await LeaveRequestModel.getById(leaveId);
+    if (!leaveRequest) {
+      return NextResponse.json({ success: false, message: "Leave request not found" }, { status: 404 });
+    }
+
     const updated = await LeaveRequestModel.review(
       leaveId,
       status,
@@ -28,7 +34,16 @@ export async function POST(req: NextRequest) {
     );
 
     if (!updated) {
-      return NextResponse.json({ success: false, message: "Leave request not found" }, { status: 404 });
+      return NextResponse.json({ success: false, message: "Failed to update leave request" }, { status: 500 });
+    }
+
+    // Auto-remove any assigned shift schedule overlapping with this approved leave
+    if (status === "approved") {
+      await ShiftScheduleModel.deleteByDateRange(
+        leaveRequest.startDate,
+        leaveRequest.endDate,
+        leaveRequest.userId
+      );
     }
 
     return NextResponse.json({ success: true, message: `Leave request ${status}` });

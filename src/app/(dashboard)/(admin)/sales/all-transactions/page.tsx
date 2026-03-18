@@ -12,6 +12,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  X,
+  Receipt,
 } from "lucide-react";
 import { useSocket } from "@/provider/socket-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +46,12 @@ interface Transaction {
   refundReason?: string;
   createdAt: string;
   updatedAt: string;
+  subtotal?: number;
+  discount?: number;
+  discountTotal?: number;
+  amountPaid?: number;
+  change?: number;
+  splitPayment?: { cash: number; gcash: number };
 }
 
 interface UnifiedStats {
@@ -197,8 +205,11 @@ export default function TransactionsPage() {
   const [refundedTransactions, setRefundedTransactions] = useState<
     Transaction[]
   >([]);
-  const [showRefundedTable, setShowRefundedTable] = useState(false);
   const [refundedLoading, setRefundedLoading] = useState(false);
+
+  // Modal states
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   // Socket connection
   const { socket, isConnected: isLive } = useSocket();
@@ -758,7 +769,8 @@ export default function TransactionsPage() {
                       {allTransactions.map((transaction) => (
                         <tr
                           key={transaction._id}
-                          className="border-b hover:bg-secondary/50"
+                          onClick={() => { setSelectedTransaction(transaction); setShowDetailsModal(true); }}
+                          className="border-b hover:bg-secondary/50 cursor-pointer transition-colors"
                         >
                           <td className="p-3">
                             <div className="font-medium font-mono text-xs">
@@ -844,6 +856,145 @@ export default function TransactionsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Details Modal */}
+        {showDetailsModal && selectedTransaction && (
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-card border border-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="p-6">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      <Receipt className="h-5 w-5" />
+                      Transaction Details
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">{selectedTransaction.orderNumber}</p>
+                  </div>
+                  <button onClick={() => setShowDetailsModal(false)} className="text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 p-2 rounded-full transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Summary Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Date</p>
+                      <p className="text-sm font-semibold">{formatDateTime(selectedTransaction.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Type</p>
+                      <p className="text-sm font-semibold capitalize">
+                        {selectedTransaction.orderType || "takeaway"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Customer</p>
+                      <p className="text-sm font-semibold">{selectedTransaction.customerName || "Walk-in"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Status</p>
+                      <p className="text-sm font-semibold capitalize">{selectedTransaction.status || "completed"}</p>
+                    </div>
+                  </div>
+
+                  {/* Items list */}
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">Order Items</h3>
+                    <div className="rounded-lg border border-border overflow-hidden">
+                      <div className="divide-y divide-border">
+                        {selectedTransaction.items?.map((item, i) => (
+                          <div key={i} className="p-3 flex justify-between items-center bg-card hover:bg-muted/30 transition-colors">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-sm">{item.name}</span>
+                              <span className="text-xs text-muted-foreground">Qty: {item.quantity} × {formatCurrency(item.price)}</span>
+                            </div>
+                            <span className="font-semibold text-sm">{formatCurrency(item.price * item.quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Totals */}
+                  <div className="bg-muted/30 p-5 rounded-lg border border-border/50 space-y-3">
+                    <div className="flex justify-between text-sm items-center">
+                      <span className="text-muted-foreground">Subtotal:</span>
+                      <span className="font-semibold">{formatCurrency(selectedTransaction.subtotal || selectedTransaction.total)}</span>
+                    </div>
+                    {(selectedTransaction.discountTotal ?? selectedTransaction.discount ?? 0) > 0 && (
+                      <div className="flex justify-between text-sm items-center text-green-600 dark:text-green-400">
+                        <span>Discount:</span>
+                        <span className="font-semibold border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded">
+                          -{formatCurrency(selectedTransaction.discountTotal ?? selectedTransaction.discount ?? 0)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="border-t border-border/60 my-3" />
+                    <div className="flex justify-between items-center bg-primary/5 p-3 rounded-lg border border-primary/20">
+                      <span className="font-bold text-lg text-primary">TOTAL:</span>
+                      <span className="font-black text-2xl text-primary">{formatCurrency(selectedTransaction.total)}</span>
+                    </div>
+                  </div>
+
+                  {/* Payment Details */}
+                  <div className="border border-border rounded-lg p-5">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">Payment Information</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm items-center">
+                        <span className="text-muted-foreground">Method:</span>
+                        <span className="font-bold capitalize bg-secondary px-3 py-1 rounded-full text-foreground">
+                          {selectedTransaction.paymentMethod || "cash"}
+                        </span>
+                      </div>
+                      
+                      {selectedTransaction.paymentMethod === 'cash' && selectedTransaction.amountPaid != null && (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Amount Received:</span>
+                            <span className="font-semibold">{formatCurrency(selectedTransaction.amountPaid)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm border-t border-dashed border-border pt-2 mt-2">
+                            <span className="font-bold">Change:</span>
+                            <span className="font-bold text-green-600">{formatCurrency(selectedTransaction.change || 0)}</span>
+                          </div>
+                        </>
+                      )}
+                      
+                      {selectedTransaction.paymentMethod === 'split' && selectedTransaction.splitPayment && (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Cash Portion:</span>
+                            <span className="font-semibold">{formatCurrency(selectedTransaction.splitPayment.cash)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">GCash Portion:</span>
+                            <span className="font-semibold">{formatCurrency(selectedTransaction.splitPayment.gcash)}</span>
+                          </div>
+                          <div className="border-t border-dashed border-border my-2 pt-2" />
+                          <div className="flex justify-between text-sm">
+                            <span className="font-bold">Total Paid:</span>
+                            <span className="font-bold">
+                              {formatCurrency(selectedTransaction.splitPayment.cash + selectedTransaction.splitPayment.gcash)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="mt-8">
+                  <Button onClick={() => setShowDetailsModal(false)} className="w-full h-12 text-base font-semibold" variant="outline">
+                    Close Details
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

@@ -12,7 +12,9 @@ import {
   UserCheck, 
   ChevronLeft,
   Search,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle,
+  Zap,
 } from "lucide-react";
 import {
   Dialog,
@@ -58,6 +60,11 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
   const [isLoading, setIsLoading] = React.useState(false);
   const [isFetchingStaff, setIsFetchingStaff] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [overtimePrompt, setOvertimePrompt] = React.useState<{
+    hoursWorked: number;
+    overtimeHours: number;
+    pendingBody: Record<string, unknown>;
+  } | null>(null);
 
   // Fetch staff list when dialog opens
   React.useEffect(() => {
@@ -70,6 +77,7 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
       setPassword("");
       setShowPassword(false);
       setSearchTerm("");
+      setOvertimePrompt(null);
     }
   }, [open]);
 
@@ -110,9 +118,7 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
     s.role.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const doSubmit = async (extraBody: Record<string, unknown> = {}) => {
     if (!selectedStaff) return;
 
     if (selectedStaff.hasPin && pin.length !== 4) {
@@ -136,11 +142,21 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
           staffId: selectedStaff.id, 
           pin: selectedStaff.hasPin ? pin : undefined,
           password: !selectedStaff.hasPin ? password : undefined,
-          action 
+          action,
+          ...extraBody,
         }),
       });
 
       const data = await res.json();
+
+      if (data.overtimeReached) {
+        setOvertimePrompt({
+          hoursWorked: data.hoursWorked,
+          overtimeHours: data.overtimeHours,
+          pendingBody: extraBody,
+        });
+        return;
+      }
 
       if (data.success) {
         toast.success(data.message);
@@ -157,12 +173,23 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doSubmit();
+  };
+
+  const handleOvertimeConfirm = async () => {
+    setOvertimePrompt(null);
+    await doSubmit({ confirmOvertime: true });
+  };
+
   const handlePinChange = (val: string) => {
     const sanitized = val.replace(/\D/g, "").slice(0, 4);
     setPin(sanitized);
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden border-none shadow-2xl">
         <div className="bg-primary/5 p-6 border-b">
@@ -358,5 +385,64 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Overtime Confirmation Modal (rendered outside Dialog to avoid z-index issues) */}
+    {overtimePrompt && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setOvertimePrompt(null)} />
+        <div className="relative z-10 w-full max-w-sm rounded-2xl border bg-card shadow-2xl shadow-black/40 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-amber-500/10 border-b border-amber-500/20 p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base">8-Hour Limit Reached</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Worked <strong>{Math.floor(overtimePrompt.hoursWorked)}h {Math.round((overtimePrompt.hoursWorked % 1) * 60)}m</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 space-y-3">
+            <div className="rounded-xl bg-muted/40 p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Regular hours</span>
+                <span className="font-semibold">8h 0m</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Overtime</span>
+                <span className="font-semibold text-amber-600">
+                  {Math.floor(overtimePrompt.overtimeHours)}h {Math.round((overtimePrompt.overtimeHours % 1) * 60)}m
+                </span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Overtime is paid at <strong>1.25× rate</strong>. Log overtime or clock out now?
+            </p>
+          </div>
+          <div className="flex gap-3 p-5 pt-0">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={handleOvertimeConfirm}
+              disabled={isLoading}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Clock Out Now
+            </Button>
+            <Button
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={handleOvertimeConfirm}
+              disabled={isLoading}
+            >
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+              Log Overtime
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
