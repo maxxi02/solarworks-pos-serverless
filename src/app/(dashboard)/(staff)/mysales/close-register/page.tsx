@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, DollarSign, Receipt, Printer } from 'lucide-react';
+import { Save, DollarSign, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import ZReportModal from '@/app/(dashboard)/(public)/settings/receipt-setting/components/ZReportModal';
 import { useReceiptSettings } from '@/hooks/useReceiptSettings';
@@ -242,7 +242,7 @@ export default function CloseRegisterPage() {
           subtotal: summaryData.totalSales,
           discountTotal: summaryData.totalDiscounts,
           total: summaryData.netSales,
-          paymentMethod: 'cash',
+          paymentMethod: 'cash' as 'cash' | 'gcash' | 'split',
           splitPayment: undefined,
           amountPaid: summaryData.actualCash,
           change: summaryData.difference,
