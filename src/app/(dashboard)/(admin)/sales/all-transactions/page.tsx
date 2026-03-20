@@ -206,6 +206,7 @@ export default function TransactionsPage() {
     Transaction[]
   >([]);
   const [refundedLoading, setRefundedLoading] = useState(false);
+  const [showRefundedTable, setShowRefundedTable] = useState(false);
 
   // Modal states
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
