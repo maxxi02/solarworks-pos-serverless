@@ -1,8 +1,11 @@
 "use client"
 import React, { useState, useEffect, useCallback } from 'react'
 import { useReceiptSettings } from '@/hooks/useReceiptSettings'
+import { useSocket } from '@/provider/socket-provider'
+import type { ReceiptBuildInput } from '@/provider/socket-provider'
+import { CompanionPrintButton } from '@/components/ui/companion-print-button'
 import {
-  Search, Download, Printer, RefreshCw,
+  Search, Download, RefreshCw,
   CheckCircle2, XCircle, AlertCircle,
   DollarSign, Smartphone, Receipt, TrendingUp, FileText,
   ArrowLeft, ArrowRight, X, CreditCard, ChevronUp, ChevronDown, QrCode,
@@ -51,6 +54,7 @@ const DISCOUNT_RATE = 0.2
 
 const History = () => {
   const { settings } = useReceiptSettings()
+  const { printBoth, isConnected, companionStatus } = useSocket()
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -168,9 +172,39 @@ const History = () => {
   const formatDate = (s: string) => new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(s))
   const formatShortDate = (d: Date) => new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
 
-  const handlePrint = useCallback((transaction: Transaction) => {
+  const buildReceiptInput = useCallback((transaction: Transaction): ReceiptBuildInput => {
+    return {
+      orderNumber: transaction.orderNumber,
+      customerName: transaction.customerName,
+      cashier: transaction.cashier,
+      timestamp: new Date(transaction.timestamp || transaction.createdAt),
+      orderType: (transaction.orderType === 'qr' ? 'takeaway' : transaction.orderType) as 'dine-in' | 'takeaway',
+      tableNumber: transaction.tableNumber,
+      items: transaction.items.map(item => ({
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        hasDiscount: item.hasDiscount,
+      })),
+      subtotal: transaction.subtotal,
+      discountTotal: transaction.discountTotal ?? transaction.discount ?? 0,
+      total: transaction.total,
+      paymentMethod: transaction.paymentMethod,
+      splitPayment: transaction.splitPayment,
+      amountPaid: transaction.amountPaid,
+      change: transaction.change,
+      seniorPwdIds: transaction.seniorPwdIds,
+      isReprint: true,
+      businessName: settings?.businessName || '',
+      businessAddress: settings?.locationAddress,
+      businessPhone: settings?.phoneNumber,
+      businessLogo: settings?.logoPreview,
+      receiptMessage: settings?.receiptMessage,
+    }
+  }, [settings])
+
+  const printFallback = useCallback((transaction: Transaction) => {
     if (!settings) return
-    setIsPrinting(true)
     const is58mm = settings.receiptWidth === '58mm'
     const dash = '-'.repeat(is58mm ? 24 : 32)
     const discountTotal = transaction.discountTotal ?? transaction.discount ?? 0
@@ -223,6 +257,24 @@ const History = () => {
       iframe.onload = () => setTimeout(() => { iframe.contentWindow?.print(); setTimeout(() => { document.body.removeChild(iframe); document.body.removeChild(tempDiv); setIsPrinting(false) }, 500) }, 200)
     } else { document.body.removeChild(tempDiv); setIsPrinting(false) }
   }, [settings])
+
+  const handlePrint = useCallback(async (transaction: Transaction) => {
+    if (!settings) return
+    setIsPrinting(true)
+    const canUseCompanion = isConnected && (companionStatus.usb || companionStatus.bt)
+    if (canUseCompanion) {
+      try {
+        await printBoth(buildReceiptInput(transaction))
+      } catch (e) {
+        console.error('Companion print failed, falling back:', e)
+        printFallback(transaction)
+      } finally {
+        setIsPrinting(false)
+      }
+    } else {
+      printFallback(transaction)
+    }
+  }, [settings, isConnected, companionStatus, printBoth, buildReceiptInput, printFallback])
 
   const handleExport = () => {
     if (!sortedTransactions.length) return
@@ -436,11 +488,14 @@ const History = () => {
                     <td className="px-4 py-3.5">
                       <span className="text-sm text-muted-foreground">{t.cashier}</span>
                     </td>
-                    <td className="px-4 py-3.5">
-                      <button onClick={e => { e.stopPropagation(); handlePrint(t) }} disabled={isPrinting}
-                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg disabled:opacity-40 transition-colors">
-                        <Printer className="w-4 h-4" />
-                      </button>
+                    <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                      <CompanionPrintButton
+                        onClick={() => handlePrint(t)}
+                        isPrinting={isPrinting && selectedTransaction?._id === t._id}
+                        hasPrinted={false}
+                        iconSize="w-3.5 h-3.5"
+                        className="!py-1.5 !px-2 !rounded-md text-xs"
+                      />
                     </td>
                   </tr>
                 ))}
@@ -572,15 +627,19 @@ const History = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3 justify-end">
+                <div className="flex gap-3 justify-end items-center">
                   <button onClick={() => setShowDetailsModal(false)}
                     className="px-5 py-2.5 border border-border rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors">
                     Close
                   </button>
-                  <button onClick={() => handlePrint(selectedTransaction)} disabled={isPrinting}
-                    className="px-5 py-2.5 bg-foreground text-background rounded-lg text-sm font-medium hover:opacity-90 flex items-center gap-2 disabled:opacity-50 transition-opacity">
-                    <Printer className="w-4 h-4" />{isPrinting ? 'Printing...' : 'Reprint'}
-                  </button>
+                  <div className="w-40">
+                    <CompanionPrintButton
+                      onClick={() => handlePrint(selectedTransaction)}
+                      isPrinting={isPrinting}
+                      hasPrinted={false}
+                      label="Reprint"
+                    />
+                  </div>
                 </div>
 
               </div>

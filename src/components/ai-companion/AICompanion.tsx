@@ -15,7 +15,8 @@ import {
   Minimize2,
   LayoutGrid,
   List,
-  AlignLeft
+  AlignLeft,
+  Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,7 @@ import {
 import { authClient } from '@/lib/auth-client';
 import { useTheme } from 'next-themes';
 import { useNotificationSound } from '@/lib/use-notification-sound';
+import { useSocket } from '@/provider/socket-provider';
 
 interface Message {
   id: string;
@@ -84,6 +86,8 @@ export function AICompanion() {
   const isAdmin = session?.user?.role === 'admin';
   const userName = session?.user?.name || session?.user?.email?.split('@')[0] || (isAdmin ? 'Admin' : 'Staff');
   const { playOrder, playSuccess } = useNotificationSound();
+  const { emitPrintZReport, companionStatus, isConnected } = useSocket();
+  const canPrint = isConnected && (companionStatus.usb || companionStatus.bt);
 
   const roleQuickActions = isAdmin ? quickActions : [
     { id: 'today-highlights', label: "Your Highlights", icon: Zap, description: 'Your revenue, sold items, and activity' },
@@ -130,6 +134,17 @@ export function AICompanion() {
     setMessages(prev => prev.map(m =>
       m.id === messageId ? { ...m, viewFormat: format } : m
     ));
+  };
+
+  const handlePrintMessage = (message: Message) => {
+    if (!canPrint) return;
+    const title = message.content.split('\n')[0] || 'Analytics Report';
+    emitPrintZReport({
+      type: 'analytics',
+      title,
+      content: message.content,
+      generatedAt: message.timestamp.toISOString(),
+    });
   };
 
   const formatContent = (content: string, format: ViewFormat): string => {
@@ -442,7 +457,22 @@ export function AICompanion() {
                         )}
                       >
                         {message.role === 'assistant' && !isGreetingOnly(message.content) && (
-                          <div className="flex justify-end mb-2">
+                          <div className="flex justify-between items-center mb-2">
+                            {/* Print button — only shown when companion + printer are ready */}
+                            {message.data && canPrint ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                onClick={() => handlePrintMessage(message)}
+                                title="Print via Companion App"
+                              >
+                                <Printer className="h-3 w-3 mr-1" />
+                                Print
+                              </Button>
+                            ) : (
+                              <span />
+                            )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">

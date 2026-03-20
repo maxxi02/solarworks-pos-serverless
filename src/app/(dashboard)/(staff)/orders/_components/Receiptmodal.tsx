@@ -1,15 +1,15 @@
 "use client";
 
 import {
-  Printer,
   BluetoothConnected,
   BluetoothOff,
   FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CompanionPrintButton } from "@/components/ui/companion-print-button";
 import { ReceiptOrder } from "./pos.types";
-import { formatCurrency, DISCOUNT_RATE } from "./pos.utils";
-import { useEffect, useState, useMemo } from "react";
+import { DISCOUNT_RATE } from "./pos.utils";
+import { useMemo } from "react";
 import { useSocket } from "@/provider/socket-provider";
 import {
   Dialog,
@@ -165,15 +165,13 @@ export const ReceiptModal = ({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t bg-muted/30 flex sm:flex-row gap-3">
-          <Button
+          <CompanionPrintButton
             onClick={onPrint}
-            disabled={isPrinting}
-            className="flex-1 gap-2 h-11 text-base font-bold shadow-sm"
-            variant={companionConnected ? "default" : "secondary"}
-          >
-            <Printer className="w-5 h-5" />
-            {isPrinting ? "Printing..." : "Print Receipt"}
-          </Button>
+            isPrinting={isPrinting}
+            label="Print Receipt"
+            iconSize="w-5 h-5"
+            className="flex-1 h-11 text-base rounded-md"
+          />
           <Button
             onClick={onClose}
             variant="outline"

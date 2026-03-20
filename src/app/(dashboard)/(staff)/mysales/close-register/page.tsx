@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, DollarSign, Receipt } from 'lucide-react';
+import { Save, DollarSign, Receipt, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import ZReportModal from '@/app/(dashboard)/(public)/settings/receipt-setting/components/ZReportModal';
 import { useReceiptSettings } from '@/hooks/useReceiptSettings';
+import { useSocket } from '@/provider/socket-provider';
 import { notifyRegisterClosed, notifyCashUpdated, notifyShopStatus } from '@/lib/notifyServer';
 
 interface Payment {
@@ -43,10 +44,12 @@ interface SessionData {
 export default function CloseRegisterPage() {
   const router = useRouter();
   const { settings } = useReceiptSettings();
+  const { printBoth, isConnected } = useSocket();
 
   const [actualCash, setActualCash]   = useState<number | ''>('');
   const [loading, setLoading]         = useState(true);
   const [isClosing, setIsClosing]     = useState(false);
+  const [isPrinting, setIsPrinting]   = useState(false);
   const [showZReport, setShowZReport] = useState(false);
   const [includeXReceipt, setIncludeXReceipt] = useState(false);
 
@@ -222,10 +225,51 @@ export default function CloseRegisterPage() {
   };
 
   const handleZReportClose  = () => { setShowZReport(false); router.replace('/mysales/cash-management'); };
-  const handleConfirmClose  = () => { 
-    setShowZReport(false); 
-    toast.success('Register closed successfully!'); 
-    router.replace('/mysales/cash-management'); 
+  const handleConfirmClose  = async () => {
+    // Print Z-Report via companion app
+    if (isConnected && settings) {
+      setIsPrinting(true);
+      try {
+        const receiptInput = {
+          orderNumber: `Z-${new Date().getTime()}`,
+          customerName: 'Z-Report',
+          cashier: summary.cashierName,
+          timestamp: new Date(),
+          orderType: 'z-report',
+          tableNumber: undefined,
+          orderNote: undefined,
+          items: summaryData.items ? Array(summaryData.items).fill({ name: 'Items Sold', price: 0, quantity: 1, hasDiscount: false, menuType: 'food' }) : [],
+          subtotal: summaryData.totalSales,
+          discountTotal: summaryData.totalDiscounts,
+          total: summaryData.netSales,
+          paymentMethod: 'cash',
+          splitPayment: undefined,
+          amountPaid: summaryData.actualCash,
+          change: summaryData.difference,
+          seniorPwdIds: undefined,
+          businessName: settings.businessName || 'RENDEZVOUS CAFE',
+          businessAddress: settings.locationAddress,
+          businessPhone: settings.phoneNumber,
+          receiptMessage: settings.receiptMessage,
+        };
+
+        const results = await printBoth(receiptInput);
+        if (results.receipt || results.kitchen) {
+          toast.success('Z-Report printed');
+        } else {
+          toast.warning('Printer not connected');
+        }
+      } catch (error) {
+        console.error('Print error:', error);
+        toast.error('Failed to print Z-Report');
+      } finally {
+        setIsPrinting(false);
+      }
+    }
+
+    setShowZReport(false);
+    toast.success('Register closed successfully!');
+    router.replace('/mysales/cash-management');
   };
 
   const fmt  = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');

@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useRef, useState, useCallback, useEffect } from "react";
-import { X, Download, Printer, Smartphone, CheckCircle } from "lucide-react";
+import { X, Download } from "lucide-react";
 import QRCode from "react-qr-code";
 import { useSocket } from "@/provider/socket-provider";
+import { CompanionPrintButton } from "@/components/ui/companion-print-button";
 import { toast } from "sonner";
 
 interface QRPreviewModalProps {
@@ -84,22 +85,7 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
   }, [label, url]);
 
   const handlePrintViaCompanion = useCallback(async () => {
-    if (!socket || !isConnected) {
-      toast.error("Companion connection unavailable", {
-        description:
-          "The POS is not connected to the server. Check your connection.",
-      });
-      return;
-    }
-
-    // Guard: need at least one printer connected
-    const anyPrinterConnected = companionStatus.usb || companionStatus.bt;
-    if (!anyPrinterConnected) {
-      toast.error("No printers detected", {
-        description: "Connect a USB or Bluetooth printer in the companion app.",
-      });
-      return;
-    }
+    if (!socket) return; // socket null-check for TypeScript
 
     // Determine the actual target — prefer the selected one,
     // but fallback to whichever is available since the companion
@@ -219,23 +205,12 @@ export function QRPreviewModal({ url, label, onClose }: QRPreviewModalProps) {
             Download
           </button>
         </div>
-        <button
+        <CompanionPrintButton
           onClick={handlePrintViaCompanion}
-          disabled={isPrinting}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isPrinting ? (
-            <>
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Printing...
-            </>
-          ) : (
-            <>
-              <Printer className="w-4 h-4" />
-              {hasPrinted ? "Reprint" : "Print"}
-            </>
-          )}
-        </button>
+          isPrinting={isPrinting}
+          hasPrinted={hasPrinted}
+          label="Print QR"
+        />
       </div>
     </div>
   );
