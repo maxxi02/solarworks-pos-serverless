@@ -1,8 +1,9 @@
 'use client';
 
-import { X, Printer, FileText, CheckCircle, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, FileText, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
 import { ReceiptSettings } from '@/types/receipt';
 import { useSocket } from '@/provider/socket-provider';
+import { CompanionPrintButton } from '@/components/ui/companion-print-button';
 
 interface Session {
   id?: string;
@@ -579,16 +580,12 @@ export default function ZReportModal({
             </button>
 
             {onConfirmClose && (
-              <button
-                onClick={() => {
-                  handlePrint();
-                  onConfirmClose();
-                }}
-                className="flex-1 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-sm rounded-md transition-colors flex items-center justify-center gap-2"
-              >
-                <Printer className="h-4 w-4" />
-                Print & Close
-              </button>
+              <div className="flex-1">
+                <CompanionPrintButton
+                  onClick={() => { handlePrint(); onConfirmClose(); }}
+                  label="Print & Close"
+                />
+              </div>
             )}
           </div>
         </div>
