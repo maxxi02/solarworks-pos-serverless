@@ -2,12 +2,15 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useReceiptSettings } from '@/hooks/useReceiptSettings'
 import {
-  Clock, Search, Printer, RefreshCw, ArrowUpDown,
-  CheckCircle2, XCircle, AlertCircle, DollarSign, Smartphone, Receipt,
+  Clock, Search, RefreshCw, ArrowUpDown,
+  CheckCircle2, XCircle, AlertCircle, DollarSign, Smartphone,
   TrendingUp, FileText, ArrowLeft, ArrowRight, X, CreditCard, WifiOff,
-  Ban, QrCode,
+  QrCode,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSocket } from '@/provider/socket-provider'
+import type { ReceiptBuildInput } from '@/provider/socket-provider'
+import { CompanionPrintButton } from '@/components/ui/companion-print-button'
 
 interface TransactionItem {
   name: string
@@ -41,6 +44,7 @@ const DISCOUNT_RATE = 0.2
 
 const History = () => {
   const { settings } = useReceiptSettings()
+  const { printBoth, isConnected, companionStatus } = useSocket()
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -189,10 +193,37 @@ const History = () => {
     new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
 
   // ── Reprint receipt ───────────────────────────────────────────────────────
-  const handlePrint = useCallback((transaction: Transaction) => {
-    if (!settings) return
-    setIsPrinting(true)
+  const buildReceiptInput = useCallback((transaction: Transaction): ReceiptBuildInput => ({
+    orderNumber: transaction.orderNumber,
+    customerName: transaction.customerName,
+    cashier: transaction.cashier,
+    timestamp: transaction.timestamp,
+    orderType: transaction.orderType,
+    tableNumber: transaction.tableNumber,
+    items: transaction.items.map(item => ({
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      hasDiscount: item.hasDiscount,
+    })),
+    subtotal: transaction.subtotal,
+    discountTotal: transaction.discountTotal ?? transaction.discount ?? 0,
+    total: transaction.total,
+    paymentMethod: transaction.paymentMethod,
+    splitPayment: transaction.splitPayment,
+    amountPaid: transaction.amountPaid,
+    change: transaction.change,
+    seniorPwdIds: transaction.seniorPwdIds,
+    isReprint: true,
+    businessName: settings?.businessName || '',
+    businessAddress: settings?.locationAddress,
+    businessPhone: settings?.phoneNumber,
+    businessLogo: settings?.logoPreview,
+    receiptMessage: settings?.receiptMessage,
+  }), [settings])
 
+  const printFallback = useCallback((transaction: Transaction) => {
+    if (!settings) return
     const is58mm = settings.receiptWidth === '58mm'
     const dash = '-'.repeat(is58mm ? 24 : 32)
     const discountTotal = transaction.discountTotal ?? transaction.discount ?? 0
@@ -289,6 +320,23 @@ const History = () => {
     }
   }, [settings])
 
+  const handlePrint = useCallback(async (transaction: Transaction) => {
+    if (!settings) return
+    setIsPrinting(true)
+    const canUseCompanion = isConnected && (companionStatus.usb || companionStatus.bt)
+    if (canUseCompanion) {
+      try {
+        await printBoth(buildReceiptInput(transaction))
+      } catch (e) {
+        console.error('Companion print failed, falling back:', e)
+        printFallback(transaction)
+      } finally {
+        setIsPrinting(false)
+      }
+    } else {
+      printFallback(transaction)
+    }
+  }, [settings, isConnected, companionStatus, printBoth, buildReceiptInput, printFallback])
 
   // ── Badges / icons ────────────────────────────────────────────────────────
   const getStatusBadge = (status: string) => {
@@ -680,7 +728,7 @@ const History = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
                   {/* Refund button — only for completed transactions */}
                   {selectedTransaction.status === 'completed' && (
                     <button
@@ -692,14 +740,14 @@ const History = () => {
                       Refund
                     </button>
                   )}
-                  <button
-                    onClick={() => handlePrint(selectedTransaction)}
-                    disabled={isPrinting}
-                    className="flex-1 px-6 py-3 bg-primary text-white rounded-xl text-base font-semibold hover:bg-primary/90 active:bg-primary/80 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
-                  >
-                    <Printer className="w-5 h-5" />
-                    {isPrinting ? 'Printing...' : 'Reprint Receipt'}
-                  </button>
+                  <div className="flex-1">
+                    <CompanionPrintButton
+                      onClick={() => handlePrint(selectedTransaction)}
+                      isPrinting={isPrinting}
+                      hasPrinted={false}
+                      label="Reprint Receipt"
+                    />
+                  </div>
                   <button
                     onClick={() => setShowDetailsModal(false)}
                     className="px-6 py-3 border-2 border-border rounded-xl text-base font-semibold hover:bg-muted/50 active:bg-background transition-colors"

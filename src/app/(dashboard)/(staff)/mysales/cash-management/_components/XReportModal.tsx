@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Printer, FileText } from 'lucide-react';
+import { X, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSocket } from '@/provider/socket-provider';
+import { CompanionPrintButton } from '@/components/ui/companion-print-button';
 
 interface Props {
   session: any;
@@ -27,7 +28,7 @@ const TENDER_LABELS: Record<string, string> = {
 
 export default function XReportModal({ session, summary, settings, expectedCash, onClose }: Props) {
   const { emitPrintZReport, companionStatus } = useSocket();
-  
+  const [isPrinting, setIsPrinting] = useState(false);
   // Format helpers
   const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const fmtP = (n: number) => `₱${fmt(n)}`;
@@ -72,41 +73,41 @@ export default function XReportModal({ session, summary, settings, expectedCash,
   const is58mm = settings.receiptWidth === '58mm';
   const dash = '-'.repeat(is58mm ? 24 : 32);
 
-  const handlePrint = () => {
-    // Note: If you have an emitPrintXReport socket event, you should use that instead.
-    // We are passing this as if it's a Z-Report, but changing the title/text in the printing structure.
-    const xReportData = {
-      businessName: settings?.businessName,
-      locationAddress: settings?.locationAddress,
-      taxPin: settings?.taxPin,
-      today,
-      timeNow,
-      cashierName: session?.cashierName,
-      registerName: session?.registerName || 'Main Register',
-      openedAt: session?.openedAt ? new Date(session.openedAt).toLocaleString() : '—',
-      totalSales,
-      totalDiscounts,
-      totalRefunds: summary.totalRefunds || 0,
-      totalVoids: summary.totalVoids || 0,
-      netSales: todayEarnings,
-      openingFund: session?.openingFund || 0,
-      cashEarned: summary.cashSales || 0,
-      expectedCash,
-      tenders,
-      transactions: summary.transactionCount || 0,
-      items: summary.items || 0,
-      receiptMessage: settings?.receiptMessage,
-      disclaimer: settings?.disclaimer,
-      isXReading: true // flag for the companion app to know it's an X-reading
-    };
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const xReportData = {
+        businessName: settings?.businessName,
+        locationAddress: settings?.locationAddress,
+        taxPin: settings?.taxPin,
+        today,
+        timeNow,
+        cashierName: session?.cashierName,
+        registerName: session?.registerName || 'Main Register',
+        openedAt: session?.openedAt ? new Date(session.openedAt).toLocaleString() : '—',
+        totalSales,
+        totalDiscounts,
+        totalRefunds: summary.totalRefunds || 0,
+        totalVoids: summary.totalVoids || 0,
+        netSales: todayEarnings,
+        openingFund: session?.openingFund || 0,
+        cashEarned: summary.cashSales || 0,
+        expectedCash,
+        tenders,
+        transactions: summary.transactionCount || 0,
+        items: summary.items || 0,
+        receiptMessage: settings?.receiptMessage,
+        disclaimer: settings?.disclaimer,
+        isXReading: true,
+      };
 
-    if (companionStatus.usb || companionStatus.bt) {
-      emitPrintZReport(xReportData);
-      return;
-    }
+      if (companionStatus.usb || companionStatus.bt) {
+        emitPrintZReport(xReportData);
+        return;
+      }
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) return;
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (!printWindow) return;
 
     const fs = '11px';
     const fsL = '14px';
@@ -196,12 +197,15 @@ ${settings?.disclaimer ? `<div style="text-align:center;font-size:${fs};margin:2
     printWindow.document.close();
     printWindow.focus();
 
-    setTimeout(() => {
-      printWindow.print();
       setTimeout(() => {
-        printWindow.close();
-      }, 500);
-    }, 300);
+        printWindow.print();
+        setTimeout(() => {
+          printWindow.close();
+        }, 500);
+      }, 300);
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   return (
@@ -372,13 +376,13 @@ ${settings?.disclaimer ? `<div style="text-align:center;font-size:${fs};margin:2
         {/* Footer */}
         <div className="border-t-2 bg-gray-50 p-3 sticky bottom-0">
           <div className="flex gap-2">
-            <Button
-              onClick={() => { handlePrint(); onClose(); }}
-              className="flex-1 gap-2 h-11 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white"
-              size="default"
-            >
-              <Printer className="w-5 h-5 text-white" />PRINT X-READING
-            </Button>
+            <div className="flex-1">
+              <CompanionPrintButton
+                onClick={() => { handlePrint(); onClose(); }}
+                isPrinting={isPrinting}
+                label="PRINT X-READING"
+              />
+            </div>
             <Button
               onClick={onClose}
               variant="outline"
