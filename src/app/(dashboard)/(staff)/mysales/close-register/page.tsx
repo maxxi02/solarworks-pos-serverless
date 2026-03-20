@@ -235,7 +235,7 @@ export default function CloseRegisterPage() {
           customerName: 'Z-Report',
           cashier: summary.cashierName,
           timestamp: new Date(),
-          orderType: 'z-report',
+          orderType: 'takeaway' as 'dine-in' | 'takeaway',
           tableNumber: undefined,
           orderNote: undefined,
           items: summaryData.items ? Array(summaryData.items).fill({ name: 'Items Sold', price: 0, quantity: 1, hasDiscount: false, menuType: 'food' }) : [],
