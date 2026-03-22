@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const allStaff = await usersColl
       .find(
         { role: { $in: ["staff", "manager"] } },
-        { projection: { _id: 1, name: 1, email: 1, role: 1, image: 1 } },
+        { projection: { _id: 1, id: 1, name: 1, email: 1, role: 1, image: 1 } },
       )
       .sort({ name: 1 })
       .toArray();
@@ -73,16 +73,17 @@ export async function GET(req: NextRequest) {
     // Build maps: userId → record (prefer confirmed over temp)
     const recordMap = new Map<string, typeof confirmedRecords[0]>();
     for (const r of tempRecords) {
-      recordMap.set(r.userId.toString(), r);
+      recordMap.set(String(r.userId), r);
     }
     for (const r of confirmedRecords) {
       // confirmed overrides temp
-      recordMap.set(r.userId.toString(), r);
+      recordMap.set(String(r.userId), r);
     }
 
     // 3. Build daily staff status list
     const staffStatuses: DailyStaffStatus[] = allStaff.map((user) => {
-      const userId = user._id.toString();
+      // Better auth uses `id` (string), but we fallback to _id just in case
+      const userId = user.id ? String(user.id) : user._id.toString();
       const record = recordMap.get(userId);
 
       if (!record) {

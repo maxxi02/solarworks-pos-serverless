@@ -39,6 +39,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import type { LeaveRequest } from "@/models/leave-request.model";
+import type { OvertimeRequest } from "@/models/overtime-request.model";
 
 interface StaffEntry {
   id: string;
@@ -96,6 +97,17 @@ const AttendancePage = () => {
   const [leaveForm, setLeaveForm] = React.useState({ startDate: "", endDate: "", reason: "" });
   const [leaveSubmitting, setLeaveSubmitting] = React.useState(false);
 
+  // ── Overtime Requests ─────────────────────────────────────────────────────
+  const [overtimeRequests, setOvertimeRequests] = React.useState<OvertimeRequest[]>([]);
+  const [overtimeLoading, setOvertimeLoading] = React.useState(false);
+  const [showOvertimeModal, setShowOvertimeModal] = React.useState(false);
+  const [overtimeForm, setOvertimeForm] = React.useState({
+    date: new Date().toISOString().split("T")[0],
+    requestedHours: "",
+    reason: "",
+  });
+  const [overtimeSubmitting, setOvertimeSubmitting] = React.useState(false);
+
   // ── Schedules ─────────────────────────────────────────────────────────────
   const [schedules, setSchedules] = React.useState<any[]>([]);
   const [scheduleLoading, setScheduleLoading] = React.useState(false);
@@ -142,6 +154,56 @@ const AttendancePage = () => {
   React.useEffect(() => {
     if (activeTab === "leave") loadLeaveRequests();
   }, [activeTab, loadLeaveRequests]);
+
+  // ── fetch overtime requests ────────────────────────────────────────────────
+  const loadOvertimeRequests = React.useCallback(async () => {
+    setOvertimeLoading(true);
+    try {
+      const res = await fetch("/api/attendance/overtime/my");
+      const data = await res.json();
+      if (data.success) setOvertimeRequests(data.records || []);
+    } catch {
+      toast.error("Failed to load overtime requests");
+    } finally {
+      setOvertimeLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab === "overtime") loadOvertimeRequests();
+  }, [activeTab, loadOvertimeRequests]);
+
+  const handleSubmitOvertime = async () => {
+    if (!overtimeForm.date || !overtimeForm.requestedHours || !overtimeForm.reason.trim()) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    setOvertimeSubmitting(true);
+    try {
+      const res = await fetch("/api/attendance/overtime/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: overtimeForm.date,
+          requestedHours: Number(overtimeForm.requestedHours),
+          reason: overtimeForm.reason,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Overtime request submitted successfully");
+        setShowOvertimeModal(false);
+        setOvertimeForm({ date: new Date().toISOString().split("T")[0], requestedHours: "", reason: "" });
+        loadOvertimeRequests();
+      } else {
+        toast.error(data.message);
+      }
+    } catch {
+      toast.error("Network error – please try again");
+    } finally {
+      setOvertimeSubmitting(false);
+    }
+  };
 
   const loadSchedules = React.useCallback(async () => {
     setScheduleLoading(true);
@@ -599,7 +661,7 @@ const AttendancePage = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-lg grid-cols-3">
+        <TabsList className="grid w-full max-w-2xl grid-cols-4">
           <TabsTrigger value="clockin" className="gap-2">
             <Clock className="h-4 w-4" /> Clock In/Out
           </TabsTrigger>
@@ -608,6 +670,14 @@ const AttendancePage = () => {
           </TabsTrigger>
           <TabsTrigger value="leave" className="gap-2">
             <FileText className="h-4 w-4" /> Leave Requests
+          </TabsTrigger>
+          <TabsTrigger value="overtime" className="gap-2">
+            <Zap className="h-4 w-4" /> Overtime
+            {overtimeRequests.filter(r => r.status === "pending").length > 0 && (
+              <Badge variant="secondary" className="ml-1 px-1.5 text-xs">
+                {overtimeRequests.filter(r => r.status === "pending").length}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -735,6 +805,65 @@ const AttendancePage = () => {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Overtime Requests Tab ───────────────────────────────────────────── */}
+        <TabsContent value="overtime" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {overtimeRequests.filter(r => r.status === "pending").length} pending
+            </p>
+            <Button size="sm" className="gap-2" onClick={() => setShowOvertimeModal(true)}>
+              <PlusCircle className="h-4 w-4" /> Request Overtime
+            </Button>
+          </div>
+
+          {overtimeLoading ? (
+            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+          ) : overtimeRequests.length === 0 ? (
+            <div className="grid place-items-center py-16 text-center">
+              <Zap className="mx-auto mb-5 h-14 w-14 text-muted-foreground/60" />
+              <h3 className="text-lg font-semibold">No overtime requests yet</h3>
+              <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+                Click &quot;Request Overtime&quot; to submit a request for admin approval.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {overtimeRequests.map(req => {
+                const statusColors: Record<string, string> = {
+                  pending: "bg-yellow-500 hover:bg-yellow-500",
+                  approved: "bg-green-600 hover:bg-green-600",
+                };
+                return (
+                  <Card key={req._id}>
+                    <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm">{req.date}</p>
+                          <Badge className={`text-xs ${
+                            req.status === "pending" ? statusColors.pending
+                            : req.status === "approved" ? statusColors.approved
+                            : ""
+                          }`}
+                            variant={req.status === "rejected" ? "destructive" : "default"}
+                          >
+                            {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                          </Badge>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
+                            <Timer className="h-3 w-3" />
+                            {req.requestedHours}h requested
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{req.reason}</p>
+                        {req.reviewNote && <p className="text-xs text-muted-foreground italic">Admin note: {req.reviewNote}</p>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -909,6 +1038,57 @@ const AttendancePage = () => {
               placeholder="Explain the reason for your leave..."
               value={leaveForm.reason}
               onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))}
+              rows={3}
+            />
+          </div>
+        </div>
+      </AttendanceModal>
+
+      {/* ── Overtime Request Modal ────────────────────────────────────────────── */}
+      <AttendanceModal
+        open={showOvertimeModal}
+        title="Request Overtime"
+        description="Submit an overtime request for admin approval"
+        confirmLabel="Submit Request"
+        isLoading={overtimeSubmitting}
+        onConfirm={handleSubmitOvertime}
+        onCancel={() => {
+          setShowOvertimeModal(false);
+          setOvertimeForm({ date: new Date().toISOString().split("T")[0], requestedHours: "", reason: "" });
+        }}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="ot-date">Date *</Label>
+              <Input
+                id="ot-date"
+                type="date"
+                value={overtimeForm.date}
+                onChange={e => setOvertimeForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ot-hours">Hours Requested *</Label>
+              <Input
+                id="ot-hours"
+                type="number"
+                min="0.5"
+                max="12"
+                step="0.5"
+                placeholder="e.g. 2"
+                value={overtimeForm.requestedHours}
+                onChange={e => setOvertimeForm(f => ({ ...f, requestedHours: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ot-reason">Reason *</Label>
+            <Textarea
+              id="ot-reason"
+              placeholder="Explain why overtime is needed..."
+              value={overtimeForm.reason}
+              onChange={e => setOvertimeForm(f => ({ ...f, reason: e.target.value }))}
               rows={3}
             />
           </div>

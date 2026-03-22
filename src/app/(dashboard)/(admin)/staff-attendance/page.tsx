@@ -75,6 +75,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { AttendanceModal } from "@/components/attendance/AttendanceModal";
 import type { LeaveRequest } from "@/models/leave-request.model";
 import type { ShiftSchedule } from "@/models/shift-schedule.model";
+import type { OvertimeRequest } from "@/models/overtime-request.model";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface StaffMember {
@@ -148,6 +149,7 @@ const AdminAttendancePage = () => {
   );
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [trackingDate, setTrackingDate] = useState<Date>(new Date());
 
   // ── UI state ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("pending");
@@ -174,6 +176,13 @@ const AdminAttendancePage = () => {
   const [shiftForm, setShiftForm] = useState({ staffId: "", date: "", dateTo: "", startTime: "08:00", endTime: "17:00", notes: "" });
   const [shiftSubmitting, setShiftSubmitting] = useState(false);
   const [deleteShiftId, setDeleteShiftId] = useState<string | null>(null);
+
+  // ── Overtime Requests tab ──────────────────────────────────────────────────
+  const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
+  const [overtimeLoading, setOvertimeLoading] = useState(false);
+  const [overtimeModal, setOvertimeModal] = useState<{ open: boolean; id: string; action: "approved" | "rejected" } | null>(null);
+  const [overtimeReviewNote, setOvertimeReviewNote] = useState("");
+  const [overtimeProcessing, setOvertimeProcessing] = useState(false);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -207,6 +216,42 @@ const AdminAttendancePage = () => {
   useEffect(() => {
     if (activeTab === "leave") fetchLeaveRequests();
   }, [activeTab]);
+
+  const fetchOvertimeRequests = async () => {
+    setOvertimeLoading(true);
+    try {
+      const res = await fetch("/api/attendance/admin/overtime");
+      const data = await res.json();
+      if (data.success) setOvertimeRequests(data.records || []);
+    } catch { toast.error("Failed to load overtime requests"); }
+    finally { setOvertimeLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === "overtime") fetchOvertimeRequests();
+    // Also load overtime requests when dashboard is open (needed for Hours Tracking summary)
+    if (activeTab === "dashboard") fetchOvertimeRequests();
+  }, [activeTab]);
+
+  const handleOvertimeReview = async () => {
+    if (!overtimeModal) return;
+    setOvertimeProcessing(true);
+    try {
+      const res = await fetch("/api/attendance/admin/overtime/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ overtimeId: overtimeModal.id, status: overtimeModal.action, reviewNote: overtimeReviewNote }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Overtime request ${overtimeModal.action}`);
+        setOvertimeRequests(prev => prev.map(r => r._id === overtimeModal.id ? { ...r, status: overtimeModal.action } : r));
+        setOvertimeModal(null);
+        setOvertimeReviewNote("");
+      } else { toast.error(data.message); }
+    } catch { toast.error("Network error"); }
+    finally { setOvertimeProcessing(false); }
+  };
 
   const weekEnd = new Date(scheduleWeekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
@@ -605,7 +650,7 @@ const AdminAttendancePage = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-3xl grid-cols-4">
+        <TabsList className="grid w-full max-w-3xl grid-cols-5">
           <TabsTrigger value="pending" className="gap-2">
             <Clock className="h-4 w-4" />
             Pending
@@ -629,6 +674,15 @@ const AdminAttendancePage = () => {
             {leaveRequests.filter(r => r.status === "pending").length > 0 && (
               <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
                 {leaveRequests.filter(r => r.status === "pending").length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="overtime" className="gap-2">
+            <Zap className="h-4 w-4" />
+            Overtime
+            {overtimeRequests.filter(r => r.status === "pending").length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
+                {overtimeRequests.filter(r => r.status === "pending").length}
               </Badge>
             )}
           </TabsTrigger>
@@ -754,6 +808,7 @@ const AdminAttendancePage = () => {
                           <th className="px-4 py-3 text-left font-medium text-muted-foreground">Staff Name</th>
                           <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
                           <th className="px-4 py-3 text-left font-medium text-muted-foreground">Today's Status</th>
+                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Hours Today</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -803,6 +858,20 @@ const AdminAttendancePage = () => {
                                   </Badge>
                                 )}
                               </td>
+                              <td className="px-4 py-3">
+                                {s.hoursWorked != null ? (
+                                  <span className="text-sm font-medium">
+                                    {s.hoursWorked.toFixed(2)} h
+                                    {s.overtimeHours > 0 && (
+                                      <span className="ml-1.5 text-amber-600 font-semibold text-xs">
+                                        +{s.overtimeHours.toFixed(2)} OT
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">—</span>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
@@ -811,6 +880,161 @@ const AdminAttendancePage = () => {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* ── Staff Hours Tracking (Day-by-Day) ─────────────────────────────── */}
+          <Card>
+            <CardHeader className="pb-3 border-b border-border/50">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Timer className="h-5 w-5 text-primary" />
+                    Daily Hours Tracking
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Hours logged per staff per day.
+                  </CardDescription>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const d = new Date(trackingDate);
+                    d.setDate(d.getDate() - 1);
+                    setTrackingDate(d);
+                  }}>
+                    ← Prev Day
+                  </Button>
+                  <span className="text-sm font-bold min-w-[120px] text-center">
+                    {trackingDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const d = new Date(trackingDate);
+                    d.setDate(d.getDate() + 1);
+                    setTrackingDate(d);
+                  }} disabled={trackingDate.toDateString() === new Date().toDateString()}>
+                    Next Day →
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {dashboardLoading ? (
+                <div className="space-y-3">
+                  {Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+                </div>
+              ) : records.length === 0 ? (
+                <EmptyState icon={Clock} title="No records in range" description="Adjust the main date range filters above to load attendance data." />
+              ) : (() => {
+                const targetDateStr = trackingDate.toISOString().split("T")[0];
+                const dayRecords = records.filter(r => r.date === targetDateStr);
+                
+                if (dayRecords.length === 0) {
+                  return <EmptyState icon={Clock} title="No records for this day" description={`No staff clocked in on ${trackingDate.toLocaleDateString()}.`} />;
+                }
+                // Build a per-date+userId map for approved OT requests
+                const approvedOtByDateUser = new Map<string, number>();
+                overtimeRequests.filter(r => r.status === "approved").forEach(r => {
+                  const key = `${r.date}__${r.userId}`;
+                  approvedOtByDateUser.set(key, (approvedOtByDateUser.get(key) ?? 0) + r.requestedHours);
+                });
+
+                // Sort records by staff name
+                const sorted = [...dayRecords].sort((a, b) => {
+                  return (a.user?.name ?? "").localeCompare(b.user?.name ?? "");
+                });
+
+                const formatT = (d: string | Date | undefined) =>
+                  d ? new Date(d).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—";
+
+                return (
+                  <div className="overflow-hidden rounded-lg border border-border">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="border-b border-border bg-muted/50">
+                          <tr>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12">No.</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Staff</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Clock In</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Clock Out</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Regular Hours</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">OT Hours</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Approved OT</th>
+                            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {sorted.map((r, idx) => {
+                            const hours = r.hoursWorked ?? 0;
+                            const regH = Math.min(8, hours);
+                            const otH = Math.max(0, hours - 8);
+                            const approvedOt = approvedOtByDateUser.get(`${r.date}__${r.userId}`) ?? 0;
+                            const total = hours;
+
+                            return (
+                              <tr key={r._id} className="hover:bg-accent/40 transition-colors">
+                                <td className="px-4 py-3 font-medium text-muted-foreground text-xs">
+                                  {idx + 1}
+                                </td>
+                                <td className="px-4 py-3">
+
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                      {(r.user?.name ?? "?").charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold leading-tight">{r.user?.name ?? "Unknown"}</p>
+                                      {r.shift && <p className="text-[10px] text-muted-foreground capitalize">{r.shift} shift</p>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1">
+                                    <LogIn className="h-3 w-3 text-green-500" />
+                                    {formatT(r.clockInTime)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                  {r.clockOutTime ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <LogOut className="h-3 w-3 text-rose-500" />
+                                      {formatT(r.clockOutTime)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs italic text-muted-foreground/60">Still in</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="font-medium">{hours > 0 ? `${regH.toFixed(2)} h` : "—"}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {otH > 0 ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-600">
+                                      <Zap className="h-3 w-3" />
+                                      {otH.toFixed(2)} h
+                                    </span>
+                                  ) : <span className="text-muted-foreground">—</span>}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {approvedOt > 0 ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+                                      <CheckCircle className="h-3 w-3" />
+                                      {approvedOt.toFixed(1)} h
+                                    </span>
+                                  ) : <span className="text-muted-foreground">—</span>}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="font-bold">{total > 0 ? `${total.toFixed(2)} h` : "—"}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -1028,6 +1252,60 @@ const AdminAttendancePage = () => {
             </div>
           )}
         </TabsContent>
+
+        {/* ── Overtime Requests Tab ───────────────────────────────────────────── */}
+        <TabsContent value="overtime" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {overtimeRequests.filter(r => r.status === "pending").length} pending review
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchOvertimeRequests} disabled={overtimeLoading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${overtimeLoading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
+
+          {overtimeLoading ? (
+            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+          ) : overtimeRequests.length === 0 ? (
+            <EmptyState icon={Zap} title="No overtime requests" description="No staff have submitted overtime requests yet" />
+          ) : (
+            <div className="space-y-3">
+              {overtimeRequests.map(req => (
+                <Card key={req._id}>
+                  <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{req.userName}</p>
+                        {req.status === "pending" && <Badge className="bg-yellow-500 hover:bg-yellow-500">Pending</Badge>}
+                        {req.status === "approved" && <Badge className="bg-green-600 hover:bg-green-600">Approved</Badge>}
+                        {req.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
+                          <Timer className="h-3 w-3" />
+                          {req.requestedHours}h requested
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{req.date}</p>
+                      <p className="text-sm">{req.reason}</p>
+                      {req.reviewNote && <p className="text-xs text-muted-foreground italic">Note: {req.reviewNote}</p>}
+                    </div>
+                    {req.status === "pending" && (
+                      <div className="flex gap-2 shrink-0">
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700"
+                          onClick={() => { setOvertimeModal({ open: true, id: req._id, action: "approved" }); setOvertimeReviewNote(""); }}>
+                          <CheckCircle className="mr-1.5 h-4 w-4" /> Approve
+                        </Button>
+                        <Button size="sm" variant="destructive"
+                          onClick={() => { setOvertimeModal({ open: true, id: req._id, action: "rejected" }); setOvertimeReviewNote(""); }}>
+                          <XCircle className="mr-1.5 h-4 w-4" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* ── Assign Shift Modal ────────────────────────────────────────────────── */}
@@ -1112,6 +1390,29 @@ const AdminAttendancePage = () => {
             placeholder="Add a note for the staff member..."
             value={leaveReviewNote}
             onChange={e => setLeaveReviewNote(e.target.value)}
+            rows={3}
+          />
+        </div>
+      </AttendanceModal>
+
+      {/* ── Overtime Review Modal ────────────────────────────────────────── */}
+      <AttendanceModal
+        open={!!overtimeModal?.open}
+        title={overtimeModal?.action === "approved" ? "Approve Overtime Request" : "Reject Overtime Request"}
+        description={overtimeModal?.action === "approved" ? "The staff member will be notified that their overtime has been approved." : "The staff member will be notified that their overtime request was rejected."}
+        confirmLabel={overtimeModal?.action === "approved" ? "Approve" : "Reject"}
+        confirmVariant={overtimeModal?.action === "approved" ? "default" : "destructive"}
+        isLoading={overtimeProcessing}
+        onConfirm={handleOvertimeReview}
+        onCancel={() => { setOvertimeModal(null); setOvertimeReviewNote(""); }}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="ot-review-note">Note for Staff (Optional)</Label>
+          <Textarea
+            id="ot-review-note"
+            placeholder="Add a note for the staff member..."
+            value={overtimeReviewNote}
+            onChange={e => setOvertimeReviewNote(e.target.value)}
             rows={3}
           />
         </div>
