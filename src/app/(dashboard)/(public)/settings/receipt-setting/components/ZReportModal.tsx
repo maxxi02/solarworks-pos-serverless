@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { X, FileText, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
 import { ReceiptSettings } from '@/types/receipt';
 import { useSocket } from '@/provider/socket-provider';
@@ -87,7 +88,10 @@ export default function ZReportModal({
   onClose,
   onConfirmClose,
 }: ZReportModalProps) {
-  const { emitPrintZReport, companionStatus } = useSocket();
+  const { emitPrintZReport, companionStatus, isConnected } = useSocket();
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [hasPrinted, setHasPrinted] = useState(false);
+
   const is58mm = settings.receiptWidth === '58mm';
   const zreading = settings.zreading;
 
@@ -95,45 +99,56 @@ export default function ZReportModal({
   const fmtP = (n: number) => `₱${n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 
   // Handle print via companion app
-  const handlePrint = () => {
-    const zReportData = {
-      session: {
-        openedAt: session.openedAt,
-        closedAt: session.closedAt || new Date().toISOString(),
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const zReportData = {
+        // Cashier info at top level so companion app can read it easily
         cashierName: session.cashierName,
         registerName: session.registerName,
-        openingFund: session.openingFund,
-      },
-      summary: {
-        totalSales: summary.totalSales,
-        netSales: summary.netSales,
-        totalDiscounts: summary.totalDiscounts,
-        totalRefunds: summary.totalRefunds,
-        cashSales: summary.cashSales || summary.tenders?.cash || 0,
-        gcashSales: summary.gcashSales || summary.tenders?.gcash || 0,
-        cashInDrawer: summary.cashInDrawer,
-        expectedCash: summary.expectedCash,
-        difference: summary.difference,
-        closeStatus: summary.closeStatus,
-        openingFund: summary.openingFund,
-        cashOuts: summary.cashOuts,
-        transactions: summary.transactions,
-        items: summary.items,
-        actualCash: summary.actualCash,
-        tenders: summary.tenders,
-        discounts: summary.discounts,
-        presentAccumulatedSales: summary.presentAccumulatedSales,
-        previousAccumulatedSales: summary.previousAccumulatedSales,
-      },
-      settings,
-      isXReading: includeXReceipt,
-    };
 
-    if (companionStatus.usb || companionStatus.bt) {
-      emitPrintZReport(zReportData);
-    } else {
-      // Fallback to browser print
-      window.print();
+        session: {
+          openedAt: session.openedAt,
+          closedAt: session.closedAt || new Date().toISOString(),
+          cashierName: session.cashierName,
+          registerName: session.registerName,
+          openingFund: session.openingFund,
+        },
+        summary: {
+          totalSales: summary.totalSales,
+          netSales: summary.netSales,
+          totalDiscounts: summary.totalDiscounts,
+          totalRefunds: summary.totalRefunds,
+          cashSales: summary.cashSales || summary.tenders?.cash || 0,
+          gcashSales: summary.gcashSales || summary.tenders?.gcash || 0,
+          cashInDrawer: summary.cashInDrawer,
+          expectedCash: summary.expectedCash,
+          difference: summary.difference,
+          closeStatus: summary.closeStatus,
+          openingFund: summary.openingFund,
+          cashOuts: summary.cashOuts,
+          transactions: summary.transactions,
+          items: summary.items,
+          actualCash: summary.actualCash,
+          tenders: summary.tenders,
+          discounts: summary.discounts,
+          presentAccumulatedSales: summary.presentAccumulatedSales,
+          previousAccumulatedSales: summary.previousAccumulatedSales,
+        },
+        settings,
+        isXReading: includeXReceipt,
+      };
+
+      if (isConnected && (companionStatus.usb || companionStatus.bt)) {
+        emitPrintZReport(zReportData);
+        setHasPrinted(true);
+      } else {
+        // Fallback: browser print
+        window.print();
+        setHasPrinted(true);
+      }
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -163,7 +178,7 @@ export default function ZReportModal({
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-muted/50 shrink-0">
           <div className="flex items-center gap-2">
             <FileText className={`h-5 w-5 ${statusInfo.color}`} />
-            <h3 className="text-lg font-bold text-foreground">Z-Report</h3>
+            <h3 className="text-lg font-bold text-foreground">{includeXReceipt ? 'X-Report' : 'Z-Report'}</h3>
           </div>
           <button
             onClick={onClose}
@@ -171,6 +186,23 @@ export default function ZReportModal({
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Cashier Info Banner */}
+        <div className="px-5 py-2.5 bg-primary/5 border-b border-primary/10 flex items-center gap-2 shrink-0">
+          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-primary text-xs font-bold">
+              {session.cashierName?.[0]?.toUpperCase() ?? 'C'}
+            </span>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground leading-none">Cashier</p>
+            <p className="text-sm font-semibold text-foreground leading-tight">{session.cashierName}</p>
+          </div>
+          <div className="ml-auto text-right">
+            <p className="text-xs text-muted-foreground leading-none">Register</p>
+            <p className="text-sm font-semibold text-foreground leading-tight">{session.registerName}</p>
+          </div>
         </div>
 
         {/* Content */}
@@ -203,7 +235,9 @@ export default function ZReportModal({
             </div>
 
             {/* Report Title */}
-            <div className="text-center font-black text-base mb-2">Z-READING REPORT</div>
+            <div className="text-center font-black text-base mb-2">
+              {includeXReceipt ? 'X-READING REPORT' : 'Z-READING REPORT'}
+            </div>
 
             {/* Session Info */}
             <div className="mb-2 text-xs space-y-1 font-bold">
@@ -279,7 +313,7 @@ export default function ZReportModal({
                   </div>
 
                   <div className="flex justify-between font-bold mb-1">
-                    <span>VATable Sales:</span>
+                    <span>VATTable Sales:</span>
                     <span>{fmtP(summary.netSales / (1 + zreading.vatPercentage / 100))}</span>
                   </div>
 
@@ -445,9 +479,7 @@ export default function ZReportModal({
 
               {summary.difference !== 0 && (
                 <div className={`flex justify-between font-extrabold ${summary.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  <span>
-                    {summary.difference > 0 ? 'Overage:' : 'Shortage:'}
-                  </span>
+                  <span>{summary.difference > 0 ? 'Overage:' : 'Shortage:'}</span>
                   <span>{fmtP(Math.abs(summary.difference))}</span>
                 </div>
               )}
@@ -525,7 +557,7 @@ export default function ZReportModal({
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Cashier signature line */}
             {zreading?.showCashierSignature && (
               <div className="mt-4 pt-2 border-t border-dashed border-gray-400">
                 <div className="flex justify-between text-xs">
@@ -579,11 +611,22 @@ export default function ZReportModal({
               {onConfirmClose ? 'Back' : 'Close'}
             </button>
 
-            {onConfirmClose && (
+            {onConfirmClose ? (
               <div className="flex-1">
                 <CompanionPrintButton
                   onClick={() => { handlePrint(); onConfirmClose(); }}
+                  isPrinting={isPrinting}
+                  hasPrinted={hasPrinted}
                   label="Print & Close"
+                />
+              </div>
+            ) : (
+              <div className="flex-1">
+                <CompanionPrintButton
+                  onClick={handlePrint}
+                  isPrinting={isPrinting}
+                  hasPrinted={hasPrinted}
+                  label={`Print ${includeXReceipt ? 'X' : 'Z'}-Report`}
                 />
               </div>
             )}

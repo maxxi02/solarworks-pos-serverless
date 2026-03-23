@@ -742,16 +742,16 @@ const AttendancePage = () => {
                     <p className="truncate text-sm font-semibold">{s.name}</p>
                     <p className="truncate text-xs text-muted-foreground capitalize">{s.role}</p>
                     {s.assignedShift ? (
-                       <button
-                         onClick={(e) => { e.stopPropagation(); toast.info(`Assigned Schedule: ${s.assignedShift}\nNotes: ${s.shiftNotes || "None"}`); }}
-                         className="mt-1.5 truncate text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-full px-2 py-0.5 transition-colors duration-200"
-                       >
-                         {s.assignedShift}
-                       </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toast.info(`Assigned Schedule: ${s.assignedShift}\nNotes: ${s.shiftNotes || "None"}`); }}
+                        className="mt-1.5 truncate text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-full px-2 py-0.5 transition-colors duration-200"
+                      >
+                        {s.assignedShift}
+                      </button>
                     ) : (
-                       <span className="mt-1.5 truncate text-xs font-medium text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5">
-                         No Shift
-                       </span>
+                      <span className="mt-1.5 truncate text-xs font-medium text-muted-foreground bg-muted/50 rounded-full px-2 py-0.5">
+                        No Shift
+                      </span>
                     )}
                   </div>
                   <Badge
@@ -769,10 +769,13 @@ const AttendancePage = () => {
         {/* ── Leave Requests Tab ─────────────────────────────────────────────── */}
         <TabsContent value="leave" className="space-y-6">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {leaveRequests.filter(r => r.status === "pending").length} pending
-            </p>
-            <Button size="sm" className="gap-2" onClick={() => setShowLeaveModal(true)}>
+            <div>
+              <p className="text-sm font-medium">Your Leave Requests</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {leaveRequests.filter(r => r.status === "pending").length} pending
+              </p>
+            </div>
+            <Button size="sm" className="gap-2 shadow-sm" onClick={() => setShowLeaveModal(true)}>
               <PlusCircle className="h-4 w-4" /> Request Leave
             </Button>
           </div>
@@ -781,11 +784,16 @@ const AttendancePage = () => {
             <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
           ) : leaveRequests.length === 0 ? (
             <div className="grid place-items-center py-16 text-center">
-              <FileText className="mx-auto mb-5 h-14 w-14 text-muted-foreground/60" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-5">
+                <FileText className="h-8 w-8 text-primary/60" />
+              </div>
               <h3 className="text-lg font-semibold">No leave requests yet</h3>
               <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                Click &quot;Request Leave&quot; to submit a leave request for admin review.
+                Click "Request Leave" to submit a leave request for admin review.
               </p>
+              <Button className="mt-5 gap-2" variant="outline" onClick={() => setShowLeaveModal(true)}>
+                <PlusCircle className="h-4 w-4" /> Request Leave
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -810,58 +818,102 @@ const AttendancePage = () => {
         </TabsContent>
 
         {/* ── Overtime Requests Tab ───────────────────────────────────────────── */}
-        <TabsContent value="overtime" className="space-y-6">
+        <TabsContent value="overtime" className="space-y-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {overtimeRequests.filter(r => r.status === "pending").length} pending
-            </p>
-            <Button size="sm" className="gap-2" onClick={() => setShowOvertimeModal(true)}>
+            <div>
+              <p className="text-sm font-medium">Your Overtime Requests</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {overtimeRequests.filter(r => r.status === "pending").length} pending · {overtimeRequests.filter(r => r.status === "approved").length} approved
+              </p>
+            </div>
+            <Button size="sm" className="gap-2 shadow-sm" onClick={() => setShowOvertimeModal(true)}>
               <PlusCircle className="h-4 w-4" /> Request Overtime
             </Button>
           </div>
 
           {overtimeLoading ? (
-            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+            <div className="grid gap-3">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
           ) : overtimeRequests.length === 0 ? (
             <div className="grid place-items-center py-16 text-center">
-              <Zap className="mx-auto mb-5 h-14 w-14 text-muted-foreground/60" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 mb-5">
+                <Zap className="h-8 w-8 text-amber-500" />
+              </div>
               <h3 className="text-lg font-semibold">No overtime requests yet</h3>
               <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                Click &quot;Request Overtime&quot; to submit a request for admin approval.
+                Submit an overtime request for admin approval. Approved hours are automatically added to your daily tracking.
               </p>
+              <Button className="mt-5 gap-2" onClick={() => setShowOvertimeModal(true)}>
+                <PlusCircle className="h-4 w-4" /> Request Overtime
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
               {overtimeRequests.map(req => {
-                const statusColors: Record<string, string> = {
-                  pending: "bg-yellow-500 hover:bg-yellow-500",
-                  approved: "bg-green-600 hover:bg-green-600",
-                };
+                const isPending = req.status === "pending";
+                const isApproved = req.status === "approved";
+                const isRejected = req.status === "rejected";
+
+                const accentClass = isPending
+                  ? "from-yellow-400 to-amber-500"
+                  : isApproved
+                    ? "from-green-400 to-emerald-600"
+                    : "from-rose-400 to-rose-600";
+
+                const borderClass = isPending
+                  ? "hover:border-amber-500/40"
+                  : isApproved
+                    ? "hover:border-green-500/40"
+                    : "hover:border-rose-500/40";
+
                 return (
-                  <Card key={req._id}>
-                    <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
-                      <div className="flex-1 min-w-0 space-y-1">
+                  <div
+                    key={req._id}
+                    className={`group relative overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition-all duration-200 ${borderClass}`}
+                  >
+                    {/* Left accent bar */}
+                    <div className={`absolute left-0 top-0 h-full w-1 bg-gradient-to-b ${accentClass}`} />
+
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 pl-5">
+                      {/* Info section */}
+                      <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-sm">{req.date}</p>
-                          <Badge className={`text-xs ${
-                            req.status === "pending" ? statusColors.pending
-                            : req.status === "approved" ? statusColors.approved
-                            : ""
-                          }`}
-                            variant={req.status === "rejected" ? "destructive" : "default"}
-                          >
-                            {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
-                          </Badge>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
+                          <p className="font-semibold text-sm">
+                            {new Date(req.date + "T00:00:00").toLocaleDateString("en-US", {
+                              weekday: "long", month: "long", day: "numeric", year: "numeric",
+                            })}
+                          </p>
+                          {/* Status badge */}
+                          {isPending && <Badge className="bg-yellow-500 hover:bg-yellow-500 text-[10px] px-2 py-0.5">Pending</Badge>}
+                          {isApproved && (
+                            <Badge className="bg-green-600 hover:bg-green-600 text-[10px] px-2 py-0.5 gap-1">
+                              <CheckCircle2 className="h-2.5 w-2.5" /> Approved
+                            </Badge>
+                          )}
+                          {isRejected && <Badge variant="destructive" className="text-[10px] px-2 py-0.5">Rejected</Badge>}
+
+                          {/* Hours pill */}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-600">
                             <Timer className="h-3 w-3" />
-                            {req.requestedHours}h requested
+                            {req.requestedHours}h
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground">{req.reason}</p>
-                        {req.reviewNote && <p className="text-xs text-muted-foreground italic">Admin note: {req.reviewNote}</p>}
+
+                        <p className="text-sm text-muted-foreground leading-snug line-clamp-2">{req.reason}</p>
+
+                        {isApproved && (
+                          <p className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            {req.requestedHours}h added to your daily hour tracking
+                          </p>
+                        )}
+                        {req.reviewNote && (
+                          <p className="text-xs text-muted-foreground italic bg-muted/50 rounded-md px-2.5 py-1.5 mt-1">
+                            💬 Admin: {req.reviewNote}
+                          </p>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -920,16 +972,14 @@ const AttendancePage = () => {
                   <button
                     key={s._id}
                     onClick={() => setSelectedSchedule(s)}
-                    className={`w-full flex items-center gap-4 rounded-xl border px-4 py-3.5 text-left transition-all hover:shadow-sm hover:-translate-y-px active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary ${
-                      isToday
+                    className={`w-full flex items-center gap-4 rounded-xl border px-4 py-3.5 text-left transition-all hover:shadow-sm hover:-translate-y-px active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-primary ${isToday
                         ? "border-primary/40 bg-primary/5 ring-1 ring-primary/20"
                         : "bg-card border-border hover:border-primary/30"
-                    }`}
+                      }`}
                   >
                     {/* Date pill */}
-                    <div className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg text-center ${
-                      isToday ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                    }`}>
+                    <div className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg text-center ${isToday ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}>
                       <span className="text-[10px] font-semibold uppercase tracking-wider leading-none">
                         {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
                       </span>
@@ -1048,7 +1098,7 @@ const AttendancePage = () => {
       <AttendanceModal
         open={showOvertimeModal}
         title="Request Overtime"
-        description="Submit an overtime request for admin approval"
+        description="Submit an overtime request for admin approval. Hours will be added to your daily tracking once approved."
         confirmLabel="Submit Request"
         isLoading={overtimeSubmitting}
         onConfirm={handleSubmitOvertime}
@@ -1091,6 +1141,10 @@ const AttendancePage = () => {
               onChange={e => setOvertimeForm(f => ({ ...f, reason: e.target.value }))}
               rows={3}
             />
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            <Zap className="h-3.5 w-3.5 shrink-0" />
+            Approved overtime hours are automatically saved to your daily attendance tracking.
           </div>
         </div>
       </AttendanceModal>

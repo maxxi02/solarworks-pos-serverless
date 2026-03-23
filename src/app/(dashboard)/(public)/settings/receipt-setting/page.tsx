@@ -67,6 +67,7 @@ export default function ReceiptSettingsPage() {
 
   const [showPreview, setShowPreview] = useState(false);
   const [showZReportPreview, setShowZReportPreview] = useState(false);
+  const [showXReportPreview, setShowXReportPreview] = useState(false);
   const [previewSession] = useState(SAMPLE_SESSION);
   const [previewSummary] = useState(SAMPLE_SUMMARY);
   const [activeTab, setActiveTab] = useState<'general' | 'sections' | 'printers' | 'zreading'>('general');
@@ -165,10 +166,16 @@ export default function ReceiptSettingsPage() {
     setShowZReportPreview(false);
   };
 
+  // Handle X-Report preview close
+  const handleXReportClose = () => {
+    setShowXReportPreview(false);
+  };
+
   // Handle Z-Report confirm close (for preview only)
   const handleZReportConfirmClose = () => {
-    toast.success('Z-Report would be finalized here');
+    toast.success('Report would be finalized here');
     setShowZReportPreview(false);
+    setShowXReportPreview(false);
   };
 
   // Update zreading settings
@@ -413,6 +420,13 @@ export default function ReceiptSettingsPage() {
               Receipt Preview
             </button>
             <button
+              onClick={() => setShowXReportPreview(true)}
+              className="flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-500 hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              X-Report Preview
+            </button>
+            <button
               onClick={() => setShowZReportPreview(true)}
               className="flex items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-orange-600 dark:text-orange-500 hover:bg-accent hover:text-accent-foreground transition-colors"
             >
@@ -464,7 +478,7 @@ export default function ReceiptSettingsPage() {
                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
-              ZReading
+              X / Z Reading
             </button>
           </div>
 
@@ -475,18 +489,27 @@ export default function ReceiptSettingsPage() {
                 <Calendar className="h-5 w-5 text-white" />
               </div>
               <div className="flex-1 text-left">
-                <h3 className="font-bold text-orange-800 dark:text-orange-300">End of Day Z-Report</h3>
+                <h3 className="font-bold text-orange-800 dark:text-orange-300">X / Z Reports Overview</h3>
                 <p className="text-sm text-orange-600 dark:text-orange-400">
-                  Preview how your daily closing report will look with current settings
+                  Preview how your mid-shift and end of day closing reports will look
                 </p>
               </div>
-              <button
-                onClick={() => setShowZReportPreview(true)}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                View Sample
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowXReportPreview(true)}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  X-Report
+                </button>
+                <button
+                  onClick={() => setShowZReportPreview(true)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  Z-Report
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1490,6 +1513,14 @@ export default function ReceiptSettingsPage() {
                 </button>
 
                 <button
+                  onClick={() => setShowXReportPreview(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-300 dark:border-blue-700 px-4 py-3 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                >
+                  <FileText className="h-4 w-4" />
+                  Preview X-Report
+                </button>
+
+                <button
                   onClick={() => setShowZReportPreview(true)}
                   className="w-full flex items-center justify-center gap-2 rounded-lg border border-orange-300 dark:border-orange-700 px-4 py-3 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                 >
@@ -1518,6 +1549,18 @@ export default function ReceiptSettingsPage() {
           summary={SAMPLE_SUMMARY}
           settings={settings}
           onClose={handleZReportClose}
+          onConfirmClose={handleZReportConfirmClose}
+        />
+      )}
+
+      {/* X-Report Preview Modal */}
+      {showXReportPreview && (
+        <ZReportModal
+          session={SAMPLE_SESSION}
+          summary={SAMPLE_SUMMARY}
+          settings={settings}
+          includeXReceipt={true}
+          onClose={handleXReportClose}
           onConfirmClose={handleZReportConfirmClose}
         />
       )}

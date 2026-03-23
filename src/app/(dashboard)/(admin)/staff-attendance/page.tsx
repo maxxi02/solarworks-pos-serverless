@@ -66,6 +66,7 @@ import {
   Bar,
   BarChart,
 } from "recharts";
+import { LeaveCalendar } from "@/components/attendance/LeaveCalendar";
 import {
   exportToCSV,
   generateFilename,
@@ -140,7 +141,7 @@ const AdminAttendancePage = () => {
   const [dailyStaff, setDailyStaff] = useState<DailyStaffStatus[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null);
   const [dailyLoading, setDailyLoading] = useState(true);
-  const [dailyFilter, setDailyFilter] = useState<"all" | "present" | "absent" | "late">("all");
+  const [dailyFilter, setDailyFilter] = useState<"all" | "present" | "absent">("all");
 
   // ── Shared filters ─────────────────────────────────────────────────────────
   const [selectedStaff, setSelectedStaff] = useState<string>("all");
@@ -178,7 +179,8 @@ const AdminAttendancePage = () => {
   const [deleteShiftId, setDeleteShiftId] = useState<string | null>(null);
 
   // ── Overtime Requests tab ──────────────────────────────────────────────────
-  const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]);
+  const [overtimeRequests, setOvertimeRequests] = useState<OvertimeRequest[]>([]); // pending only
+  const [allOvertimeRequests, setAllOvertimeRequests] = useState<OvertimeRequest[]>([]); // all (for dashboard)
   const [overtimeLoading, setOvertimeLoading] = useState(false);
   const [overtimeModal, setOvertimeModal] = useState<{ open: boolean; id: string; action: "approved" | "rejected" } | null>(null);
   const [overtimeReviewNote, setOvertimeReviewNote] = useState("");
@@ -220,6 +222,7 @@ const AdminAttendancePage = () => {
   const fetchOvertimeRequests = async () => {
     setOvertimeLoading(true);
     try {
+      // Fetch pending-only for the approval tab
       const res = await fetch("/api/attendance/admin/overtime");
       const data = await res.json();
       if (data.success) setOvertimeRequests(data.records || []);
@@ -227,10 +230,19 @@ const AdminAttendancePage = () => {
     finally { setOvertimeLoading(false); }
   };
 
+  const fetchAllOvertimeRequests = async () => {
+    try {
+      // Fetch all (pending + approved) for the dashboard hours tracking table
+      const res = await fetch("/api/attendance/admin/overtime?all=true");
+      const data = await res.json();
+      if (data.success) setAllOvertimeRequests(data.records || []);
+    } catch { /* silently fail */ }
+  };
+
   useEffect(() => {
     if (activeTab === "overtime") fetchOvertimeRequests();
-    // Also load overtime requests when dashboard is open (needed for Hours Tracking summary)
-    if (activeTab === "dashboard") fetchOvertimeRequests();
+    // For dashboard: load all OT records to show approved hours in daily tracking
+    if (activeTab === "dashboard") fetchAllOvertimeRequests();
   }, [activeTab]);
 
   const handleOvertimeReview = async () => {
@@ -244,8 +256,10 @@ const AdminAttendancePage = () => {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(`Overtime request ${overtimeModal.action}`);
-        setOvertimeRequests(prev => prev.map(r => r._id === overtimeModal.id ? { ...r, status: overtimeModal.action } : r));
+        const actionLabel = overtimeModal.action === "approved" ? "approved ✓" : "rejected";
+        toast.success(`Overtime request ${actionLabel}`);
+        // Remove from list immediately — the tab is a "pending only" action queue
+        setOvertimeRequests(prev => prev.filter(r => r._id !== overtimeModal.id));
         setOvertimeModal(null);
         setOvertimeReviewNote("");
       } else { toast.error(data.message); }
@@ -281,7 +295,8 @@ const AdminAttendancePage = () => {
     try {
       const res = await fetch("/api/attendance/admin/leave");
       const data = await res.json();
-      if (data.success) setLeaveRequests(data.records || []);
+      // Filter out rejected leaves so they disappear from the admin view
+      if (data.success) setLeaveRequests((data.records || []).filter((r: any) => r.status !== "rejected"));
     } catch { toast.error("Failed to load leave requests"); }
     finally { setLeaveLoading(false); }
   };
@@ -298,7 +313,12 @@ const AdminAttendancePage = () => {
       const data = await res.json();
       if (data.success) {
         toast.success(`Leave request ${leaveModal.action}`);
-        setLeaveRequests(prev => prev.map(r => r._id === leaveModal.id ? { ...r, status: leaveModal.action } : r));
+        if (leaveModal.action === "rejected") {
+          // Immediately remove rejected leave requests from view
+          setLeaveRequests(prev => prev.filter(r => r._id !== leaveModal.id));
+        } else {
+          setLeaveRequests(prev => prev.map(r => r._id === leaveModal.id ? { ...r, status: leaveModal.action } : r));
+        }
         setLeaveModal(null);
         setLeaveReviewNote("");
       } else { toast.error(data.message); }
@@ -814,11 +834,9 @@ const AdminAttendancePage = () => {
                       <tbody className="divide-y divide-border">
                         {dailyStaff.map(s => {
                           const statusColor =
-                            s.status === "present"
+                            s.status === "present" || s.status === "late"
                               ? { badge: "bg-green-600 hover:bg-green-600", dot: "bg-green-500" }
-                              : s.status === "late"
-                                ? { badge: "bg-amber-500 hover:bg-amber-500", dot: "bg-amber-500" }
-                                : { badge: "bg-rose-600 hover:bg-rose-600", dot: "bg-gray-300" };
+                              : { badge: "bg-rose-600 hover:bg-rose-600", dot: "bg-gray-300" };
 
                           return (
                             <tr
@@ -850,7 +868,7 @@ const AdminAttendancePage = () => {
                               </td>
                               <td className="px-4 py-3">
                                 <Badge className={`text-[10px] px-2 py-0.5 ${statusColor.badge}`}>
-                                  {s.status === "present" ? "Present" : s.status === "late" ? "Late" : "Absent"}
+                                  {(s.status === "present" || s.status === "late") ? "Present" : "Absent"}
                                 </Badge>
                                 {s.isCurrentlyIn && (
                                   <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-blue-400 text-blue-600 ml-2">
@@ -934,7 +952,7 @@ const AdminAttendancePage = () => {
                 }
                 // Build a per-date+userId map for approved OT requests
                 const approvedOtByDateUser = new Map<string, number>();
-                overtimeRequests.filter(r => r.status === "approved").forEach(r => {
+                allOvertimeRequests.filter(r => r.status === "approved").forEach(r => {
                   const key = `${r.date}__${r.userId}`;
                   approvedOtByDateUser.set(key, (approvedOtByDateUser.get(key) ?? 0) + r.requestedHours);
                 });
@@ -1217,91 +1235,114 @@ const AdminAttendancePage = () => {
           ) : leaveRequests.length === 0 ? (
             <EmptyState icon={FileText} title="No leave requests" description="No staff have submitted leave requests yet" />
           ) : (
-            <div className="space-y-3">
-              {leaveRequests.map(req => (
-                <Card key={req._id}>
-                  <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold">{req.userName}</p>
-                        {req.status === "pending" && <Badge className="bg-yellow-500 hover:bg-yellow-500">Pending</Badge>}
-                        {req.status === "approved" && <Badge className="bg-green-600 hover:bg-green-600">Approved</Badge>}
-                        {req.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {req.startDate} {req.startDate !== req.endDate ? `→ ${req.endDate}` : ""}
-                      </p>
-                      <p className="text-sm">{req.reason}</p>
-                      {req.reviewNote && <p className="text-xs text-muted-foreground italic">Note: {req.reviewNote}</p>}
-                    </div>
-                    {req.status === "pending" && (
-                      <div className="flex gap-2 shrink-0">
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700"
-                          onClick={() => { setLeaveModal({ open: true, id: req._id, action: "approved" }); setLeaveReviewNote(""); }}>
-                          <CheckCircle className="mr-1.5 h-4 w-4" /> Approve
-                        </Button>
-                        <Button size="sm" variant="destructive"
-                          onClick={() => { setLeaveModal({ open: true, id: req._id, action: "rejected" }); setLeaveReviewNote(""); }}>
-                          <XCircle className="mr-1.5 h-4 w-4" /> Reject
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <LeaveCalendar 
+              requests={leaveRequests} 
+              isAdmin={true} 
+              onApprove={(id) => { 
+                setLeaveModal({ open: true, id, action: "approved" }); 
+                setLeaveReviewNote(""); 
+              }} 
+              onReject={(id) => { 
+                setLeaveModal({ open: true, id, action: "rejected" }); 
+                setLeaveReviewNote(""); 
+              }} 
+            />
           )}
         </TabsContent>
 
         {/* ── Overtime Requests Tab ───────────────────────────────────────────── */}
         <TabsContent value="overtime" className="space-y-6">
+          {/* Header */}
           <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {overtimeRequests.filter(r => r.status === "pending").length} pending review
+            <div>
+              <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-500" />
+                Pending Overtime Requests
+              </h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Approve to automatically save hours to daily tracking · Reject to decline
+              </p>
             </div>
             <Button variant="outline" size="sm" onClick={fetchOvertimeRequests} disabled={overtimeLoading}>
               <RefreshCw className={`mr-2 h-4 w-4 ${overtimeLoading ? "animate-spin" : ""}`} /> Refresh
             </Button>
           </div>
 
+          {/* Pending count banner */}
+          {overtimeRequests.length > 0 && (
+            <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/20">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                  {overtimeRequests.length} request{overtimeRequests.length !== 1 ? "s" : ""} awaiting your review
+                </p>
+                <p className="text-xs text-muted-foreground">Approved requests will be automatically added to the staff's daily hour tracking.</p>
+              </div>
+            </div>
+          )}
+
           {overtimeLoading ? (
-            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+            <div className="grid gap-4">{Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
           ) : overtimeRequests.length === 0 ? (
-            <EmptyState icon={Zap} title="No overtime requests" description="No staff have submitted overtime requests yet" />
+            <div className="grid place-items-center py-20 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500/10 mb-5">
+                <CheckCircle className="h-8 w-8 text-green-500" />
+              </div>
+              <h3 className="text-lg font-semibold">All caught up!</h3>
+              <p className="mt-2 text-sm text-muted-foreground max-w-md">No pending overtime requests. All submissions have been reviewed.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {overtimeRequests.map(req => (
-                <Card key={req._id}>
-                  <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4 py-4">
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold">{req.userName}</p>
-                        {req.status === "pending" && <Badge className="bg-yellow-500 hover:bg-yellow-500">Pending</Badge>}
-                        {req.status === "approved" && <Badge className="bg-green-600 hover:bg-green-600">Approved</Badge>}
-                        {req.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-600">
-                          <Timer className="h-3 w-3" />
-                          {req.requestedHours}h requested
-                        </span>
+                <div key={req._id} className="group relative overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition-all duration-200 hover:border-amber-500/40">
+                  {/* Accent bar */}
+                  <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-amber-400 to-amber-600 rounded-l-xl" />
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 pl-5">
+                    {/* Avatar + Info */}
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-sm font-bold text-amber-700 dark:text-amber-400">
+                        {req.userName.charAt(0).toUpperCase()}
                       </div>
-                      <p className="text-sm text-muted-foreground">{req.date}</p>
-                      <p className="text-sm">{req.reason}</p>
-                      {req.reviewNote && <p className="text-xs text-muted-foreground italic">Note: {req.reviewNote}</p>}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm">{req.userName}</p>
+                          <Badge className="bg-yellow-500 hover:bg-yellow-500 text-[10px] px-2 py-0.5">Pending</Badge>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-bold text-amber-600 border border-amber-500/20">
+                            <Timer className="h-3 w-3" />
+                            {req.requestedHours}h overtime
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <CalendarDays className="h-3 w-3" />
+                          {new Date(req.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                        </div>
+                        <p className="text-sm text-foreground/80 leading-snug">{req.reason}</p>
+                      </div>
                     </div>
-                    {req.status === "pending" && (
-                      <div className="flex gap-2 shrink-0">
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700"
-                          onClick={() => { setOvertimeModal({ open: true, id: req._id, action: "approved" }); setOvertimeReviewNote(""); }}>
-                          <CheckCircle className="mr-1.5 h-4 w-4" /> Approve
-                        </Button>
-                        <Button size="sm" variant="destructive"
-                          onClick={() => { setOvertimeModal({ open: true, id: req._id, action: "rejected" }); setOvertimeReviewNote(""); }}>
-                          <XCircle className="mr-1.5 h-4 w-4" /> Reject
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+
+                    {/* Actions */}
+                    <div className="flex gap-2 shrink-0 sm:ml-2">
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 gap-1.5 shadow-sm"
+                        onClick={() => { setOvertimeModal({ open: true, id: req._id, action: "approved" }); setOvertimeReviewNote(""); }}
+                      >
+                        <CheckCircle className="h-4 w-4" /> Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="gap-1.5"
+                        onClick={() => { setOvertimeModal({ open: true, id: req._id, action: "rejected" }); setOvertimeReviewNote(""); }}
+                      >
+                        <XCircle className="h-4 w-4" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           )}
