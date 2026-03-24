@@ -102,45 +102,43 @@ export default function ZReportModal({
   const handlePrint = async () => {
     setIsPrinting(true);
     try {
-      const zReportData = {
-        // Cashier info at top level so companion app can read it easily
+      const baseReportData = {
+        businessName: settings.businessName || "RENDEZVOUS CAFE",
+        locationAddress: settings.locationAddress || "123 Coffee St.",
+        taxPin: settings.taxPin || "123-456-789-000",
+        today: new Date().toLocaleDateString(),
+        timeNow: new Date().toLocaleTimeString(),
         cashierName: session.cashierName,
         registerName: session.registerName,
-
-        session: {
-          openedAt: session.openedAt,
-          closedAt: session.closedAt || new Date().toISOString(),
-          cashierName: session.cashierName,
-          registerName: session.registerName,
-          openingFund: session.openingFund,
-        },
-        summary: {
-          totalSales: summary.totalSales,
-          netSales: summary.netSales,
-          totalDiscounts: summary.totalDiscounts,
-          totalRefunds: summary.totalRefunds,
-          cashSales: summary.cashSales || summary.tenders?.cash || 0,
-          gcashSales: summary.gcashSales || summary.tenders?.gcash || 0,
-          cashInDrawer: summary.cashInDrawer,
-          expectedCash: summary.expectedCash,
-          difference: summary.difference,
-          closeStatus: summary.closeStatus,
-          openingFund: summary.openingFund,
-          cashOuts: summary.cashOuts,
-          transactions: summary.transactions,
-          items: summary.items,
-          actualCash: summary.actualCash,
-          tenders: summary.tenders,
-          discounts: summary.discounts,
-          presentAccumulatedSales: summary.presentAccumulatedSales,
-          previousAccumulatedSales: summary.previousAccumulatedSales,
-        },
-        settings,
-        isXReading: includeXReceipt,
+        openedAt: session.openedAt,
+        closedAt: session.closedAt || new Date().toISOString(),
+        totalSales: summary.totalSales,
+        totalDiscounts: summary.totalDiscounts,
+        totalRefunds: summary.totalRefunds || 0,
+        totalVoids: summary.cashOuts || 0, // Using cashOuts as voids for brevity
+        netSales: summary.netSales,
+        openingFund: summary.openingFund,
+        cashEarned: summary.cashSales || summary.tenders?.cash || 0,
+        expectedCash: summary.expectedCash,
+        actualCash: summary.actualCash,
+        difference: summary.difference,
+        tenders: summary.tenders,
+        discounts: summary.discounts,
+        transactions: summary.transactions,
+        items: summary.items,
+        receiptMessage: settings.receiptMessage || "Thank you!",
+        disclaimer: settings.disclaimer || "This is an official receipt",
+        showCashierSignature: zreading.showCashierSignature,
       };
 
       if (isConnected && (companionStatus.usb || companionStatus.bt)) {
-        emitPrintZReport(zReportData);
+        if (includeXReceipt) {
+          emitPrintZReport({ ...baseReportData, isXReading: true });
+          // A short delay helps avoid jamming the thermal printer buffer
+          await new Promise((resume) => setTimeout(resume, 1500));
+        }
+        
+        emitPrintZReport({ ...baseReportData, isXReading: false });
         setHasPrinted(true);
       } else {
         // Fallback: browser print

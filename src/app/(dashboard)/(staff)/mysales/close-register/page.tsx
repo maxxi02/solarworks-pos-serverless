@@ -226,47 +226,8 @@ export default function CloseRegisterPage() {
 
   const handleZReportClose  = () => { setShowZReport(false); router.replace('/mysales/cash-management'); };
   const handleConfirmClose  = async () => {
-    // Print Z-Report via companion app
-    if (isConnected && settings) {
-      setIsPrinting(true);
-      try {
-        const receiptInput = {
-          orderNumber: `Z-${new Date().getTime()}`,
-          customerName: 'Z-Report',
-          cashier: summary.cashierName,
-          timestamp: new Date(),
-          orderType: 'takeaway' as 'dine-in' | 'takeaway',
-          tableNumber: undefined,
-          orderNote: undefined,
-          items: summaryData.items ? Array(summaryData.items).fill({ name: 'Items Sold', price: 0, quantity: 1, hasDiscount: false, menuType: 'food' }) : [],
-          subtotal: summaryData.totalSales,
-          discountTotal: summaryData.totalDiscounts,
-          total: summaryData.netSales,
-          paymentMethod: 'cash' as 'cash' | 'gcash' | 'split',
-          splitPayment: undefined,
-          amountPaid: summaryData.actualCash,
-          change: summaryData.difference,
-          seniorPwdIds: undefined,
-          businessName: settings.businessName || 'RENDEZVOUS CAFE',
-          businessAddress: settings.locationAddress,
-          businessPhone: settings.phoneNumber,
-          receiptMessage: settings.receiptMessage,
-        };
-
-        const results = await printBoth(receiptInput);
-        if (results.receipt || results.kitchen) {
-          toast.success('Z-Report printed');
-        } else {
-          toast.warning('Printer not connected');
-        }
-      } catch (error) {
-        console.error('Print error:', error);
-        toast.error('Failed to print Z-Report');
-      } finally {
-        setIsPrinting(false);
-      }
-    }
-
+    // Printing is already handled natively by ZReportModal!
+    // No need to call printBoth (which sends the wrong format anyway).
     setShowZReport(false);
     toast.success('Register closed successfully!');
     router.replace('/mysales/cash-management');
