@@ -123,7 +123,15 @@ export default function ZReportModal({
         actualCash: summary.actualCash,
         difference: summary.difference,
         tenders: summary.tenders,
-        discounts: summary.discounts,
+        discounts: summary.discounts
+          ? [
+              { key: 'sc', label: 'SC', value: summary.discounts.sc || 0 },
+              { key: 'pwd', label: 'PWD', value: summary.discounts.pwd || 0 },
+              { key: 'naac', label: 'NAAC', value: summary.discounts.naac || 0 },
+              { key: 'solo_parent', label: 'Solo Parent', value: summary.discounts.solo_parent || 0 },
+              { key: 'other', label: 'Other', value: summary.discounts.other || 0 },
+            ].filter(d => d.value > 0)
+          : [],
         transactions: summary.transactions,
         items: summary.items,
         receiptMessage: settings.receiptMessage || "Thank you!",
