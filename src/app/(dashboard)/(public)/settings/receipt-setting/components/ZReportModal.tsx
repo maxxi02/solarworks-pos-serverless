@@ -176,7 +176,7 @@ export default function ZReportModal({
         <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-muted/50 shrink-0">
           <div className="flex items-center gap-2">
             <FileText className={`h-5 w-5 ${statusInfo.color}`} />
-            <h3 className="text-lg font-bold text-foreground">{includeXReceipt ? 'X-Report' : 'Z-Report'}</h3>
+            <h3 className="text-lg font-bold text-foreground">{includeXReceipt ? 'X + Z Report' : 'Z-Report'}</h3>
           </div>
           <button
             onClick={onClose}
@@ -234,7 +234,7 @@ export default function ZReportModal({
 
             {/* Report Title */}
             <div className="text-center font-black text-base mb-2">
-              {includeXReceipt ? 'X-READING REPORT' : 'Z-READING REPORT'}
+              Z-READING REPORT
             </div>
 
             {/* Session Info */}
@@ -612,10 +612,10 @@ export default function ZReportModal({
             {onConfirmClose ? (
               <div className="flex-1">
                 <CompanionPrintButton
-                  onClick={() => { handlePrint(); onConfirmClose(); }}
+                  onClick={async () => { await handlePrint(); onConfirmClose(); }}
                   isPrinting={isPrinting}
                   hasPrinted={hasPrinted}
-                  label="Print & Close"
+                  label={includeXReceipt ? 'Print X + Z & Close' : 'Print Z & Close'}
                 />
               </div>
             ) : (
@@ -624,7 +624,7 @@ export default function ZReportModal({
                   onClick={handlePrint}
                   isPrinting={isPrinting}
                   hasPrinted={hasPrinted}
-                  label={`Print ${includeXReceipt ? 'X' : 'Z'}-Report`}
+                  label={includeXReceipt ? 'Print X + Z Reports' : 'Print Z-Report'}
                 />
               </div>
             )}
