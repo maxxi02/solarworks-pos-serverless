@@ -134,6 +134,8 @@ export default function ZReportModal({
           : [],
         transactions: summary.transactions,
         items: summary.items,
+        presentAccumulatedSales: summary.presentAccumulatedSales,
+        previousAccumulatedSales: summary.previousAccumulatedSales,
         receiptMessage: settings.receiptMessage || "Thank you!",
         disclaimer: settings.disclaimer || "This is an official receipt",
         showCashierSignature: zreading.showCashierSignature,
