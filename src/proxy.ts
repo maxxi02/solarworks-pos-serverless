@@ -82,6 +82,7 @@ export async function proxy(request: NextRequest) {
       "/staff",
       "/staff-management",
       "/reports",
+      "/settings/customer-portal-settings",
       "/settings/store-setting",
       "/settings/receipt-setting",
       "/settings/payments-methods",

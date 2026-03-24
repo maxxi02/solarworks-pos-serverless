@@ -47,6 +47,7 @@ export const PATHS = {
 
     SETTINGS_RECEIPT: "/settings/receipt-setting",
     SETTINGS_PROFILE: "/settings/profile",
+    SETTINGS_CUSTOMER_PORTAL: "/settings/customer-portal-settings",
   },
 
   STAFF_NAV: {
@@ -142,6 +143,10 @@ export const adminNavigation: NavItem[] = [
     items: [
       { title: "Receipt Settings", url: PATHS.ADMIN.SETTINGS_RECEIPT },
       { title: "Profile", url: PATHS.ADMIN.SETTINGS_PROFILE },
+      {
+        title: "Customer Portal Settings",
+        url: PATHS.ADMIN.SETTINGS_CUSTOMER_PORTAL,
+      },
     ],
   },
 ];
