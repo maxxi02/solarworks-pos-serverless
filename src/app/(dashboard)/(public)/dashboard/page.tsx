@@ -6,17 +6,9 @@ import {
   Package,
   Clock,
   RefreshCw,
-  Utensils,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  fetchInventory,
-  getLowStockAlerts,
-  getCriticalStockAlerts,
-} from "@/lib/inventoryService";
-import { useInventorySocket } from "@/hooks/useInventorySocket";
 import { useSocket } from "@/provider/socket-provider";
 import { formatCurrency, formatDateTime } from "@/lib/format-utils";
 import { AICompanion } from "@/components/ai-companion";
@@ -29,11 +21,10 @@ import { RecentReceipts } from "@/components/dashboard/RecentReceipts";
 import { InventoryAlerts } from "@/components/dashboard/InventoryAlerts";
 import { AttendanceApprovals } from "@/components/dashboard/AttendanceApprovals";
 import { OrderQueue } from "@/components/dashboard/OrderQueue";
+import { AttendanceCard } from "@/components/dashboard/AttendanceCard";
 import { authClient } from "@/lib/auth-client";
 
-// Types
 import type { LowStockAlert } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PaymentMethod {
   _id: string;
@@ -67,7 +58,6 @@ export default function AdminDashboard() {
   const [invLoading, setInvLoading] = useState(true);
   const [receiptsLoading, setReceiptsLoading] = useState(true);
   const [pendingLoading, setPendingLoading] = useState(true);
-  const [attendanceLoading, setAttendanceLoading] = useState(true);
 
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +114,6 @@ export default function AdminDashboard() {
 
     const refreshAttendance = () => {
       loadPendingData();
-      loadAttendanceHistory();
     };
 
     onSalesUpdated(refreshSales);
@@ -226,25 +215,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Attendance History for Staff
-  const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
-  async function loadAttendanceHistory() {
-    if (isAdmin) {
-      setAttendanceLoading(false);
-      return;
-    }
-    setAttendanceLoading(true);
-    try {
-      const res = await fetch("/api/attendance/history?limit=5");
-      const d = await res.json();
-      if (d.success) setAttendanceHistory(d.history || []);
-    } catch (err) {
-      console.error("Attendance history error:", err);
-    } finally {
-      setAttendanceLoading(false);
-    }
-  }
-
   async function loadRecentReceipts() {
     setReceiptsLoading(true);
     try {
@@ -289,7 +259,6 @@ export default function AdminDashboard() {
     loadInventoryData();
     loadRecentReceipts();
     loadPendingData();
-    loadAttendanceHistory();
     setLastUpdated(new Date());
   }
 
@@ -325,8 +294,7 @@ export default function AdminDashboard() {
     salesLoading ||
     invLoading ||
     receiptsLoading ||
-    pendingLoading ||
-    attendanceLoading;
+    pendingLoading;
 
   const uniqueLowStockItems = [...lowStock, ...criticalStock].filter(
     (item, index, self) =>
@@ -366,8 +334,8 @@ export default function AdminDashboard() {
         )}
 
         {/* Top-level Stats */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-          {isAdmin && (
+        {isAdmin ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
             <StatCard
               title="Today's Total Sales"
               value={formatCurrency(sales.today)}
@@ -375,144 +343,99 @@ export default function AdminDashboard() {
               isCurrency
               isLoading={salesLoading}
             />
-          )}
-          <StatCard
-            title={isAdmin ? "Transactions" : "Your Transactions"}
-            value={sales.transactions.toString()}
-            {...calculateTrend(sales.transactions, sales.transactions * 0.95)}
-            icon={<ShoppingCart className="h-5 w-5 text-muted-foreground" />}
-            isLoading={salesLoading}
-          />
-          {isAdmin ? (
-            <>
-              <StatCard
-                title="Active Low Stocks"
-                value={(invStats.critical + invStats.low).toString()}
-                change={`${invStats.critical} critical items`}
-                trend={invStats.critical > 0 ? "attention" : "stable"}
-                icon={<Package className="h-5 w-5 text-muted-foreground" />}
-                isLoading={invLoading}
-              />
-              <StatCard
-                title="Staff Approvals"
-                value={pending.length.toString()}
-                change={`${pending.length} pending requests`}
-                trend={pending.length > 0 ? "attention" : "stable"}
-                icon={<Clock className="h-5 w-5 text-muted-foreground" />}
-                isLoading={pendingLoading}
-              />
-            </>
-          ) : (
-            <>
-              <StatCard
-                title="Active Orders"
-                value="View Queue"
-                change="Incoming orders"
-                trend="stable"
-                icon={<Utensils className="h-5 w-5 text-muted-foreground" />}
-                isLoading={false}
-              />
-              <StatCard
-                title="Your Attendance"
-                value={attendanceHistory[0]?.status || "No record"}
-                change={
-                  attendanceHistory[0]
-                    ? `Last: ${formatDateTime(attendanceHistory[0].date)}`
-                    : "Check history below"
-                }
-                trend="stable"
-                icon={<Clock className="h-5 w-5 text-muted-foreground" />}
-                isLoading={attendanceLoading}
-              />
-            </>
-          )}
-        </div>
-
-        {/* Charts & Queue Section */}
-        <div className="grid lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2">
-            <SalesTrendChart
-              data={sales.daily}
-              period={period}
-              onPeriodChange={setPeriod}
+            <StatCard
+              title="Transactions"
+              value={sales.transactions.toString()}
+              {...calculateTrend(sales.transactions, sales.transactions * 0.95)}
+              icon={<ShoppingCart className="h-5 w-5 text-muted-foreground" />}
               isLoading={salesLoading}
             />
-          </div>
-          <div className="lg:col-span-1">
-            {isAdmin ? (
-              <PaymentMethodsChart
-                methods={sales.methods}
-                periodLabel={periodLabels[period]}
-                isLoading={salesLoading}
-              />
-            ) : (
-              <OrderQueue />
-            )}
-          </div>
-        </div>
-
-        {/* Detail Sections */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="space-y-6">
-            <RecentReceipts
-              receipts={recentReceipts}
-              isLoading={receiptsLoading}
+            <StatCard
+              title="Active Low Stocks"
+              value={(invStats.critical + invStats.low).toString()}
+              change={`${invStats.critical} critical items`}
+              trend={invStats.critical > 0 ? "attention" : "stable"}
+              icon={<Package className="h-5 w-5 text-muted-foreground" />}
+              isLoading={invLoading}
+            />
+            <StatCard
+              title="Staff Approvals"
+              value={pending.length.toString()}
+              change={`${pending.length} pending requests`}
+              trend={pending.length > 0 ? "attention" : "stable"}
+              icon={<Clock className="h-5 w-5 text-muted-foreground" />}
+              isLoading={pendingLoading}
             />
           </div>
-          <div className="space-y-6">
-            {isAdmin ? (
-              <>
-                <InventoryAlerts
-                  items={uniqueLowStockItems}
-                  isLoading={invLoading}
-                />
-                <AttendanceApprovals
-                  pending={pending}
-                  isLoading={pendingLoading}
-                />
-              </>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">
-                    Your Recent Attendance
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {attendanceHistory.map((rec) => (
-                      <div
-                        key={rec._id}
-                        className="flex justify-between items-center border-b pb-2 last:border-0"
-                      >
-                        <div className="text-sm">
-                          <p className="font-medium">
-                            {new Date(rec.date).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {rec.clockInTime}{" "}
-                            {rec.clockOutTime
-                              ? `- ${rec.clockOutTime}`
-                              : "(Active)"}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={
-                            rec.status === "present" || rec.status === "on-time"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {rec.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+        ) : (
+          <div className="grid gap-4 grid-cols-2 mb-6">
+            <StatCard
+              title="Your Transactions"
+              value={sales.transactions.toString()}
+              {...calculateTrend(sales.transactions, sales.transactions * 0.95)}
+              icon={<ShoppingCart className="h-5 w-5 text-muted-foreground" />}
+              isLoading={salesLoading}
+            />
+            <StatCard
+              title="Your Attendance"
+              value="See below"
+              change="Today's shift details"
+              trend="stable"
+              icon={<Clock className="h-5 w-5 text-muted-foreground" />}
+              isLoading={false}
+            />
           </div>
-        </div>
+        )}
+
+        {isAdmin ? (
+          <>
+            {/* Admin: Chart + Payment Methods */}
+            <div className="grid lg:grid-cols-3 gap-6 mb-6">
+              <div className="lg:col-span-2">
+                <SalesTrendChart
+                  data={sales.daily}
+                  period={period}
+                  onPeriodChange={setPeriod}
+                  isLoading={salesLoading}
+                />
+              </div>
+              <div className="lg:col-span-1">
+                <PaymentMethodsChart
+                  methods={sales.methods}
+                  periodLabel={periodLabels[period]}
+                  isLoading={salesLoading}
+                />
+              </div>
+            </div>
+            {/* Admin: Receipts + Inventory + Attendance */}
+            <div className="grid lg:grid-cols-2 gap-6">
+              <RecentReceipts receipts={recentReceipts} isLoading={receiptsLoading} />
+              <div className="space-y-6">
+                <InventoryAlerts items={uniqueLowStockItems} isLoading={invLoading} />
+                <AttendanceApprovals pending={pending} isLoading={pendingLoading} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Staff: Full-width chart */}
+            <div className="mb-6">
+              <SalesTrendChart
+                data={sales.daily}
+                period={period}
+                onPeriodChange={setPeriod}
+                isLoading={salesLoading}
+              />
+            </div>
+            {/* Staff: Order Queue + Attendance side by side */}
+            <div className="grid lg:grid-cols-2 gap-6 mb-6">
+              <OrderQueue />
+              <AttendanceCard />
+            </div>
+            {/* Staff: Recent Receipts full width */}
+            <RecentReceipts receipts={recentReceipts} isLoading={receiptsLoading} />
+          </>
+        )}
       </div>
 
       <AICompanion />
