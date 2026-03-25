@@ -94,61 +94,24 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    // ── When marked "done", auto-save into the payments (transaction history) collection ──
+    // ── When marked "done", notify socket server to refresh the sales dashboard ──
+    // NOTE: Portal/QR orders are already surfaced in GET /api/payments by reading
+    // the orders collection directly (paymentStatus: "paid"). Inserting them into
+    // the payments collection here would create duplicates in transaction history.
     if (queueStatus === "done") {
       try {
-        const paymentsCollection = MONGODB.collection("payments");
-
-        // Avoid duplicate entries
-        const existing = await paymentsCollection.findOne({
-          orderId: result.orderId,
-        });
-        if (!existing) {
-          await paymentsCollection.insertOne({
-            orderId: result.orderId,
-            orderNumber: result.orderNumber,
-            customerName: result.customerName,
-            cashier: "QR Order", // GCash QR orders have no cashier
-            items: result.items || [],
-            subtotal: result.subtotal || result.total,
-            discount: 0,
-            discountTotal: 0,
-            total: result.total,
-            paymentMethod: "gcash",
-            paymentReference: result.paymentReference || null,
-            amountPaid: result.total,
-            change: 0,
-            status: "completed",
-            orderType: result.orderType || "dine-in",
-            tableNumber: result.tableNumber || null,
-            timestamp: new Date(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            source: "qr_order", // marks it as a QR/online order
-          });
-          console.log(
-            `✅ Payment record created for QR order: ${result.orderId}`,
-          );
-        }
-
-        // Notify socket server to refresh sales dashboard
-        try {
-          await fetch(
-            `${process.env.NEXT_PUBLIC_SOCKET_URL}/internal/sales-updated`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-internal-secret": process.env.INTERNAL_SECRET || "",
-              },
+        await fetch(
+          `${process.env.NEXT_PUBLIC_SOCKET_URL}/internal/sales-updated`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-internal-secret": process.env.INTERNAL_SECRET || "",
             },
-          );
-        } catch {
-          /* non-critical */
-        }
-      } catch (payErr) {
-        console.error("⚠️ Failed to save payment record:", payErr);
-        // Don't fail the status update just because payment save failed
+          },
+        );
+      } catch {
+        /* non-critical */
       }
     }
 
