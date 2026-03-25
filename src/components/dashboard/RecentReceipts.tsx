@@ -51,7 +51,7 @@ export function RecentReceipts() {
 
     const viewAllHref = isAdmin
         ? '/dashboard/sales/all-transactions'
-        : '/dashboard/mysales/transactionhistory';
+        : '/transactionhistory';
 
     async function fetchTransactions() {
         setIsLoading(true);
