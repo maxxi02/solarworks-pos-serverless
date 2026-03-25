@@ -249,14 +249,24 @@ function buildReceiptText(
   s += dbDiv + "\n";
   s += lr("TOTAL:", fmt(receipt.total)) + "\n";
   s += dbDiv + "\n";
-  s += lr("Payment:", receipt.paymentMethod.toUpperCase()) + "\n";
+  s += "Payment Method:\n";
   if (receipt.paymentMethod === "split" && receipt.splitPayment) {
     s += lr("  Cash:", fmt(receipt.splitPayment.cash)) + "\n";
     s += lr("  GCash:", fmt(receipt.splitPayment.gcash)) + "\n";
-  }
-  if (receipt.paymentMethod === "cash" && receipt.amountPaid) {
-    s += lr("Tendered:", fmt(receipt.amountPaid)) + "\n";
-    s += lr("Change:", fmt(receipt.amountPaid - receipt.total)) + "\n";
+    s += div + "\n";
+    s += lr("Total:", fmt(receipt.total)) + "\n";
+    const splitChange = (receipt.amountPaid ?? 0) > receipt.total
+      ? (receipt.amountPaid ?? 0) - receipt.total : 0;
+    s += lr("Change:", fmt(splitChange)) + "\n";
+  } else if (receipt.paymentMethod === "gcash") {
+    s += lr("  GCash:", fmt(receipt.total)) + "\n";
+    s += div + "\n";
+    s += lr("Total:", fmt(receipt.total)) + "\n";
+  } else {
+    s += lr("  Cash:", fmt(receipt.amountPaid ?? receipt.total)) + "\n";
+    s += div + "\n";
+    s += lr("Total:", fmt(receipt.total)) + "\n";
+    s += lr("Change:", fmt(receipt.amountPaid ? receipt.amountPaid - receipt.total : 0)) + "\n";
   }
   s += dbDiv + "\n";
   s += c(settings.receiptMessage || "Thank you!") + "\n";

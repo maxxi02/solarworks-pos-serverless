@@ -278,47 +278,30 @@ export function buildCustomerReceiptLines(
   });
   lines.push({ type: "divider" });
 
-  // Payment
-  lines.push({
-    type: "two-col",
-    left: "Payment:",
-    right: data.paymentMethod.toUpperCase(),
-  });
-  if (data.paymentMethod === "split" && data.splitPayment) {
-    lines.push({
-      type: "two-col",
-      left: "  Cash:",
-      right: fmt(data.splitPayment.cash),
-    });
-    lines.push({
-      type: "two-col",
-      left: "  GCash:",
-      right: fmt(data.splitPayment.gcash),
-    });
-  }
-  if (data.paymentMethod === "cash" && data.amountPaid !== undefined) {
-    lines.push({
-      type: "two-col",
-      left: "Tendered:",
-      right: fmt(data.amountPaid),
-    });
-    lines.push({
-      type: "two-col",
-      left: "Change:",
-      right: fmt((data.amountPaid ?? 0) - data.total),
-    });
-  }
+  // Payment Method section
+  const method = data.paymentMethod;
+  lines.push({ type: "text", text: "Payment Method:" });
 
-  // Senior/PWD IDs
-  if (data.seniorPwdIds?.length) {
+  if (method === "split" && data.splitPayment) {
+    lines.push({ type: "two-col", left: "  Cash:", right: fmt(data.splitPayment.cash) });
+    lines.push({ type: "two-col", left: "  GCash:", right: fmt(data.splitPayment.gcash) });
     lines.push({ type: "divider" });
-    lines.push({ type: "text", text: "Senior/PWD ID(s):" });
-    data.seniorPwdIds.forEach((id) =>
-      lines.push({ type: "text", text: `  ${id}` }),
-    );
+    lines.push({ type: "two-col", left: "Total:", right: fmt(data.total), bold: true });
+    const splitChange = (data.amountPaid ?? 0) > data.total ? (data.amountPaid ?? 0) - data.total : 0;
+    lines.push({ type: "two-col", left: "Change:", right: fmt(splitChange) });
+  } else if (method === "gcash") {
+    lines.push({ type: "two-col", left: "  GCash:", right: fmt(data.total) });
+    lines.push({ type: "divider" });
+    lines.push({ type: "two-col", left: "Total:", right: fmt(data.total), bold: true });
+  } else {
+    // cash
+    lines.push({ type: "two-col", left: "  Cash:", right: fmt(data.amountPaid ?? data.total) });
+    lines.push({ type: "divider" });
+    lines.push({ type: "two-col", left: "Total:", right: fmt(data.total), bold: true });
+    lines.push({ type: "two-col", left: "Change:", right: fmt((data.amountPaid ?? 0) - data.total) });
   }
 
-  lines.push({ type: "divider", char: "=" });
+  lines.push({ type: "divider" });
 
   // Footer
   if (data.receiptMessage)
