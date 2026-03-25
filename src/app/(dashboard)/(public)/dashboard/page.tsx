@@ -56,7 +56,6 @@ type PeriodFilter = "day" | "week" | "month" | "quarter" | "year";
 export default function AdminDashboard() {
   const [salesLoading, setSalesLoading] = useState(true);
   const [invLoading, setInvLoading] = useState(true);
-  const [receiptsLoading, setReceiptsLoading] = useState(true);
   const [pendingLoading, setPendingLoading] = useState(true);
 
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -84,9 +83,6 @@ export default function AdminDashboard() {
     needRestock: 0,
   });
 
-  // Recent Receipts State
-  const [recentReceipts, setRecentReceipts] = useState<any[]>([]);
-
   // Attendance State
   const [pending, setPending] = useState<AttendanceRecord[]>([]);
 
@@ -109,7 +105,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     const refreshSales = () => {
       loadSalesData();
-      loadRecentReceipts();
     };
 
     const refreshAttendance = () => {
@@ -215,25 +210,6 @@ export default function AdminDashboard() {
     }
   }
 
-  async function loadRecentReceipts() {
-    setReceiptsLoading(true);
-    try {
-      let url = "/api/payments?limit=5&noStats=true";
-      const res = await fetch(url);
-      const d = await res.json();
-      if (d.success && d.data?.payments) {
-        const payments = isAdmin
-          ? d.data.payments
-          : d.data.payments.filter((p: any) => p.cashierId === userId || p.cashier === session?.user?.name);
-        setRecentReceipts(payments);
-      }
-    } catch (err) {
-      console.error("Transactions error:", err);
-    } finally {
-      setReceiptsLoading(false);
-    }
-  }
-
   async function loadPendingData() {
     if (!isAdmin) {
       setPendingLoading(false);
@@ -257,7 +233,6 @@ export default function AdminDashboard() {
     // slowest section won't block the faster ones anymore
     loadSalesData();
     loadInventoryData();
-    loadRecentReceipts();
     loadPendingData();
     setLastUpdated(new Date());
   }
@@ -293,7 +268,6 @@ export default function AdminDashboard() {
   const isRefreshing =
     salesLoading ||
     invLoading ||
-    receiptsLoading ||
     pendingLoading;
 
   const uniqueLowStockItems = [...lowStock, ...criticalStock].filter(
@@ -409,7 +383,7 @@ export default function AdminDashboard() {
             </div>
             {/* Admin: Receipts + Inventory + Attendance */}
             <div className="grid lg:grid-cols-2 gap-6">
-              <RecentReceipts receipts={recentReceipts} isLoading={receiptsLoading} />
+              <RecentReceipts />
               <div className="space-y-6">
                 <InventoryAlerts items={uniqueLowStockItems} isLoading={invLoading} />
                 <AttendanceApprovals pending={pending} isLoading={pendingLoading} />
@@ -433,7 +407,7 @@ export default function AdminDashboard() {
               <AttendanceCard />
             </div>
             {/* Staff: Recent Receipts full width */}
-            <RecentReceipts receipts={recentReceipts} isLoading={receiptsLoading} />
+            <RecentReceipts />
           </>
         )}
       </div>
