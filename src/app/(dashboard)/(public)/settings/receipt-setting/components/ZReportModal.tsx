@@ -41,7 +41,6 @@ interface Summary {
   cashSales?: number;
   gcashSales?: number;
   splitSales?: number;
-  cashInDrawer: number;
   expectedCash: number;
   difference: number;
   closeStatus: string;
@@ -122,7 +121,10 @@ export default function ZReportModal({
         expectedCash: summary.expectedCash,
         actualCash: summary.actualCash,
         difference: summary.difference,
-        tenders: summary.tenders,
+        tenders: {
+          ...(summary.tenders || {}),
+          split: summary.splitSales || 0,
+        },
         discounts: summary.discounts
           ? [
               { key: 'sc', label: 'SC', value: summary.discounts.sc || 0 },
@@ -414,6 +416,16 @@ export default function ZReportModal({
                       <span>GCash:</span>
                       <span>{fmtP(summary.tenders?.gcash || summary.gcashSales || 0)}</span>
                     </div>
+                  )}
+
+                  {/* Split payment breakdown */}
+                  {(summary.splitSales ?? 0) > 0 && (
+                    <>
+                      <div className="flex justify-between font-bold mb-1">
+                        <span>Split (Cash+GCash):</span>
+                        <span>{fmtP(summary.splitSales ?? 0)}</span>
+                      </div>
+                    </>
                   )}
 
                   {zreading.showPayments.creditCard && summary.tenders?.credit_card && (

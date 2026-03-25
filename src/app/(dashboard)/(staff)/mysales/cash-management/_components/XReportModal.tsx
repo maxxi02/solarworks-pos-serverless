@@ -56,8 +56,6 @@ export default function XReportModal({ session, summary, settings, expectedCash,
     gcash: summary.gcashSales || 0,
     split: summary.splitSales || 0,
   };
-
-  // Revenue totals
   const totalTendered = todayEarnings; // net sales = total tendered
   const cashOuts      = summary.cashOuts || 0;
   const totalRefunds  = summary.totalRefunds || 0;
