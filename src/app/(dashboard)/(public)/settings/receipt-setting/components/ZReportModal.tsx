@@ -41,6 +41,7 @@ interface Summary {
   cashSales?: number;
   gcashSales?: number;
   splitSales?: number;
+  cashInDrawer?: number;
   expectedCash: number;
   difference: number;
   closeStatus: string;
