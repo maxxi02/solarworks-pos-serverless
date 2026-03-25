@@ -280,24 +280,23 @@ export function buildCustomerReceiptLines(
 
   // Payment Method section
   const method = data.paymentMethod;
-  lines.push({ type: "text", text: "Payment Method:" });
 
   if (method === "split" && data.splitPayment) {
+    lines.push({ type: "two-col", left: "Payment Method:", right: "Split (Cash+GCash)" });
     lines.push({ type: "two-col", left: "  Cash:", right: fmt(data.splitPayment.cash) });
     lines.push({ type: "two-col", left: "  GCash:", right: fmt(data.splitPayment.gcash) });
-    lines.push({ type: "divider" });
-    lines.push({ type: "two-col", left: "Total:", right: fmt(data.total), bold: true });
     const splitChange = (data.amountPaid ?? 0) > data.total ? (data.amountPaid ?? 0) - data.total : 0;
+    lines.push({ type: "divider" });
     lines.push({ type: "two-col", left: "Change:", right: fmt(splitChange) });
   } else if (method === "gcash") {
+    lines.push({ type: "two-col", left: "Payment Method:", right: "GCash" });
     lines.push({ type: "two-col", left: "  GCash:", right: fmt(data.total) });
     lines.push({ type: "divider" });
-    lines.push({ type: "two-col", left: "Total:", right: fmt(data.total), bold: true });
   } else {
     // cash
+    lines.push({ type: "two-col", left: "Payment Method:", right: "Cash" });
     lines.push({ type: "two-col", left: "  Cash:", right: fmt(data.amountPaid ?? data.total) });
     lines.push({ type: "divider" });
-    lines.push({ type: "two-col", left: "Total:", right: fmt(data.total), bold: true });
     lines.push({ type: "two-col", left: "Change:", right: fmt((data.amountPaid ?? 0) - data.total) });
   }
 

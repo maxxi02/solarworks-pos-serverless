@@ -144,7 +144,7 @@ export default function CloseRegisterPage() {
         cashInDrawer: expectedCash, cashOuts: totalCashOuts,
         transactions: txCount, items: itemCount,
         splitSales: splitPayments.reduce((s: number, p: Payment) => s + p.total, 0),
-        tenders: { cash: cashSales, gcash: gcashSales, split: splitPayments.reduce((s: number, p: Payment) => s + p.total, 0), credit_card: 0, pay_later: 0, online: 0, invoice: 0, e_wallet: 0, pay_in: 0 },
+        tenders: { cash: cashSales, gcash: gcashSales, credit_card: 0, pay_later: 0, online: 0, invoice: 0, e_wallet: 0, pay_in: 0 },
         discounts: { sc: completed.reduce((s: number, p: Payment) => s + (p.discountTotal || 0), 0), pwd: 0, naac: 0, solo_parent: 0, other: 0 },
         openingFund: dbSession.openingFund, actualCash: 0,
         presentAccumulatedSales, previousAccumulatedSales,

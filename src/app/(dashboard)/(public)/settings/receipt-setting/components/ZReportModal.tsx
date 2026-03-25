@@ -61,6 +61,7 @@ interface Summary {
     e_wallet: number;
     pay_in: number;
     gcash?: number;
+    split?: number;
   };
   discounts?: {
     sc: number;
@@ -123,8 +124,15 @@ export default function ZReportModal({
         actualCash: summary.actualCash,
         difference: summary.difference,
         tenders: {
-          ...(summary.tenders || {}),
-          split: summary.splitSales || 0,
+          cash:        summary.tenders?.cash        ?? summary.cashSales  ?? 0,
+          gcash:       summary.tenders?.gcash       ?? summary.gcashSales ?? 0,
+          split:       summary.tenders?.split       ?? summary.splitSales ?? 0,
+          credit_card: summary.tenders?.credit_card ?? 0,
+          pay_later:   summary.tenders?.pay_later   ?? 0,
+          online:      summary.tenders?.online      ?? 0,
+          invoice:     summary.tenders?.invoice     ?? 0,
+          e_wallet:    summary.tenders?.e_wallet    ?? 0,
+          pay_in:      summary.tenders?.pay_in      ?? 0,
         },
         discounts: summary.discounts
           ? [

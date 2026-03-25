@@ -110,24 +110,23 @@ export const ReceiptModal = ({
 
     // Payment Method section
     const method = receipt.paymentMethod;
-    lines.push("Payment Method:");
 
     if (method === "split" && receipt.splitPayment) {
+      lines.push(lr("Payment Method:", "Split (Cash+GCash)"));
       lines.push(lr("  Cash:", fmt(receipt.splitPayment.cash)));
       lines.push(lr("  GCash:", fmt(receipt.splitPayment.gcash)));
-      lines.push(dash);
-      lines.push(lr("Total:", `PHP ${receipt.total.toFixed(2)}`));
       const splitChange = (receipt.amountPaid ?? 0) > receipt.total
         ? (receipt.amountPaid ?? 0) - receipt.total : 0;
+      lines.push(dash);
       lines.push(lr("Change:", fmt(splitChange)));
     } else if (method === "gcash") {
+      lines.push(lr("Payment Method:", "GCash"));
       lines.push(lr("  GCash:", `PHP ${receipt.total.toFixed(2)}`));
       lines.push(dash);
-      lines.push(lr("Total:", `PHP ${receipt.total.toFixed(2)}`));
     } else {
+      lines.push(lr("Payment Method:", "Cash"));
       lines.push(lr("  Cash:", fmt(receipt.amountPaid ?? receipt.total)));
       lines.push(dash);
-      lines.push(lr("Total:", `PHP ${receipt.total.toFixed(2)}`));
       lines.push(lr("Change:", fmt(receipt.change || 0)));
     }
     lines.push(dash);
