@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import MONGODB from "@/config/db";
 import OpenAI from "openai";
+import { type NextRequest } from "next/server";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -376,6 +380,14 @@ async function getAnalyticsData(
 
 export async function GET(request: Request) {
   try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
+    const { success: allowed, response: limitResponse } = rateLimit(request as unknown as Parameters<typeof rateLimit>[0], LIMITS.aiCompanion, session.user.id);
+    if (!allowed) return limitResponse!;
+
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") || "summary";
     const staffId = searchParams.get("staffId");

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.paymongoSource);
+    if (!allowed) return limitResponse!;
+
     const { amount, orderId, orderNumber, description } = await req.json();
 
     if (!amount || !orderId) {

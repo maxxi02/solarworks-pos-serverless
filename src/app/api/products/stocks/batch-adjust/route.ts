@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIENT, MONGODB } from '@/config/db';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+import { rateLimit, LIMITS } from '@/lib/rate-limit';
 import { 
   INVENTORY_COLLECTION, 
   Inventory,
@@ -24,6 +27,14 @@ import { ObjectId } from 'mongodb';
 export async function POST(req: NextRequest) {
   const session = CLIENT.startSession();
   try {
+    const authSession = await auth.api.getSession({ headers: await headers() });
+    if (!authSession?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.batchAdjust, authSession.user.id);
+    if (!allowed) return limitResponse!;
+
     let response: NextResponse = NextResponse.json({ error: 'Failed' }, { status: 500 });
     
     await session.withTransaction(async () => {

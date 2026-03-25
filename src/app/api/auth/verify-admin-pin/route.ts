@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,6 +10,9 @@ export async function POST(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
+
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.adminPin, session.user.id);
+    if (!allowed) return limitResponse!;
 
     const { pin } = await req.json() as { pin?: string };
 

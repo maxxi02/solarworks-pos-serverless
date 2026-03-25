@@ -367,13 +367,15 @@ export default function AdminDashboard() {
 
         {/* Top-level Stats */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-          <StatCard
-            title={isAdmin ? "Today's Total Sales" : "Your Today's Sales"}
-            value={formatCurrency(sales.today)}
-            {...calculateTrend(sales.today, sales.yesterday)}
-            isCurrency
-            isLoading={salesLoading}
-          />
+          {isAdmin && (
+            <StatCard
+              title="Today's Total Sales"
+              value={formatCurrency(sales.today)}
+              {...calculateTrend(sales.today, sales.yesterday)}
+              isCurrency
+              isLoading={salesLoading}
+            />
+          )}
           <StatCard
             title={isAdmin ? "Transactions" : "Your Transactions"}
             value={sales.transactions.toString()}

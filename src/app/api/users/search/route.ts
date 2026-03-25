@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import MONGODB from "@/config/db";
 import { getUsersCollection } from "@/lib/messaging.db";
 import { headers } from "next/headers";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,9 @@ export async function GET(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.search, session.user.id);
+    if (!allowed) return limitResponse!;
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q")?.trim();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
     }
+
+    const { success: allowed, response: limitResponse } = rateLimit(request, LIMITS.createUser, session.user.id);
+    if (!allowed) return limitResponse!;
 
     const body = await request.json();
     const { email, name, password, role } = body;

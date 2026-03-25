@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { v2 as cloudinary } from "cloudinary";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.upload, session.user.id);
+    if (!allowed) return limitResponse!;
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;

@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
 import MONGODB from "@/config/db";
+import { type NextRequest } from "next/server";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 export async function GET() {
   try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user || session.user.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const req = { headers: { get: () => null } } as unknown as Parameters<typeof rateLimit>[0];
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.reports, session.user.id);
+    if (!allowed) return limitResponse!;
+
     const ratingsCol = MONGODB.collection("orderRatings");
     const usersCol = MONGODB.collection("user");
     const ordersCol = MONGODB.collection("orders");

@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 const notifySalesUpdate = async () => {
   try {
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
+
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.refund, session.user.id);
+    if (!allowed) return limitResponse!;
 
     const { transactionId, reason, adminPin } = await req.json() as {
       transactionId?: string;

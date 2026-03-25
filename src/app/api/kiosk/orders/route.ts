@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MONGODB } from "@/config/db";
+import { rateLimit, LIMITS } from "@/lib/rate-limit";
 
 function generateOrderNumber() {
   const d = new Date();
@@ -32,6 +33,9 @@ async function notifyQueue(orderId: string, queueStatus: string, order: Record<s
 
 export async function POST(req: NextRequest) {
   try {
+    const { success: allowed, response: limitResponse } = rateLimit(req, LIMITS.kioskOrder);
+    if (!allowed) return limitResponse!;
+
     const body = await req.json();
     const {
       customerName,

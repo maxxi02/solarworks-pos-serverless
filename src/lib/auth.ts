@@ -117,6 +117,12 @@ export const auth = betterAuth({
     }),
     nextCookies(),
   ],
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 10,
+    storage: "memory",
+  },
 });
 
 // Type definitions
