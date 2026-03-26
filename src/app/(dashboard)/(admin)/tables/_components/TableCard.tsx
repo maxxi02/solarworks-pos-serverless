@@ -1,23 +1,25 @@
 "use client";
 
-import { QrCode, Trash2 } from "lucide-react";
+import { CheckCircle2, QrCode, Trash2, XCircle } from "lucide-react";
 import { Table } from "@/hooks/useTables";
 
 interface TableCardProps {
     table: Table;
     onViewQR: (table: Table) => void;
     onDelete: (tableId: string) => void;
-    onMarkAvailable?: (tableId: string) => void;
+    onToggleAvailability: (tableId: string, currentStatus: string) => void;
 }
 
 const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
     available: { bg: "bg-emerald-500/10", text: "text-emerald-500", dot: "bg-emerald-500" },
     occupied: { bg: "bg-amber-500/10", text: "text-amber-500", dot: "bg-amber-500" },
+    unavailable: { bg: "bg-red-500/10", text: "text-red-500", dot: "bg-red-500" },
     reserved: { bg: "bg-blue-500/10", text: "text-blue-500", dot: "bg-blue-500" },
 };
 
-export function TableCard({ table, onViewQR, onDelete, onMarkAvailable }: TableCardProps) {
+export function TableCard({ table, onViewQR, onDelete, onToggleAvailability }: TableCardProps) {
     const statusStyle = statusColors[table.status] || statusColors.available;
+    const isUnavailable = table.status === "unavailable";
 
     return (
         <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
@@ -57,15 +59,37 @@ export function TableCard({ table, onViewQR, onDelete, onMarkAvailable }: TableC
                     <QrCode className="w-3.5 h-3.5" />
                     View QR
                 </button>
-                {table.status === 'occupied' && onMarkAvailable && (
+
+                {/* Toggle: Available ↔ Unavailable (when not occupied) */}
+                {table.status !== "occupied" && (
                     <button
-                        onClick={() => onMarkAvailable(table.tableId)}
-                        className="flex items-center justify-center px-3 py-2 rounded-lg border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors"
-                        title="Mark as Available"
+                        onClick={() => onToggleAvailability(table.tableId, table.status)}
+                        title={isUnavailable ? "Mark as Available" : "Mark as Unavailable"}
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${
+                            isUnavailable
+                                ? "border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10"
+                                : "border-red-500/30 text-red-500 hover:bg-red-500/10"
+                        }`}
                     >
-                        Mark Available
+                        {isUnavailable ? (
+                            <><CheckCircle2 className="w-3.5 h-3.5" /> Available</>
+                        ) : (
+                            <><XCircle className="w-3.5 h-3.5" /> Unavailable</>
+                        )}
                     </button>
                 )}
+
+                {/* Mark Available when occupied */}
+                {table.status === "occupied" && (
+                    <button
+                        onClick={() => onToggleAvailability(table.tableId, table.status)}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors"
+                        title="Mark as Available"
+                    >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Available
+                    </button>
+                )}
+
                 <button
                     onClick={() => onDelete(table.tableId)}
                     className="flex items-center justify-center px-3 py-2 rounded-lg border border-destructive/30 text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors"

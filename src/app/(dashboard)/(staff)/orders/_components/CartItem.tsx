@@ -10,9 +10,9 @@ import { formatCurrency, DISCOUNT_RATE } from "./pos.utils";
 interface CartItemProps {
   item: CartItemType;
   isDisabled: boolean;
-  onUpdateQuantity: (id: string, delta: number) => void;
-  onRemoveDiscount: (id: string) => void;
-  onRemoveFromCart: (id: string) => void;
+  onUpdateQuantity: (cartKey: string, delta: number) => void;
+  onRemoveDiscount: (cartKey: string) => void;
+  onRemoveFromCart: (cartKey: string) => void;
 }
 
 export const CartItem = memo(
@@ -23,6 +23,10 @@ export const CartItem = memo(
     onRemoveDiscount,
     onRemoveFromCart,
   }: CartItemProps) => {
+    // Use cartKey for all operations so addon-differentiated items work correctly
+    const key = item.cartKey ?? item._id;
+    const displayPrice = item.effectivePrice ?? item.price;
+
     return (
       <div className="flex flex-col p-3 border rounded-lg bg-card/50 shadow-sm gap-3">
         {/* Top Row: Thumbnail + Info */}
@@ -35,7 +39,7 @@ export const CartItem = memo(
               className="h-12 w-12 rounded-lg object-cover border shrink-0"
             />
           ) : (
-            <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 border">
+            <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0 border">
               {item.menuType === "drink" ? (
                 <Coffee className="h-5 w-5 text-muted-foreground" />
               ) : (
@@ -59,19 +63,36 @@ export const CartItem = memo(
               )}
             </div>
 
+            {/* Selected Addons */}
+            {item.selectedAddons && item.selectedAddons.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {item.selectedAddons.map((addon) => (
+                  <span
+                    key={addon.addonName}
+                    className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
+                  >
+                    {addon.addonName}
+                    {addon.price > 0 && (
+                      <span className="ml-1 text-primary/80">+{formatCurrency(addon.price)}</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               {item.hasDiscount ? (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[10px] text-muted-foreground line-through opacity-70">
-                    {formatCurrency(item.price)}
+                    {formatCurrency(displayPrice)}
                   </span>
                   <span className="text-xs text-green-600 font-bold">
-                    {formatCurrency(item.price * (1 - DISCOUNT_RATE))}
+                    {formatCurrency(displayPrice * (1 - DISCOUNT_RATE))}
                   </span>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {formatCurrency(item.price)}
+                  {formatCurrency(displayPrice)}
                 </p>
               )}
               <span className="text-[10px] text-muted-foreground/60 px-1 py-0.5 bg-muted rounded">
@@ -87,7 +108,7 @@ export const CartItem = memo(
             <Button
               size="icon"
               variant="ghost"
-              onClick={() => onUpdateQuantity(item._id, -1)}
+              onClick={() => onUpdateQuantity(key, -1)}
               className="h-7 w-7 md:h-8 md:w-8 hover:bg-background"
               disabled={isDisabled}
             >
@@ -99,7 +120,7 @@ export const CartItem = memo(
             <Button
               size="icon"
               variant="ghost"
-              onClick={() => onUpdateQuantity(item._id, 1)}
+              onClick={() => onUpdateQuantity(key, 1)}
               className="h-7 w-7 md:h-8 md:w-8 hover:bg-background"
               disabled={isDisabled}
             >
@@ -112,7 +133,7 @@ export const CartItem = memo(
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onRemoveDiscount(item._id)}
+                onClick={() => onRemoveDiscount(key)}
                 className="h-8 px-2 text-yellow-600 border-yellow-500/20 hover:bg-yellow-500/10"
                 disabled={isDisabled}
               >
@@ -123,7 +144,7 @@ export const CartItem = memo(
             <Button
               size="icon"
               variant="destructive"
-              onClick={() => onRemoveFromCart(item._id)}
+              onClick={() => onRemoveFromCart(key)}
               className="h-8 w-8"
               disabled={isDisabled}
             >

@@ -39,6 +39,7 @@ function formatProduct(product: WithId<Document>): FormattedProduct {
       product.available !== undefined ? (product.available as boolean) : true,
     categoryId: product.categoryId as string,
     imageUrl: (product.imageUrl as string) || "",
+    addonGroups: Array.isArray(product.addonGroups) ? product.addonGroups : [],
     createdAt: product.createdAt as Date | undefined,
     updatedAt: product.updatedAt as Date | undefined,
   };
@@ -210,6 +211,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           : existingProduct.available,
       categoryId: body.categoryId!,
       imageUrl,
+      // Preserve existing addon groups unless explicitly provided
+      addonGroups: Array.isArray(body.addonGroups)
+        ? body.addonGroups
+        : (existingProduct.addonGroups || []),
       updatedAt: new Date(),
     };
 

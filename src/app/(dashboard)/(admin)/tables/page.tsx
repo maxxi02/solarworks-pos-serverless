@@ -71,10 +71,13 @@ export default function TablesPage() {
     }
   };
 
-  const handleMarkAvailable = async (tableId: string) => {
+  const handleToggleAvailability = async (tableId: string, currentStatus: string) => {
     try {
-      await updateTable(tableId, { status: "available" });
-      toast.success("Table marked as available");
+      const newStatus = currentStatus === "available" || currentStatus === "occupied" ? "unavailable" : "available";
+      await updateTable(tableId, { status: newStatus });
+      toast.success(
+        newStatus === "available" ? "Table is now available" : "Table marked as unavailable"
+      );
     } catch {
       toast.error("Failed to update table status");
     }
@@ -169,7 +172,7 @@ export default function TablesPage() {
                   setQrPreview({ url: t.qrCodeUrl, label: t.label })
                 }
                 onDelete={handleDeleteTable}
-                onMarkAvailable={handleMarkAvailable}
+                onToggleAvailability={handleToggleAvailability}
               />
             ))}
           </div>

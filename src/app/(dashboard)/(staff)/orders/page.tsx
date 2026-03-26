@@ -64,6 +64,7 @@ import { IncomingOrderModal } from "./_components/IncomingOrderModal";
 import { SavedOrdersPanel } from "./_components/Savedorderspanel";
 import { CategoryFilter } from "./_components/CategoryFilter";
 import { QueueBoard } from "./_components/QueueBoard";
+import { AddonSelectionModal } from "./_components/AddonSelectionModal";
 
 import { AttendanceBar } from "./_components/AttendanceBar";
 import { ProductCard } from "./_components/ProductCard";
@@ -78,6 +79,7 @@ import {
   InsufficientStockItem,
   ReceiptOrder,
   StockCheckResult,
+  SelectedAddon,
 } from "./_components/pos.types";
 import {
   formatCurrency,
@@ -305,6 +307,22 @@ export default function OrdersPage() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [isDraggingCategory, setIsDraggingCategory] = useState(false);
+
+  // Addon Selection Modal state
+  const [addonModalProduct, setAddonModalProduct] = useState<Product | null>(null);
+  const [addonModalOpen, setAddonModalOpen] = useState(false);
+
+  const handleOpenAddons = useCallback((product: Product) => {
+    setAddonModalProduct(product);
+    setAddonModalOpen(true);
+  }, []);
+
+  const handleAddonConfirm = useCallback(
+    (product: Product, selectedAddons: SelectedAddon[], quantity: number) => {
+      addToCart(product, selectedAddons, quantity);
+    },
+    [addToCart],
+  );
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
   const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
@@ -1405,6 +1423,7 @@ export default function OrdersPage() {
                           key={product._id}
                           product={product}
                           onAddToCart={addToCart}
+                          onOpenAddons={handleOpenAddons}
                         />
                       ))}
                     </div>
@@ -1513,7 +1532,7 @@ export default function OrdersPage() {
                         >
                           {cart.map((item) => (
                             <CartItem
-                              key={item._id}
+                              key={item.cartKey ?? item._id}
                               item={item}
                               isDisabled={isDisabled}
                               onUpdateQuantity={handleUpdateQuantity}
@@ -1796,6 +1815,13 @@ export default function OrdersPage() {
 
         {/* IncomingOrderModal removed: customer orders now go directly into Queue Board */}
 
+        {/* Addon Selection Modal */}
+        <AddonSelectionModal
+          product={addonModalProduct}
+          open={addonModalOpen}
+          onClose={() => setAddonModalOpen(false)}
+          onConfirm={handleAddonConfirm}
+        />
 
       </>
     </div>

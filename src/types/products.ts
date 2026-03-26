@@ -2,6 +2,20 @@
 
 // src/types/products.ts
 
+// ── Add-on types ──────────────────────────────────────────────────────────────
+export interface AddonItem {
+  name: string;
+  price: number;
+}
+
+export interface AddonGroup {
+  _id?: string;
+  name: string;
+  required: boolean;
+  multiSelect: boolean;
+  items: AddonItem[];
+}
+
 export interface ProductVariant {
   name: string;
   price: number;
@@ -51,7 +65,8 @@ export interface MongoDBProduct {
   ingredients: ProductIngredient[];
   available: boolean;
   categoryId: string;
-  imageUrl?: string; // ← NEW: optional image URL or base64 string
+  imageUrl?: string;
+  addonGroups?: AddonGroup[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -74,6 +89,7 @@ export interface FormattedProduct {
   available: boolean;
   categoryId: string;
   imageUrl: string;
+  addonGroups?: AddonGroup[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -103,6 +119,7 @@ export interface ProductInput {
   available?: boolean;
   categoryId?: string;
   imageUrl?: string;
+  addonGroups?: AddonGroup[];
 }
 
 export interface CategoryInput {

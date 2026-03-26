@@ -87,6 +87,7 @@ interface ProductFormData {
   categoryId?: string;
   menuType?: MenuType;
   imageUrl?: string;
+  addonGroups?: AddonGroupLocal[];
 }
 interface InventoryItem {
   _id: string;
@@ -111,6 +112,19 @@ interface Product {
   menuType?: MenuType;
   imageUrl?: string;
   createdAt?: string;
+  addonGroups?: AddonGroupLocal[];
+}
+
+// Local addon types (self-contained, not imported to avoid circular deps)
+interface AddonItemLocal {
+  name: string;
+  price: number;
+}
+interface AddonGroupLocal {
+  name: string;
+  required: boolean;
+  multiSelect: boolean;
+  items: AddonItemLocal[];
 }
 interface Category {
   _id?: string;
@@ -290,6 +304,45 @@ function ProductDialog({
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState(product?.imageUrl || '');
   const [imagePreview, setImagePreview] = useState(product?.imageUrl || '');
+  const [addonGroups, setAddonGroups] = useState<AddonGroupLocal[]>(product?.addonGroups || []);
+
+  // ----- Addon group helpers -----
+  const addGroup = () =>
+    setAddonGroups((prev) => [
+      ...prev,
+      { name: '', required: false, multiSelect: false, items: [] },
+    ]);
+
+  const removeGroup = (gi: number) =>
+    setAddonGroups((prev) => prev.filter((_, i) => i !== gi));
+
+  const updateGroup = (gi: number, patch: Partial<AddonGroupLocal>) =>
+    setAddonGroups((prev) =>
+      prev.map((g, i) => (i === gi ? { ...g, ...patch } : g)),
+    );
+
+  const addItem = (gi: number) =>
+    setAddonGroups((prev) =>
+      prev.map((g, i) =>
+        i === gi ? { ...g, items: [...g.items, { name: '', price: 0 }] } : g,
+      ),
+    );
+
+  const removeItem = (gi: number, ii: number) =>
+    setAddonGroups((prev) =>
+      prev.map((g, i) =>
+        i === gi ? { ...g, items: g.items.filter((_, j) => j !== ii) } : g,
+      ),
+    );
+
+  const updateItem = (gi: number, ii: number, patch: Partial<AddonItemLocal>) =>
+    setAddonGroups((prev) =>
+      prev.map((g, i) =>
+        i === gi
+          ? { ...g, items: g.items.map((item, j) => (j === ii ? { ...item, ...patch } : item)) }
+          : g,
+      ),
+    );
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -324,6 +377,7 @@ function ProductDialog({
       setAvailable(product.available);
       setImageUrl(product?.imageUrl || '');
       setImagePreview(product?.imageUrl || '');
+      setAddonGroups(product?.addonGroups || []);
 
       const convertedIngredients = product.ingredients.map(ing => {
         if ('inventoryItemId' in ing) {
@@ -344,6 +398,7 @@ function ProductDialog({
       setDescription('');
       setAvailable(true);
       setIngredients([]);
+      setAddonGroups([]);
     }
   }, [product]);
 
@@ -380,6 +435,7 @@ function ProductDialog({
         categoryId: category?._id,
         menuType: category?.menuType,
         imageUrl,
+        addonGroups,
       });
       onOpenChange(false);
     } finally {
@@ -515,6 +571,118 @@ function ProductDialog({
                 initialIngredients={ingredients}
                 loading={inventoryLoading}
               />
+            </div>
+
+            <Separator />
+
+            {/* ── Addon Groups ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-semibold">Add-on Groups</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Customisation options customers can pick at the POS (e.g. Size, Extras)
+                  </p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={addGroup}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Add Group
+                </Button>
+              </div>
+
+              {addonGroups.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">
+                  No add-on groups yet.
+                </p>
+              )}
+
+              {addonGroups.map((group, gi) => (
+                <Card key={gi} className="border-dashed">
+                  <CardContent className="p-4 space-y-3">
+                    {/* Group header */}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Group name (e.g. Size, Extras)"
+                        value={group.name}
+                        onChange={(e) => updateGroup(gi, { name: e.target.value })}
+                        className="flex-1 h-8 text-sm"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                        onClick={() => removeGroup(gi)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+
+                    {/* Toggles */}
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id={`req-${gi}`}
+                          checked={group.required}
+                          onCheckedChange={(v) => updateGroup(gi, { required: v })}
+                        />
+                        <Label htmlFor={`req-${gi}`} className="text-xs cursor-pointer">Required</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id={`multi-${gi}`}
+                          checked={group.multiSelect}
+                          onCheckedChange={(v) => updateGroup(gi, { multiSelect: v })}
+                        />
+                        <Label htmlFor={`multi-${gi}`} className="text-xs cursor-pointer">Multi-select</Label>
+                      </div>
+                    </div>
+
+                    {/* Addon items */}
+                    <div className="space-y-2">
+                      {group.items.map((item, ii) => (
+                        <div key={ii} className="flex items-center gap-2">
+                          <Input
+                            placeholder="Item name (e.g. Extra Shot)"
+                            value={item.name}
+                            onChange={(e) => updateItem(gi, ii, { name: e.target.value })}
+                            className="flex-1 h-8 text-sm"
+                          />
+                          <div className="relative w-24">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">₱</span>
+                            <Input
+                              type="number"
+                              placeholder="0"
+                              min={0}
+                              step={0.01}
+                              value={item.price}
+                              onChange={(e) => updateItem(gi, ii, { price: parseFloat(e.target.value) || 0 })}
+                              className="h-8 text-sm pl-6 w-full"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                            onClick={() => removeItem(gi, ii)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => addItem(gi)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add item
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </ScrollArea>
