@@ -145,7 +145,13 @@ export async function GET(request: Request) {
 
     // ── Build POS payments filter ──────────────────────────────────────────────
     const posFilter: Record<string, any> = {};
-    if (status && status !== "all") posFilter.status = status;
+    if (status && status !== "all") {
+      if (status === "completed") {
+        posFilter.status = { $in: ["completed", "Completed", null] };
+      } else {
+        posFilter.status = status;
+      }
+    }
     if (paymentMethod && paymentMethod !== "all") posFilter.paymentMethod = { $regex: new RegExp(`^${paymentMethod}$`, "i") };
     if (search) {
       posFilter.$or = [
