@@ -1334,7 +1334,7 @@ export default function OrdersPage() {
             setActiveTab(val as "pos" | "queue");
             if (val === "queue") setUnreadQueueCount(0);
           }}
-          className="w-full max-w-[1600px] mx-auto px-10 md:px-6"
+          className="w-full max-w-[1600px] mx-auto px-3 sm:px-4 md:px-6"
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between mt-4 md:mt-2 mb-4 md:mb-6 gap-4">
             <h1 className="text-2xl font-bold">Orders</h1>
@@ -1355,7 +1355,7 @@ export default function OrdersPage() {
 
           <TabsContent value="pos" className="m-0">
             {/* Main Layout */}
-            <div className="flex flex-row gap-3 md:gap-5">
+            <div className="flex flex-col lg:flex-row gap-3 md:gap-4 lg:gap-5">
               {/* Left — Products */}
               <div className="flex-1 flex flex-col min-w-0 h-full">
                 {/* Menu Type Filter */}
@@ -1401,11 +1401,8 @@ export default function OrdersPage() {
                 {/* Products Grid - Scrollable Area */}
                 <div
                   ref={productsContainerRef}
-                  className="overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1"
-                  style={{
-                    minHeight: "400px",
-                    maxHeight: "calc(100vh - 280px)",
-                  }}
+                  className="overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1 max-h-[calc(100vh-320px)] lg:max-h-[calc(100vh-280px)]"
+                  style={{ minHeight: "400px" }}
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center h-64">
@@ -1417,7 +1414,7 @@ export default function OrdersPage() {
                       No products found
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-4">
                       {filteredProducts.map((product) => (
                         <ProductCard
                           key={product._id}
@@ -1432,7 +1429,7 @@ export default function OrdersPage() {
               </div>
 
               {/* Right — Cart - Fully visible, no scroll */}
-              <div className="w-[280px] lg:w-[340px] shrink-0">
+              <div className="w-full lg:w-[320px] xl:w-[340px] shrink-0 max-h-[500px] lg:max-h-none overflow-y-auto">
                 <div
                   ref={cartDropZoneRef}
                   className="transition-all"
