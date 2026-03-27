@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { ProductIngredientsForm, ProductIngredient } from '@/components/forms/ProductIngredientsForm';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // shadcn/ui imports
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import { VariantProps } from 'class-variance-authority';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,25 +72,27 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-
-// Types
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 type MenuType = 'food' | 'drink';
 
-interface ProductFormData {
+// Local addon types
+interface AddonItemLocal {
   name: string;
   price: number;
-  description: string;
-  ingredients: ProductIngredient[];
-  available: boolean;
-  categoryId?: string;
-  menuType?: MenuType;
-  imageUrl?: string;
-  addonGroups?: AddonGroupLocal[];
 }
+
+interface AddonGroupLocal {
+  name: string;
+  required: boolean;
+  multiSelect: boolean;
+  items: AddonItemLocal[];
+}
+
 interface InventoryItem {
   _id: string;
   name: string;
@@ -109,31 +113,33 @@ interface Product {
   ingredients: ProductIngredient[];
   available: boolean;
   categoryId?: string;
+  category?: string;
   menuType?: MenuType;
   imageUrl?: string;
   createdAt?: string;
   addonGroups?: AddonGroupLocal[];
 }
 
-// Local addon types (self-contained, not imported to avoid circular deps)
-interface AddonItemLocal {
-  name: string;
-  price: number;
-}
-interface AddonGroupLocal {
-  name: string;
-  required: boolean;
-  multiSelect: boolean;
-  items: AddonItemLocal[];
-}
 interface Category {
   _id?: string;
   name: string;
   description: string;
   menuType: MenuType;
-  products: Product[];
+  products?: Product[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+interface ProductFormData {
+  name: string;
+  price: number;
+  description: string;
+  ingredients: ProductIngredient[];
+  available: boolean;
+  categoryId?: string;
+  menuType?: MenuType;
+  imageUrl?: string;
+  addonGroups?: AddonGroupLocal[];
 }
 
 // Stats Card Component
@@ -181,6 +187,14 @@ function CategoryDialog({
   const [menuType, setMenuType] = useState<MenuType>(initialData?.menuType || 'food');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (open) {
+      setName(initialData?.name || '');
+      setDescription(initialData?.description || '');
+      setMenuType(initialData?.menuType || 'food');
+    }
+  }, [open, initialData]);
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       toast.error('Category name is required');
@@ -190,10 +204,7 @@ function CategoryDialog({
     setLoading(true);
     try {
       await onSubmit({ name: name.trim(), description: description.trim(), menuType });
-      onOpenChange(false);
-      setName('');
-      setDescription('');
-      setMenuType('food');
+      // onOpenChange(false) and state reset handled by mutation onSuccess
     } finally {
       setLoading(false);
     }
@@ -370,16 +381,16 @@ function ProductDialog({
   };
 
   useEffect(() => {
-    if (product) {
-      setName(product.name);
-      setPrice(product.price.toString());
-      setDescription(product.description);
-      setAvailable(product.available);
+    if (open) { // Reset form when dialog opens or product changes
+      setName(product?.name || '');
+      setPrice(product?.price?.toString() || '');
+      setDescription(product?.description || '');
+      setAvailable(product?.available ?? true);
       setImageUrl(product?.imageUrl || '');
       setImagePreview(product?.imageUrl || '');
       setAddonGroups(product?.addonGroups || []);
 
-      const convertedIngredients = product.ingredients.map(ing => {
+      const convertedIngredients = product?.ingredients.map(ing => {
         if ('inventoryItemId' in ing) {
           return ing as ProductIngredient;
         }
@@ -390,17 +401,10 @@ function ProductDialog({
           quantity: typeof oldIng.quantity === 'string' ? Number(oldIng.quantity) : oldIng.quantity,
           unit: oldIng.unit
         } as ProductIngredient;
-      });
+      }) || [];
       setIngredients(convertedIngredients);
-    } else {
-      setName('');
-      setPrice('');
-      setDescription('');
-      setAvailable(true);
-      setIngredients([]);
-      setAddonGroups([]);
     }
-  }, [product]);
+  }, [open, product]);
 
   const handleIngredientsChange = useCallback((newIngredients: ProductIngredient[]) => {
     setIngredients(newIngredients);
@@ -437,7 +441,7 @@ function ProductDialog({
         imageUrl,
         addonGroups,
       });
-      onOpenChange(false);
+      // onOpenChange(false) handled by mutation onSuccess
     } finally {
       setLoading(false);
     }
@@ -712,11 +716,7 @@ function ProductDialog({
 }
 
 export default function CategoriesPage() {
-  // States
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   // Dialog States
   const [categoryDialog, setCategoryDialog] = useState<{
@@ -742,170 +742,202 @@ export default function CategoriesPage() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<MenuType>('food');
 
-  // Fetch data on mount
-  useEffect(() => {
-    fetchCategories();
-    fetchInventoryItems();
-  }, []);
+  // React Query: Fetch Categories
+  const { data: categories = [], isLoading: loading, refetch: fetchCategories } = useQuery<Category[]>({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/products/categories');
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      return res.json();
+    },
+  });
 
-  // API Functions
-  const fetchCategories = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/products/categories');
-      if (!response.ok) throw new Error('Failed to fetch categories');
-      const data = await response.json();
-      setCategories(data);
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
-      toast.error('Failed to load categories');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query: Fetch Inventory Items
+  const { data: inventoryItems = [], isLoading: inventoryLoading, refetch: fetchInventoryItems } = useQuery<InventoryItem[]>({
+    queryKey: ['inventoryItems'],
+    queryFn: async () => {
+      const res = await fetch('/api/inventory');
+      if (!res.ok) throw new Error('Failed to fetch inventory');
+      const data = await res.json();
+      return data.data || [];
+    },
+  });
 
-  const fetchInventoryItems = async () => {
-    try {
-      setInventoryLoading(true);
-      const response = await fetch('/api/products/stocks');
-      if (!response.ok) throw new Error('Failed to fetch inventory');
-      const data = await response.json();
-      setInventoryItems(data);
-    } catch (err) {
-      console.error('Failed to fetch inventory:', err);
-      toast.error('Failed to load inventory');
-    } finally {
-      setInventoryLoading(false);
-    }
-  };
+  // --- Mutations ---
 
-  // Category Handlers
-  const handleAddCategory = async (data: { name: string; description: string; menuType: MenuType }) => {
-    try {
+  // Add Category
+  const addCategoryMutation = useMutation({
+    mutationFn: async (categoryData: { name: string; description: string; menuType: MenuType }) => {
       const response = await fetch('/api/products/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(categoryData),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to add category');
       }
-
-      const category = await response.json();
-      setCategories(prev => [...prev, category]);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       toast.success('Category added successfully');
-    } catch (err) {
-      console.error('Failed to add category:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to add category');
-      throw err;
-    }
-  };
+      setCategoryDialog({ open: false });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
-  const handleDeleteCategory = async () => {
-    try {
-      const response = await fetch(`/api/products/categories/${deleteDialog.id}`, {
+  // Update Category
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; description: string; menuType: MenuType } }) => {
+      const response = await fetch(`/api/products/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update category');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      toast.success('Category updated successfully');
+      setCategoryDialog({ open: false });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Delete Category
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/products/categories/${id}`, {
         method: 'DELETE',
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to delete category');
       }
-
-      setCategories(prev => prev.filter(c => c._id !== deleteDialog.id));
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       toast.success('Category deleted successfully');
       setDeleteDialog({ open: false, type: 'category', id: '', name: '' });
-    } catch (err) {
-      console.error('Failed to delete category:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to delete category');
-    }
-  };
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
-  // Product Handlers
-  const handleAddProduct = async (productData: Product) => {
-    try {
+  // Add Product
+  const addProductMutation = useMutation({
+    mutationFn: async (productData: ProductFormData) => {
       const response = await fetch('/api/products/category-products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to add product');
       }
-
-      await fetchCategories();
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       toast.success('Product added successfully');
-    } catch (err) {
-      console.error('Failed to add product:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to add product');
-      throw err;
-    }
-  };
+      setProductDialog({ open: false, category: null });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
-  const handleUpdateProduct = async (productData: Product) => {
-    if (!productDialog.product?._id) return;
-
-    try {
-      const response = await fetch(`/api/products/category-products/${productDialog.product._id}`, {
+  // Update Product
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: ProductFormData }) => {
+      const response = await fetch(`/api/products/category-products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productData),
+        body: JSON.stringify(data),
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to update product');
       }
-
-      await fetchCategories();
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       toast.success('Product updated successfully');
-    } catch (err) {
-      console.error('Failed to update product:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to update product');
-      throw err;
-    }
-  };
+      setProductDialog({ open: false, category: null });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
-  const handleDeleteProduct = async () => {
-    try {
-      const response = await fetch(`/api/products/category-products/${deleteDialog.id}`, {
+  // Delete Product
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/products/category-products/${id}`, {
         method: 'DELETE',
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to delete product');
       }
-
-      await fetchCategories();
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
       toast.success('Product deleted successfully');
       setDeleteDialog({ open: false, type: 'product', id: '', name: '' });
-    } catch (err) {
-      console.error('Failed to delete product:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to delete product');
-    }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Handlers
+  const handleAddCategory = async (data: { name: string; description: string; menuType: MenuType }) => {
+    await addCategoryMutation.mutateAsync(data);
   };
 
-  const handleToggleAvailability = async (product: Product) => {
-    try {
-      const response = await fetch(`/api/products/category-products/${product._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, available: !product.available }),
-      });
+  const handleUpdateCategory = async (data: { name: string; description: string; menuType: MenuType }) => {
+    if (!categoryDialog.category?._id) return;
+    await updateCategoryMutation.mutateAsync({ id: categoryDialog.category._id, data });
+  };
 
-      if (!response.ok) throw new Error('Failed to update product');
+  const handleDeleteCategory = () => {
+    deleteCategoryMutation.mutate(deleteDialog.id);
+  };
 
-      await fetchCategories();
-      toast.success(`Product is now ${!product.available ? 'available' : 'unavailable'}`);
-    } catch (err) {
-      console.error('Failed to update product:', err);
-      toast.error('Failed to update product status');
-    }
+  const handleAddProduct = async (productData: ProductFormData) => {
+    await addProductMutation.mutateAsync(productData);
+  };
+
+  const handleUpdateProduct = async (productData: ProductFormData) => {
+    if (!productDialog.product?._id) return;
+    await updateProductMutation.mutateAsync({ id: productDialog.product._id, data: productData });
+  };
+
+  const handleDeleteProduct = () => {
+    deleteProductMutation.mutate(deleteDialog.id);
+  };
+
+  const handleToggleAvailability = (product: Product) => {
+    if (!product._id) return;
+    updateProductMutation.mutate({
+      id: product._id,
+      data: { ...product, available: !product.available },
+    });
   };
 
   // Formatting
@@ -954,42 +986,20 @@ export default function CategoriesPage() {
         onSubmit={productDialog.product ? handleUpdateProduct : handleAddProduct}
       />
 
-      <AlertDialog
+      <ConfirmDialog
         open={deleteDialog.open}
         onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {deleteDialog.type === 'category' ? 'Category' : 'Product'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteDialog.type === 'category' ? (
-                <>
-                  Are you sure you want to delete <span className="font-semibold">"{deleteDialog.name}"</span>?
-                  <br />
-                  This will permanently delete the category and ALL products within it.
-                </>
-              ) : (
-                <>
-                  Are you sure you want to delete <span className="font-semibold">"{deleteDialog.name}"</span>?
-                  <br />
-                  This action cannot be undone.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={deleteDialog.type === 'category' ? handleDeleteCategory : handleDeleteProduct}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={deleteDialog.type === 'category' ? handleDeleteCategory : handleDeleteProduct}
+        title={`Delete ${deleteDialog.type === 'category' ? 'Category' : 'Product'}`}
+        description={
+          deleteDialog.type === 'category' ? (
+            `Are you sure you want to delete "${deleteDialog.name}"? This will permanently delete the category and ALL products within it.`
+          ) : (
+            `Are you sure you want to delete "${deleteDialog.name}"? This action cannot be undone.`
+          )
+        }
+        loading={deleteCategoryMutation.isPending || deleteProductMutation.isPending}
+      />
 
       {/* Header */}
       <div className="flex items-center justify-between">

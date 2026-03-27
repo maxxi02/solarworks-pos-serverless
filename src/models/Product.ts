@@ -40,8 +40,20 @@ const ProductSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop',
   },
+  available: {
+    type: Boolean,
+    default: true,
+  },
 }, {
   timestamps: true,
 });
+
+// Indices for performance
+ProductSchema.index({ categoryId: 1 });
+ProductSchema.index({ shopId: 1 });
+ProductSchema.index({ available: 1 });
+
+// Text index for search optimization (Fix #6)
+ProductSchema.index({ name: 'text' });
 
 export default mongoose.models.Product || mongoose.model('Product', ProductSchema);

@@ -68,19 +68,30 @@ export async function initIndexes() {
     await createIdx("payments", { orderNumber: 1 });
     await createIdx("payments", { timestamp: -1 });
     await createIdx("payments", { cashierId: 1 });
+    await createIdx("payments", { shopId: 1, createdAt: -1 }); // Compound for dashboard/POS
+
+    // Orders
+    await createIdx("orders", { orderId: 1 }, { unique: true });
+    await createIdx("orders", { shopId: 1, createdAt: -1 });
+    await createIdx("orders", { queueStatus: 1 });
+    await createIdx("orders", { customerId: 1 });
+    await createIdx("orders", { paymentStatus: 1 });
 
     // Inventory
     await createIdx("inventory", { name: 1 });
     await createIdx("inventory", { status: 1 });
     await createIdx("inventory", { category: 1 });
+    await createIdx("inventory", { shopId: 1 });
 
     // Attendance
     await createIdx("attendance", { userId: 1, date: -1 });
+    await createIdx("attendance", { shopId: 1, date: -1 });
     await createIdx("attendance", { status: 1 });
     await createIdx("attendance", { clockInTime: -1 });
 
     // Attendance Temp (Pending)
     await createIdx("attendance_temp", { userId: 1, date: -1 });
+    await createIdx("attendance_temp", { shopId: 1, date: -1 });
     await createIdx("attendance_temp", { status: 1 });
     await createIdx("attendance_temp", { clockInTime: -1 });
 

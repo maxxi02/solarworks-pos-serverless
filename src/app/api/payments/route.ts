@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
-import MONGODB from "@/config/db";
+import { NextRequest, NextResponse } from "next/server";
+import { CLIENT, MONGODB } from "@/config/db";
+import { requireAuth } from "@/lib/api-auth";
+import { PaginationSchema, CreatePaymentSchema } from "@/lib/validators";
 
 // ── Index bootstrap (once per cold-start) ─────────────────────────────────────
 let indexesEnsured = false;
@@ -12,11 +14,13 @@ async function ensureIndexes() {
       col.createIndex({ status: 1, createdAt: -1 }),
       col.createIndex({ paymentMethod: 1 }),
       col.createIndex({ orderNumber: 1 }),
+      col.createIndex({ shopId: 1, createdAt: -1 }), // Added in Fix #2
     ]);
     const ordersCol = MONGODB.collection("orders");
     await Promise.all([
       ordersCol.createIndex({ createdAt: -1 }),
       ordersCol.createIndex({ paymentStatus: 1, createdAt: -1 }),
+      ordersCol.createIndex({ orderId: 1 }),
     ]);
     indexesEnsured = true;
   } catch {
@@ -26,7 +30,9 @@ async function ensureIndexes() {
 
 const notifySalesUpdate = async () => {
   try {
-    await fetch(`${process.env.SOCKET_URL}/internal/sales-updated`, {
+    const socketUrl = process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL;
+    if (!socketUrl) return;
+    await fetch(`${socketUrl}/internal/sales-updated`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -40,7 +46,9 @@ const notifySalesUpdate = async () => {
 
 const notifyCashUpdate = async () => {
   try {
-    await fetch(`${process.env.SOCKET_URL}/internal/cash-updated`, {
+    const socketUrl = process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL;
+    if (!socketUrl) return;
+    await fetch(`${socketUrl}/internal/cash-updated`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -84,58 +92,114 @@ function normalizePayment(p: any) {
 }
 
 // ── POST — Save a new POS payment ─────────────────────────────────────────────
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
+export async function POST(request: NextRequest) {
+  const session = CLIENT.startSession();
+  let responseBody: any = { success: false, error: "Failed to save payment" };
+  let responseStatus = 500;
 
-    if (!body.orderNumber || !body.total || !body.paymentMethod) {
+  try {
+    const authRecord = await requireAuth(request, ["admin", "staff"]);
+    if (!authRecord.authorized) return authRecord.response!;
+
+    const body = await request.json();
+    const parsed = CreatePaymentSchema.safeParse(body);
+
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields" },
+        { success: false, error: "Invalid payment data", details: parsed.error.format() },
         { status: 400 },
       );
     }
 
-    const collection = MONGODB.collection("payments");
-    await ensureIndexes();
+    const { orderId, orderNumber, total, items } = parsed.data;
 
-    const result = await collection.insertOne({
-      ...body,
-      timestamp: body.timestamp ? new Date(body.timestamp) : new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    await session.withTransaction(async () => {
+      const paymentsCollection = MONGODB.collection("payments");
+      const ordersCollection = MONGODB.collection("orders");
+      await ensureIndexes();
+
+      const paymentData = {
+        ...parsed.data,
+        status: "completed",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // 1. Insert payment record
+      const result = await paymentsCollection.insertOne(paymentData, { session });
+
+      // 2. If orderId is provided, update order status atomically (Fix #4)
+      if (orderId) {
+        const orderUpdate = await ordersCollection.updateOne(
+          { orderId },
+          { 
+            $set: { 
+              paymentStatus: "paid",
+              queueStatus: "queueing",
+              paidAt: new Date(),
+              updatedAt: new Date(),
+            } 
+          },
+          { session }
+        );
+
+        if (orderUpdate.matchedCount === 0) {
+          throw new Error(`Order with ID ${orderId} not found`);
+        }
+      }
+
+      // 3. (Future) Add inventory deduction logic here using the session
+      // For now, atomic order/payment linking is established.
+
+      console.log("Payment saved with ID:", result.insertedId);
+      responseBody = {
+        success: true,
+        data: { _id: result.insertedId, ...paymentData },
+      };
+      responseStatus = 200;
     });
 
-    console.log("Payment saved with ID:", result.insertedId);
+    // After success, notify services (outside transaction as they are HTTP)
     notifySalesUpdate();
     notifyCashUpdate();
 
-    return NextResponse.json({
-      success: true,
-      data: { _id: result.insertedId, ...body },
-    });
+    return NextResponse.json(responseBody, { status: responseStatus });
+
   } catch (error) {
     console.error("Payment save error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to save payment";
     return NextResponse.json(
-      { success: false, error: "Failed to save payment" },
-      { status: 500 },
+      { success: false, error: errorMessage },
+      { status: responseStatus },
     );
+  } finally {
+    await session.endSession();
   }
 }
 
 // ── GET — Fetch all transactions (POS payments + paid portal orders) ───────────
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, ["admin", "staff"]);
+    if (!auth.authorized) return auth.response!;
+
     await ensureIndexes();
 
     const { searchParams } = new URL(request.url);
+    const parsed = PaginationSchema.safeParse(Object.fromEntries(searchParams));
 
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const page = parseInt(searchParams.get("page") || "1");
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: "Invalid query parameters" },
+        { status: 400 }
+      );
+    }
+
+    const { page, limit, search } = parsed.data;
     const skip = (page - 1) * limit;
 
     const status = searchParams.get("status");         // e.g. "refunded"
     const paymentMethod = searchParams.get("paymentMethod"); // "cash", "gcash", "all"
-    const search = searchParams.get("search") || "";
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const noStats = searchParams.get("noStats") === "true";
