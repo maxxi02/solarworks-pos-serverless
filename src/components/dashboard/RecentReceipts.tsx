@@ -59,12 +59,17 @@ export function RecentReceipts() {
     async function fetchTransactions() {
         setIsLoading(true);
         try {
-            const res = await fetch('/api/payments?limit=5&noStats=true&status=completed');
+            const res = await fetch('/api/payments?limit=50&noStats=true');
             const d = await res.json();
             if (d.success && d.data?.payments) {
+                // First filter by completed status like TransactionHistory does
+                const completedPayments = d.data.payments.filter((t: Transaction) => 
+                    t.status === 'completed' || !t.status
+                );
+
                 const payments: Transaction[] = isAdmin
-                    ? d.data.payments
-                    : d.data.payments.filter(
+                    ? completedPayments
+                    : completedPayments.filter(
                         (p: Transaction) =>
                             (p as any).cashierId === userId ||
                             p.cashier === userName
