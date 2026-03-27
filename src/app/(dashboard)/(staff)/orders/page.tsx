@@ -1401,8 +1401,8 @@ export default function OrdersPage() {
                 {/* Products Grid - Scrollable Area */}
                 <div
                   ref={productsContainerRef}
-                  className="overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1 max-h-[calc(100svh-300px)]"
-                  style={{ minHeight: "400px" }}
+                  className="overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1"
+                  style={{ minHeight: "400px", maxHeight: "696px" }}
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center h-64">
@@ -1414,7 +1414,7 @@ export default function OrdersPage() {
                       No products found
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                       {filteredProducts.map((product) => (
                         <ProductCard
                           key={product._id}
