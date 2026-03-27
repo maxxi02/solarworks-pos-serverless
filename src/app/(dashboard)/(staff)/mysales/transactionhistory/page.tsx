@@ -688,7 +688,7 @@ const History = () => {
                 className="px-3 py-2.5 rounded-lg text-sm bg-background border border-input text-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
               >
                 {s.opts.map(([v, l]) => (
-                  <option key={v} value={v}>
+                  <option key={v} value={v} className="bg-background text-foreground">
                     {l}
                   </option>
                 ))}
@@ -719,9 +719,9 @@ const History = () => {
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="px-3 py-2.5 rounded-lg text-sm bg-background border border-input text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <option value="date">Date</option>
-                <option value="amount">Amount</option>
-                <option value="name">Customer</option>
+                <option value="date" className="bg-background text-foreground">Date</option>
+                <option value="amount" className="bg-background text-foreground">Amount</option>
+                <option value="name" className="bg-background text-foreground">Customer</option>
               </select>
               <button
                 onClick={() =>
