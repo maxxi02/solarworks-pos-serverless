@@ -30,7 +30,8 @@ async function ensureIndexes() {
 
 const notifySalesUpdate = async () => {
   try {
-    const socketUrl = process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL;
+    const socketUrl =
+      process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL;
     if (!socketUrl) return;
     await fetch(`${socketUrl}/internal/sales-updated`, {
       method: "POST",
@@ -46,7 +47,8 @@ const notifySalesUpdate = async () => {
 
 const notifyCashUpdate = async () => {
   try {
-    const socketUrl = process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL;
+    const socketUrl =
+      process.env.SOCKET_URL || process.env.NEXT_PUBLIC_SOCKET_URL;
     if (!socketUrl) return;
     await fetch(`${socketUrl}/internal/cash-updated`, {
       method: "POST",
@@ -64,6 +66,7 @@ const notifyCashUpdate = async () => {
 function normalizePortalOrder(o: any) {
   return {
     _id: o._id,
+    orderId: o.orderId,
     orderNumber: o.orderNumber || "—",
     customerName: o.customerName || "Customer",
     items: o.items || [],
@@ -72,11 +75,12 @@ function normalizePortalOrder(o: any) {
     total: o.total || 0,
     paymentMethod: (o.paymentMethod || "gcash").toLowerCase(),
     orderType: o.orderType || "dine-in",
-    status: o.paymentStatus === "paid" ? "completed" : o.paymentStatus || "completed",
-    source: "portal",  // So UI can optionally badge these
+    status:
+      o.paymentStatus === "paid" ? "completed" : o.paymentStatus || "completed",
+    source: "portal", // So UI can optionally badge these
     paymentReference: o.paymentReference || null,
     queueStatus: o.queueStatus,
-    createdAt: o.paidAt || o.createdAt,   // Use paidAt as the transaction timestamp
+    createdAt: o.paidAt || o.createdAt, // Use paidAt as the transaction timestamp
     updatedAt: o.updatedAt,
   };
 }
@@ -107,9 +111,16 @@ export async function POST(request: NextRequest) {
     const parsed = CreatePaymentSchema.safeParse(body);
 
     if (!parsed.success) {
-      console.warn("POST /api/payments - Validation failed:", JSON.stringify(parsed.error.format()));
+      console.warn(
+        "POST /api/payments - Validation failed:",
+        JSON.stringify(parsed.error.format()),
+      );
       return NextResponse.json(
-        { success: false, error: "Invalid payment data", details: parsed.error.format() },
+        {
+          success: false,
+          error: "Invalid payment data",
+          details: parsed.error.format(),
+        },
         { status: 400 },
       );
     }
@@ -129,25 +140,30 @@ export async function POST(request: NextRequest) {
       };
 
       // 1. Insert payment record
-      const result = await paymentsCollection.insertOne(paymentData, { session });
+      const result = await paymentsCollection.insertOne(paymentData, {
+        session,
+      });
 
       // 2. Handle order record link/creation
       if (orderId) {
-        const existingOrder = await ordersCollection.findOne({ orderId }, { session });
-        
+        const existingOrder = await ordersCollection.findOne(
+          { orderId },
+          { session },
+        );
+
         if (existingOrder) {
           // Update existing order status (Fix #4)
           await ordersCollection.updateOne(
             { orderId },
-            { 
-              $set: { 
+            {
+              $set: {
                 paymentStatus: "paid",
                 queueStatus: "queueing",
                 paidAt: new Date(),
                 updatedAt: new Date(),
-              } 
+              },
             },
-            { session }
+            { session },
           );
           console.log(`Order ${orderId} updated to paid.`);
         } else {
@@ -156,10 +172,10 @@ export async function POST(request: NextRequest) {
             orderId,
             orderNumber: orderNumber || "POS-WALKIN",
             customerName: parsed.data.customerName || "Walk-in Customer",
-            items: items.map(item => ({
+            items: items.map((item) => ({
               ...item,
               _id: item.productId, // Compatibility with POS structure
-              ingredients: []      // Defaulting for POS creations
+              ingredients: [], // Defaulting for POS creations
             })),
             subtotal: parsed.data.subtotal || total,
             total,
@@ -177,7 +193,7 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date(),
             paidAt: new Date(),
           };
-          
+
           await ordersCollection.insertOne(newOrder, { session });
           console.log(`Order ${orderId} created (not found during payment).`);
         }
@@ -199,15 +215,22 @@ export async function POST(request: NextRequest) {
     notifyCashUpdate();
 
     return NextResponse.json(responseBody, { status: responseStatus });
-
   } catch (error: any) {
     console.error("POST /api/payments error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to save payment";
-    
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to save payment";
+
     // Provide more context for Mongo connection errors
-    if (errorMessage.includes("Server selection timed out") || errorMessage.includes("Topology is closed")) {
+    if (
+      errorMessage.includes("Server selection timed out") ||
+      errorMessage.includes("Topology is closed")
+    ) {
       return NextResponse.json(
-        { success: false, error: "Database connection timeout. Please try again.", details: errorMessage },
+        {
+          success: false,
+          error: "Database connection timeout. Please try again.",
+          details: errorMessage,
+        },
         { status: 503 },
       );
     }
@@ -235,14 +258,14 @@ export async function GET(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { success: false, error: "Invalid query parameters" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const { page, limit, search } = parsed.data;
     const skip = (page - 1) * limit;
 
-    const status = searchParams.get("status");         // e.g. "refunded"
+    const status = searchParams.get("status"); // e.g. "refunded"
     const paymentMethod = searchParams.get("paymentMethod"); // "cash", "gcash", "all"
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
@@ -260,7 +283,10 @@ export async function GET(request: NextRequest) {
         posFilter.status = status;
       }
     }
-    if (paymentMethod && paymentMethod !== "all") posFilter.paymentMethod = { $regex: new RegExp(`^${paymentMethod}$`, "i") };
+    if (paymentMethod && paymentMethod !== "all")
+      posFilter.paymentMethod = {
+        $regex: new RegExp(`^${paymentMethod}$`, "i"),
+      };
     if (search) {
       posFilter.$or = [
         { orderNumber: { $regex: search, $options: "i" } },
@@ -281,7 +307,9 @@ export async function GET(request: NextRequest) {
     // Skip portal orders when filtering by status=refunded (they're not refundable via POS)
     const includePortal = !status || status === "all" || status === "completed";
     if (paymentMethod && paymentMethod !== "all") {
-      portalFilter.paymentMethod = { $regex: new RegExp(`^${paymentMethod}$`, "i") };
+      portalFilter.paymentMethod = {
+        $regex: new RegExp(`^${paymentMethod}$`, "i"),
+      };
     }
     if (search) {
       portalFilter.$or = [
@@ -299,27 +327,71 @@ export async function GET(request: NextRequest) {
 
     // ── Fetch paginated data in parallel ──────────────────────────────────────
     const [posRaw, portalRaw] = await Promise.all([
-      paymentsCol.find(posFilter, {
-        projection: {
-          orderNumber: 1, customerName: 1, subtotal: 1, discountTotal: 1,
-          total: 1, paymentMethod: 1, orderType: 1, createdAt: 1, items: 1,
-          status: 1, refundedAt: 1, refundedBy: 1, refundReason: 1, timestamp: 1,
-        },
-      }).sort({ createdAt: -1 }).limit(skip + limit).toArray(),
-      includePortal ? ordersCol.find(portalFilter, {
-        projection: {
-          orderNumber: 1, customerName: 1, customerId: 1, subtotal: 1,
-          total: 1, paymentMethod: 1, orderType: 1, paidAt: 1, createdAt: 1,
-          items: 1, paymentStatus: 1, paymentReference: 1, queueStatus: 1, updatedAt: 1,
-        },
-      }).sort({ createdAt: -1 }).limit(skip + limit).toArray() : Promise.resolve([]),
+      paymentsCol
+        .find(posFilter, {
+          projection: {
+            orderNumber: 1,
+            orderId: 1,
+            customerName: 1,
+            subtotal: 1,
+            discountTotal: 1,
+            total: 1,
+            paymentMethod: 1,
+            orderType: 1,
+            createdAt: 1,
+            items: 1,
+            status: 1,
+            refundedAt: 1,
+            refundedBy: 1,
+            refundReason: 1,
+            timestamp: 1,
+          },
+        })
+        .sort({ createdAt: -1 })
+        .limit(skip + limit)
+        .toArray(),
+      includePortal
+        ? ordersCol
+            .find(portalFilter, {
+              projection: {
+                orderNumber: 1,
+                orderId: 1,
+                customerName: 1,
+                customerId: 1,
+                subtotal: 1,
+                total: 1,
+                paymentMethod: 1,
+                orderType: 1,
+                paidAt: 1,
+                createdAt: 1,
+                items: 1,
+                paymentStatus: 1,
+                paymentReference: 1,
+                queueStatus: 1,
+                updatedAt: 1,
+              },
+            })
+            .sort({ createdAt: -1 })
+            .limit(skip + limit)
+            .toArray()
+        : Promise.resolve([]),
     ]);
 
     // ── Normalize & merge ─────────────────────────────────────────────────────
-    const normalized = [
-      ...posRaw.map(normalizePayment),
-      ...portalRaw.map(normalizePortalOrder),
-    ];
+    const normalizedPos = posRaw.map(normalizePayment);
+    const normalizedPortal = portalRaw.map(normalizePortalOrder);
+
+    // Deduplicate by orderId or orderNumber (payments takes precedence, so we add portal first)
+    const combinedMap = new Map();
+    for (const p of normalizedPortal) {
+      if (p.orderId) combinedMap.set(p.orderId, p);
+      else combinedMap.set(p.orderNumber, p);
+    }
+    for (const p of normalizedPos) {
+      if (p.orderId) combinedMap.set(p.orderId, p);
+      else combinedMap.set(p.orderNumber, p);
+    }
+    const normalized = Array.from(combinedMap.values());
 
     // Sort all by createdAt desc
     normalized.sort((a, b) => {
@@ -343,22 +415,49 @@ export async function GET(request: NextRequest) {
 
     if (!noStats) {
       const [posStatsRaw, portalStatsRaw] = await Promise.all([
-        paymentsCol.find(posFilter, {
-          projection: { status: 1, paymentMethod: 1, total: 1 }
-        }).toArray(),
-        includePortal ? ordersCol.find(portalFilter, {
-          projection: { paymentStatus: 1, paymentMethod: 1, total: 1 }
-        }).toArray() : Promise.resolve([])
+        paymentsCol
+          .find(posFilter, {
+            projection: {
+              status: 1,
+              paymentMethod: 1,
+              total: 1,
+              orderId: 1,
+              orderNumber: 1,
+            },
+          })
+          .toArray(),
+        includePortal
+          ? ordersCol
+              .find(portalFilter, {
+                projection: {
+                  paymentStatus: 1,
+                  paymentMethod: 1,
+                  total: 1,
+                  orderId: 1,
+                  orderNumber: 1,
+                },
+              })
+              .toArray()
+          : Promise.resolve([]),
       ]);
 
-      const allStatsData = [
-        ...posStatsRaw.map(normalizePayment),
-        ...portalStatsRaw.map(normalizePortalOrder)
-      ];
+      const normalizedPosStats = posStatsRaw.map(normalizePayment);
+      const normalizedPortalStats = portalStatsRaw.map(normalizePortalOrder);
+
+      const statsMap = new Map();
+      for (const p of normalizedPortalStats) {
+        if (p.orderId) statsMap.set(p.orderId, p);
+        else statsMap.set(p.orderNumber, p);
+      }
+      for (const p of normalizedPosStats) {
+        if (p.orderId) statsMap.set(p.orderId, p);
+        else statsMap.set(p.orderNumber, p);
+      }
+      const allStatsData = Array.from(statsMap.values());
 
       total = allStatsData.length;
       const completedAll = allStatsData.filter(
-        (t) => t.status === "completed" || t.status === "paid" || !t.status
+        (t) => t.status === "completed" || t.status === "paid" || !t.status,
       );
       const totalSales = completedAll.reduce((s, t) => s + (t.total || 0), 0);
       const cashSales = completedAll
@@ -374,7 +473,9 @@ export async function GET(request: NextRequest) {
       stats = {
         totalSales,
         totalTransactions: completedAll.length,
-        averageTransaction: completedAll.length ? totalSales / completedAll.length : 0,
+        averageTransaction: completedAll.length
+          ? totalSales / completedAll.length
+          : 0,
         cashSales,
         gcashSales,
         splitSales,
