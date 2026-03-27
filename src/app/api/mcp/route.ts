@@ -42,5 +42,5 @@ const handler = createMcpHandler((server) => {
 // Export standard Next.js route handlers for both GET (for SSE setup) and POST (for MCP requests)
 export const POST = handler;
 export const GET = handler;
-export const runtime = "edge"; // Optional: Use edge runtime for faster response
+// export const runtime = "nodejs"; // Using standard node runtime to support node:crypto
 
