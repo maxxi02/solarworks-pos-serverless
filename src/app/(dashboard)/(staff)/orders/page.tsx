@@ -1479,7 +1479,7 @@ export default function OrdersPage() {
                       {!cart.length && (
                         <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30">
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            ↓ Drop products here ↓
+                            Click or drag products here
                           </p>
                         </div>
                       )}
