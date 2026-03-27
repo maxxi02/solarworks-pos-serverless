@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/format-utils';
 import { ShoppingCart, RefreshCw, ArrowRight, DollarSign, Smartphone, CreditCard } from "lucide-react";
 import { authClient } from '@/lib/auth-client';
 import Link from 'next/link';
+import { useSocket } from '@/provider/socket-provider';
 
 interface Transaction {
     _id: string;
@@ -49,6 +50,8 @@ export function RecentReceipts() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    const { onSalesUpdated, offSalesUpdated, onNewCustomerOrder, offNewCustomerOrder } = useSocket();
+
     const viewAllHref = isAdmin
         ? '/dashboard/sales/all-transactions'
         : '/transactionhistory';
@@ -56,7 +59,7 @@ export function RecentReceipts() {
     async function fetchTransactions() {
         setIsLoading(true);
         try {
-            const res = await fetch('/api/payments?limit=5&noStats=true');
+            const res = await fetch('/api/payments?limit=5&noStats=true&status=completed');
             const d = await res.json();
             if (d.success && d.data?.payments) {
                 const payments: Transaction[] = isAdmin
@@ -76,8 +79,25 @@ export function RecentReceipts() {
     }
 
     useEffect(() => {
-        if (session) fetchTransactions();
-    }, [session]);
+        if (!session) return;
+        
+        fetchTransactions();
+
+        const handleUpdate = () => {
+            fetchTransactions();
+        };
+
+        onSalesUpdated?.(handleUpdate);
+        onNewCustomerOrder?.(handleUpdate);
+
+        const intervalId = setInterval(handleUpdate, 30000);
+
+        return () => {
+            offSalesUpdated?.(handleUpdate);
+            offNewCustomerOrder?.(handleUpdate);
+            clearInterval(intervalId);
+        };
+    }, [session, userId, userName, isAdmin, onSalesUpdated, offSalesUpdated, onNewCustomerOrder, offNewCustomerOrder]);
 
     return (
         <Card>
