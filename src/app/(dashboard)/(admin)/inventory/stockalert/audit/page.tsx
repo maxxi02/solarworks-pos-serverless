@@ -26,6 +26,13 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useInventorySocket, AuditEntry } from '@/hooks/useInventorySocket';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Pagination {
   page: number;
@@ -474,28 +481,36 @@ export default function AuditPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Adjustment Type</label>
-              <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white">
-                <option value="all">All Types</option>
-                <option value="restock">Restock</option>
-                <option value="deduction">Deduction</option>
-                <option value="usage">Usage</option>
-                <option value="waste">Waste</option>
-                <option value="correction">Correction</option>
-                <option value="adjustment">Adjustment</option>
-              </select>
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger className="w-full h-10 bg-white dark:bg-black border-gray-300 dark:border-gray-700">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="restock">Restock</SelectItem>
+                  <SelectItem value="deduction">Deduction</SelectItem>
+                  <SelectItem value="usage">Usage</SelectItem>
+                  <SelectItem value="waste">Waste</SelectItem>
+                  <SelectItem value="correction">Correction</SelectItem>
+                  <SelectItem value="adjustment">Adjustment</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Reference Type</label>
-              <select value={selectedReference} onChange={(e) => setSelectedReference(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-sm text-gray-900 dark:text-white">
-                <option value="all">All References</option>
-                <option value="order">Order</option>
-                <option value="manual">Manual</option>
-                <option value="return">Return</option>
-                <option value="rollback">Rollback</option>
-                <option value="adjustment">Adjustment</option>
-              </select>
+              <Select value={selectedReference} onValueChange={setSelectedReference}>
+                <SelectTrigger className="w-full h-10 bg-white dark:bg-black border-gray-300 dark:border-gray-700">
+                  <SelectValue placeholder="All References" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All References</SelectItem>
+                  <SelectItem value="order">Order</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="return">Return</SelectItem>
+                  <SelectItem value="rollback">Rollback</SelectItem>
+                  <SelectItem value="adjustment">Adjustment</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
