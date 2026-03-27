@@ -50,6 +50,15 @@ export const CreatePaymentSchema = z.object({
   cashierId: z.string().optional(),
   cashierName: z.string().optional(),
   shopId: z.string().optional(),
+  orderType: z.enum(["dine-in", "takeaway"]).optional().default("takeaway"),
+  tableNumber: z.string().optional().nullable(),
+  orderNote: z.string().optional().nullable(),
+  seniorPwdCount: z.number().int().nonnegative().optional().default(0),
+  seniorPwdIds: z.array(z.string()).optional().default([]),
+  splitPayment: z.object({
+    cash: z.number().nonnegative(),
+    gcash: z.number().nonnegative(),
+  }).optional(),
   timestamp: z.string().optional().transform(v => v ? new Date(v) : new Date()),
 });
 

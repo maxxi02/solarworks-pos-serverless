@@ -102,9 +102,12 @@ export async function POST(request: NextRequest) {
     if (!authRecord.authorized) return authRecord.response!;
 
     const body = await request.json();
+    console.log("POST /api/payments - Body:", JSON.stringify(body));
+
     const parsed = CreatePaymentSchema.safeParse(body);
 
     if (!parsed.success) {
+      console.warn("POST /api/payments - Validation failed:", JSON.stringify(parsed.error.format()));
       return NextResponse.json(
         { success: false, error: "Invalid payment data", details: parsed.error.format() },
         { status: 400 },
@@ -128,23 +131,55 @@ export async function POST(request: NextRequest) {
       // 1. Insert payment record
       const result = await paymentsCollection.insertOne(paymentData, { session });
 
-      // 2. If orderId is provided, update order status atomically (Fix #4)
+      // 2. Handle order record link/creation
       if (orderId) {
-        const orderUpdate = await ordersCollection.updateOne(
-          { orderId },
-          { 
-            $set: { 
-              paymentStatus: "paid",
-              queueStatus: "queueing",
-              paidAt: new Date(),
-              updatedAt: new Date(),
-            } 
-          },
-          { session }
-        );
-
-        if (orderUpdate.matchedCount === 0) {
-          throw new Error(`Order with ID ${orderId} not found`);
+        const existingOrder = await ordersCollection.findOne({ orderId }, { session });
+        
+        if (existingOrder) {
+          // Update existing order status (Fix #4)
+          await ordersCollection.updateOne(
+            { orderId },
+            { 
+              $set: { 
+                paymentStatus: "paid",
+                queueStatus: "queueing",
+                paidAt: new Date(),
+                updatedAt: new Date(),
+              } 
+            },
+            { session }
+          );
+          console.log(`Order ${orderId} updated to paid.`);
+        } else {
+          // Create a new order if it doesn't exist (POS Direct flow)
+          const newOrder = {
+            orderId,
+            orderNumber: orderNumber || "POS-WALKIN",
+            customerName: parsed.data.customerName || "Walk-in Customer",
+            items: items.map(item => ({
+              ...item,
+              _id: item.productId, // Compatibility with POS structure
+              ingredients: []      // Defaulting for POS creations
+            })),
+            subtotal: parsed.data.subtotal || total,
+            total,
+            paymentMethod: parsed.data.paymentMethod,
+            paymentStatus: "paid",
+            queueStatus: "queueing",
+            orderType: parsed.data.orderType || "takeaway",
+            tableNumber: parsed.data.tableNumber,
+            orderNote: parsed.data.orderNote,
+            seniorPwdCount: parsed.data.seniorPwdCount,
+            seniorPwdIds: parsed.data.seniorPwdIds,
+            splitPayment: parsed.data.splitPayment,
+            timestamp: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            paidAt: new Date(),
+          };
+          
+          await ordersCollection.insertOne(newOrder, { session });
+          console.log(`Order ${orderId} created (not found during payment).`);
         }
       }
 
@@ -165,12 +200,21 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseBody, { status: responseStatus });
 
-  } catch (error) {
-    console.error("Payment save error:", error);
+  } catch (error: any) {
+    console.error("POST /api/payments error:", error);
     const errorMessage = error instanceof Error ? error.message : "Failed to save payment";
+    
+    // Provide more context for Mongo connection errors
+    if (errorMessage.includes("Server selection timed out") || errorMessage.includes("Topology is closed")) {
+      return NextResponse.json(
+        { success: false, error: "Database connection timeout. Please try again.", details: errorMessage },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: errorMessage },
-      { status: responseStatus },
+      { status: 500 },
     );
   } finally {
     await session.endSession();
