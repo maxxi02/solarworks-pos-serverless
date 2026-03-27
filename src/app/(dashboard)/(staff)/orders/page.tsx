@@ -1355,9 +1355,9 @@ export default function OrdersPage() {
 
           <TabsContent value="pos" className="m-0">
             {/* Main Layout */}
-            <div className="flex flex-col lg:flex-row gap-5">
+            <div className="flex flex-row gap-3 md:gap-5">
               {/* Left — Products */}
-              <div className="md:w-[65%] lg:w-[70%] flex flex-col w-full min-w-0 h-full">
+              <div className="flex-1 flex flex-col min-w-0 h-full">
                 {/* Menu Type Filter */}
                 <div className="grid grid-cols-3 gap-1.5 xs:gap-2 md:gap-3 mb-4 md:mb-5">
                   {(["all", "food", "drink"] as const).map((type) => (
@@ -1370,7 +1370,7 @@ export default function OrdersPage() {
                         setSelectedMenuType(type);
                         setSelectedCategory("All");
                       }}
-                      className="h-9 md:h-11 text-[10px] xs:text-xs md:text-base capitalize px-1 md:px-4"
+                      className="h-9 md:h-10 lg:h-11 text-[10px] xs:text-xs md:text-sm lg:text-base capitalize px-1 md:px-2 lg:px-4"
                     >
                       {type === "food" && (
                         <Utensils className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
@@ -1417,7 +1417,7 @@ export default function OrdersPage() {
                       No products found
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 gap-3 pb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                       {filteredProducts.map((product) => (
                         <ProductCard
                           key={product._id}
@@ -1432,7 +1432,7 @@ export default function OrdersPage() {
               </div>
 
               {/* Right — Cart - Fully visible, no scroll */}
-              <div className="lg:w-[30%] min-w-[320px]">
+              <div className="w-[280px] lg:w-[340px] shrink-0">
                 <div
                   ref={cartDropZoneRef}
                   className="transition-all"
