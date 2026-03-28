@@ -121,6 +121,7 @@ export default function ZReportModal({
         openingFund: summary.openingFund,
         cashEarned: summary.cashSales || summary.tenders?.cash || 0,
         expectedCash: summary.expectedCash,
+        cashOuts: summary.cashOuts || 0,
         actualCash: summary.actualCash,
         difference: summary.difference,
         tenders: {
@@ -413,28 +414,28 @@ export default function ZReportModal({
                     <span></span>
                   </div>
 
+                  {/* Cash — already includes split cash portion */}
                   {zreading.showPayments.cash && (
                     <div className="flex justify-between font-bold mb-1">
-                      <span>Cash:</span>
+                      <span>Cash{(summary.splitSales ?? 0) > 0 ? ' (incl. Split)' : ''}:</span>
                       <span>{fmtP(summary.tenders?.cash || summary.cashSales || 0)}</span>
                     </div>
                   )}
 
+                  {/* GCash — already includes split gcash portion */}
                   {zreading.showPayments.gcash && (
                     <div className="flex justify-between font-bold mb-1">
-                      <span>GCash:</span>
+                      <span>GCash{(summary.splitSales ?? 0) > 0 ? ' (incl. Split)' : ''}:</span>
                       <span>{fmtP(summary.tenders?.gcash || summary.gcashSales || 0)}</span>
                     </div>
                   )}
 
-                  {/* Split payment breakdown */}
+                  {/* Note about split breakdown (no separate total to avoid double-count) */}
                   {(summary.splitSales ?? 0) > 0 && (
-                    <>
-                      <div className="flex justify-between font-bold mb-1">
-                        <span>Split (Cash+GCash):</span>
-                        <span>{fmtP(summary.splitSales ?? 0)}</span>
-                      </div>
-                    </>
+                    <div className="flex justify-between font-bold mb-1 text-muted-foreground text-xs italic">
+                      <span>↳ Split orders ({fmtP(summary.splitSales ?? 0)} total)</span>
+                      <span>split into above</span>
+                    </div>
                   )}
 
                   {zreading.showPayments.creditCard && summary.tenders?.credit_card && (
