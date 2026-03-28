@@ -1,5 +1,25 @@
 // ============ Shared Types ============
 
+// ── Add-on types (mirrored from src/types/products.ts) ──
+export interface AddonItem {
+  name: string;
+  price: number;
+}
+
+export interface AddonGroup {
+  _id?: string;
+  name: string;
+  required: boolean;
+  multiSelect: boolean;
+  items: AddonItem[];
+}
+
+export interface SelectedAddon {
+  groupName: string;
+  addonName: string;
+  price: number;
+}
+
 export interface Product {
   _id: string;
   name: string;
@@ -9,13 +29,20 @@ export interface Product {
   available: boolean;
   category?: string;
   menuType?: "food" | "drink";
-  imageUrl?: string; // ← ADD THIS
+  imageUrl?: string;
+  addonGroups?: AddonGroup[];
 }
 
 export interface CartItem extends Product {
   quantity: number;
   notes?: string;
   hasDiscount?: boolean;
+  /** Addons selected for this specific cart line item */
+  selectedAddons?: SelectedAddon[];
+  /** Base price + sum of selected addon prices. Used for subtotal calculations. */
+  effectivePrice?: number;
+  /** Unique key for deduplication: _id + sorted addon names (allows same product with diff addons) */
+  cartKey?: string;
 }
 
 export interface CategoryData {

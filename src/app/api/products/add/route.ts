@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       available: body.available !== undefined ? Boolean(body.available) : true,
       categoryId: body.categoryId!,
       imageUrl: body.imageUrl?.trim() || "",
+      addonGroups: Array.isArray(body.addonGroups) ? body.addonGroups : [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { useInventoryOrder } from "@/hooks/useInventoryOrder";
 import { useReceiptSettings } from "@/hooks/useReceiptSettings";
 import {
   previewReceipt,
@@ -24,7 +23,6 @@ import {
   Utensils,
   Coffee,
   Save,
-  RefreshCw,
   Printer,
   Percent,
   Wallet,
@@ -33,6 +31,8 @@ import {
   Lock,
   PowerOff,
 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 // UI
 import { Button } from "@/components/ui/button";
@@ -46,8 +46,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -60,10 +58,10 @@ import { DiscountModal } from "./_components/DiscountModal";
 import { OrderHistoryModal } from "./_components/OrderHistoryModal";
 import { InsufficientStockModal } from "./_components/Insufficientstockmodal";
 import { StockAlertsModal } from "./_components/StockAlertsModal";
-import { IncomingOrderModal } from "./_components/IncomingOrderModal";
 import { SavedOrdersPanel } from "./_components/Savedorderspanel";
 import { CategoryFilter } from "./_components/CategoryFilter";
 import { QueueBoard } from "./_components/QueueBoard";
+import { AddonSelectionModal } from "./_components/AddonSelectionModal";
 
 import { AttendanceBar } from "./_components/AttendanceBar";
 import { ProductCard } from "./_components/ProductCard";
@@ -74,15 +72,13 @@ import {
   Product,
   CategoryData,
   SavedOrder,
-  StockAlert,
   InsufficientStockItem,
   ReceiptOrder,
-  StockCheckResult,
+  SelectedAddon,
 } from "./_components/pos.types";
 import {
   formatCurrency,
   generateOrderNumber,
-  DISCOUNT_RATE,
 } from "./_components/pos.utils";
 
 import { useSocket } from "@/provider/socket-provider";
@@ -112,129 +108,137 @@ export default function OrdersPage() {
     clockOut,
     refreshStatus,
   } = useAttendance();
+
   const { playSuccess, playError, playOrder } = useNotificationSound();
   const { settings, isLoading: settingsLoading } = useReceiptSettings();
 
-  // Temporarily modified - inventory deduction postponed
-  const {
-    isProcessing,
-    // checkOrderStock,  // Commented out - inventory tracking postponed
-    // processOrderDeductions,  // Commented out - inventory tracking postponed
-    // clearStockCheck,  // Commented out - inventory tracking postponed
-  } = useInventoryOrder({
-    onSuccess: () => {
-      fetchStockAlerts();
-      playSuccess();
-    },
-    onError: (error: Error) => {
-      toast.error("Inventory update failed", { description: error.message });
-      playError();
-    },
-    onInsufficientStock: (items: StockCheckResult[]) => {
-      setInsufficientStockItems(
-        items.map((i) => ({ ...i, shortBy: i.shortBy ?? 0 })),
-      );
-      setShowInsufficientStockModal(true);
-      playError();
-    },
-    autoRollback: true,
-  });
-
+  const queryClient = useQueryClient();
   const [showStockAlertsModal, setShowStockAlertsModal] = useState(false);
 
-  // Open Register gate — shown after clock-in when no session is open
-  // null = still verifying, false = session open (orders allowed), true = must open register first
-  const [needsOpenRegister, setNeedsOpenRegister] = useState<boolean | null>(null);
-  const [startingFundInput, setStartingFundInput] = useState("");
-  const [startingFundError, setStartingFundError] = useState("");
-  const [isOpeningSession, setIsOpeningSession] = useState(false);
+  // ——— Queries ———
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["products", "categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/products/categories");
+      if (!res.ok) throw new Error("Failed to load products");
+      const data: CategoryData[] = await res.json();
+      const list: Product[] = [];
+      data.forEach((cat) =>
+        cat.products?.forEach((p: any) =>
+          list.push({ ...p, category: cat.name, menuType: cat.menuType }),
+        ),
+      );
+      return list;
+    },
+  });
 
-  // Register closed state — shown after staff closes register via Close Register page
-  const [isRegisterClosed, setIsRegisterClosed] = useState(false);
+  const { data: stockAlerts = [], refetch: refetchStockAlerts } = useQuery({
+    queryKey: ["stock-alerts"],
+    queryFn: async () => {
+      const [criticalRes, lowStockRes] = await Promise.all([
+        fetch("/api/products/stocks/alerts/critical"),
+        fetch("/api/products/stocks/alerts/low-stock"),
+      ]);
+      if (criticalRes.ok && lowStockRes.ok) {
+        return [
+          ...(await criticalRes.json()),
+          ...(await lowStockRes.json()),
+        ];
+      }
+      return [];
+    },
+    refetchInterval: 60000,
+  });
 
-  const checkSession = useCallback(async () => {
-    try {
+  const { data: sessionStatus, isLoading: sessionLoading } = useQuery({
+    queryKey: ["session"],
+    queryFn: async () => {
       const res = await fetch("/api/session");
       const result = await res.json();
-      return result.success && result.data;
-    } catch {
-      return false;
-    }
-  }, []);
+      return result.success ? result.data : null;
+    },
+  });
 
-  const checkShopOpen = useCallback(async () => {
-    try {
+  const { data: shopStatus, isLoading: shopStatusLoading } = useQuery({
+    queryKey: ["shop-status"],
+    queryFn: async () => {
       const res = await fetch("/api/shop-status");
       const data = await res.json();
-      return data.isOpen !== false; // default true on error
-    } catch {
-      return true;
-    }
-  }, []);
+      return data.isOpen !== false;
+    },
+  });
 
-  const handleClockInSuccess = useCallback(async () => {
-    const sessionOpen = await checkSession();
-    if (sessionOpen) {
-      // Session already open – go straight to orders
-      setIsRegisterClosed(false);
-      await refreshStatus();
-    } else {
-      // No open session – check if shop was explicitly closed or just never opened
-      const shopOpen = await checkShopOpen();
-      if (!shopOpen) {
-        setIsRegisterClosed(true);
-        setNeedsOpenRegister(false);
-      } else {
-        // Shop is open but no session exists -> Needs to open register first
-        setNeedsOpenRegister(true);
-        // Force the shop to close so customers can't order while staff is opening the register
-        fetch("/api/shop-status", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
-        }).catch(err => console.error("Failed to sync shop status to closed:", err));
-      }
-      await refreshStatus();
-    }
-  }, [checkSession, checkShopOpen, refreshStatus]);
+  // ——— State ———
+  const [startingFundInput, setStartingFundInput] = useState("");
+  const [startingFundError, setStartingFundError] = useState("");
 
-  const handleConfirmStartingFund = async () => {
-    const amount = parseFloat(startingFundInput);
-    if (isNaN(amount) || amount < 0) {
-      setStartingFundError("Please enter a valid amount (0 or more)");
-      return;
-    }
-    setIsOpeningSession(true);
-    try {
+  const isRegisterClosed = shopStatus === false && !sessionStatus;
+  const needsOpenRegister = isClockedIn && shopStatus !== false && !sessionStatus;
+
+  // ——— Mutations ———
+  const openRegisterMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      await fetch("/api/shop-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
+      });
+
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ openingFund: amount }),
       });
       const result = await res.json();
-      if (result.success) {
-        toast.success(`Register opened with ₱${amount.toFixed(2)} starting fund`);
-        setNeedsOpenRegister(false);
-        setIsRegisterClosed(false);
-        setStartingFundInput("");
-        setStartingFundError("");
-
-        // Unlock the shop so customers can order again
-        fetch("/api/shop-status", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isOpen: true, updatedBy: "staff" }),
-        }).catch(err => console.error("Failed to sync shop status to open:", err));
-
-      } else {
-        toast.error("Failed to open register");
-      }
-    } catch {
+      if (!result.success) throw new Error("Failed to open register");
+      
+      await fetch("/api/shop-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOpen: true, updatedBy: "staff" }),
+      });
+      
+      return result;
+    },
+    onSuccess: (result, amount) => {
+      toast.success(`Register opened with ₱${amount.toFixed(2)} starting fund`);
+      queryClient.invalidateQueries({ queryKey: ["session"] });
+      queryClient.invalidateQueries({ queryKey: ["shop-status"] });
+      setStartingFundInput("");
+      setStartingFundError("");
+    },
+    onError: () => {
       toast.error("Failed to open register");
-    } finally {
-      setIsOpeningSession(false);
+    },
+  });
+
+  const updateQueueStatusMutation = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      const res = await fetch("/api/orders/queue", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, queueStatus: status }),
+      });
+      if (!res.ok) throw new Error("Failed to update queue");
+      return res.json();
+    },
+  });
+
+  const handleClockInSuccess = useCallback(async () => {
+    queryClient.invalidateQueries({ queryKey: ["session"] });
+    queryClient.invalidateQueries({ queryKey: ["shop-status"] });
+    await refreshStatus();
+  }, [queryClient, refreshStatus]);
+
+  const handleConfirmStartingFund = () => {
+    const amount = parseFloat(startingFundInput);
+    if (isNaN(amount) || amount < 0) {
+      setStartingFundError("Please enter a valid amount (0 or more)");
+      return;
     }
+    openRegisterMutation.mutate(amount);
   };
+
 
   // Cart
   const {
@@ -260,10 +264,12 @@ export default function OrdersPage() {
     clearAll: clearAllSavedOrders,
   } = useSavedOrders();
 
-  // Product State
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
+  // Dialog States
+  const [confirmClearCartOpen, setConfirmClearCartOpen] = useState(false);
+  const [confirmDeleteSavedOrder, setConfirmDeleteSavedOrder] = useState<{ open: boolean; orderId: string | null }>({
+    open: false,
+    orderId: null,
+  });
 
   // Order Form State
   const [customerName, setCustomerName] = useState("");
@@ -291,7 +297,6 @@ export default function OrdersPage() {
   const [showOrderHistory, setShowOrderHistory] = useState(false);
   const [activeTab, setActiveTab] = useState<"pos" | "queue">("pos");
   const [unreadQueueCount, setUnreadQueueCount] = useState(0);
-  // const [showStockAlerts, setShowStockAlerts] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptOrder | null>(
     null,
@@ -305,6 +310,22 @@ export default function OrdersPage() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [isDraggingCategory, setIsDraggingCategory] = useState(false);
+
+  // Addon Selection Modal state
+  const [addonModalProduct, setAddonModalProduct] = useState<Product | null>(null);
+  const [addonModalOpen, setAddonModalOpen] = useState(false);
+
+  const handleOpenAddons = useCallback((product: Product) => {
+    setAddonModalProduct(product);
+    setAddonModalOpen(true);
+  }, []);
+
+  const handleAddonConfirm = useCallback(
+    (product: Product, selectedAddons: SelectedAddon[], quantity: number) => {
+      addToCart(product, selectedAddons, quantity);
+    },
+    [addToCart],
+  );
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
   const [touchPreview, setTouchPreview] = useState<HTMLDivElement | null>(null);
@@ -312,7 +333,6 @@ export default function OrdersPage() {
   const [scrollLeft, setScrollLeft] = useState(0);
 
   //ORDER STATES
-  // pendingWebOrders removed — orders go directly into Queue Board via socket now
   const [activeCustomerOrderId, setActiveCustomerOrderId] = useState<
     string | null
   >(null);
@@ -323,7 +343,7 @@ export default function OrdersPage() {
   const productsContainerRef = useRef<HTMLDivElement>(null);
 
   // ——— Computed ———
-  const isDisabled = isProcessing || isPrinting || attendanceLoading || isPaying;
+  const isDisabled = isPrinting || attendanceLoading || isPaying;
 
   const canProcessPayment = useMemo(() => {
     if (!cart.length) return false;
@@ -367,14 +387,11 @@ export default function OrdersPage() {
     preloadNotificationSounds();
   }, []);
 
-  // Track recently notified orders to prevent duplicate alerts from multiple webhook triggers
+  // Track recently notified orders
   const notifiedOrdersRef = useRef<Set<string>>(new Set());
 
-  // Join POS room whenever socket connects/reconnects, then listen for new orders
   useEffect(() => {
     if (!isConnected) return;
-
-    // Re-join room on every connect/reconnect
     emitPosJoin();
 
     const handleQueueUpdate = (data: {
@@ -382,7 +399,6 @@ export default function OrdersPage() {
       queueStatus: string;
       order: CustomerOrder;
     }) => {
-      // Only notify when payment is confirmed (queueing = paid and in queue)
       if (data.queueStatus === "queueing") {
         if (notifiedOrdersRef.current.has(data.orderId)) return;
         notifiedOrdersRef.current.add(data.orderId);
@@ -403,63 +419,36 @@ export default function OrdersPage() {
 
     onQueueUpdated(handleQueueUpdate);
     return () => offQueueUpdated(handleQueueUpdate);
-  }, [isConnected, activeTab, onQueueUpdated, offQueueUpdated, playOrder]);
-
-  // Fetch missed pending customer orders on load (already in Queue Board's own fetch)
-  // Removed the pendingWebOrders fetch — Queue Board fetches pending_payment directly
-
-  useEffect(() => {
-    fetchProducts();
-    fetchStockAlerts();
-    const t = setInterval(fetchStockAlerts, 60000);
-    return () => clearInterval(t);
-  }, []);
+  }, [isConnected, activeTab, onQueueUpdated, offQueueUpdated, playOrder, emitPosJoin]);
 
   // Whenever the user is clocked in, verify a cash session is open.
-  // If not, gate them to the Open Register or Register Closed screen.
-  // Also sync the shop status if they are blocked on Open Register.
   useEffect(() => {
     if (!isClockedIn) return;
-    Promise.all([checkSession(), checkShopOpen()]).then(([sessionOpen, shopOpen]) => {
-      if (sessionOpen) {
-        setIsRegisterClosed(false);
-        setNeedsOpenRegister(false);
-      } else if (!shopOpen) {
-        // Shop was explicitly closed via Close Register
-        setIsRegisterClosed(true);
-        setNeedsOpenRegister(false);
-      } else {
-        // No session and shop not explicitly closed = needs to open register
-        setIsRegisterClosed(false);
-        setNeedsOpenRegister(true);
+    if (needsOpenRegister) {
+      fetch("/api/shop-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
+      }).catch(err => console.error("Failed to sync shop status to closed:", err));
+    }
+  }, [isClockedIn, needsOpenRegister]);
 
-        // Block customer portal if we are stuck on the Open Register screen
-        fetch("/api/shop-status", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
-        }).catch(err => console.error("Failed to sync shop status to closed:", err));
-      }
-    });
-  }, [isClockedIn, checkSession, checkShopOpen]);
-
-  // Real-time: listen for shop status changes from Close Register
+  // Real-time: listen for shop status changes
   useEffect(() => {
     const handleShopStatus = ({ isOpen }: { isOpen: boolean }) => {
       if (!isOpen) {
-        setIsRegisterClosed(true);
-        setNeedsOpenRegister(false);
+        queryClient.invalidateQueries({ queryKey: ["shop-status"] });
         toast.warning("Register has been closed.", {
           description: "Please open the register to continue taking orders.",
           duration: 6000,
         });
       } else {
-        setIsRegisterClosed(false);
+        queryClient.invalidateQueries({ queryKey: ["shop-status"] });
       }
     };
     onShopStatusChanged(handleShopStatus);
     return () => offShopStatusChanged(handleShopStatus);
-  }, [onShopStatusChanged, offShopStatusChanged]);
+  }, [onShopStatusChanged, offShopStatusChanged, queryClient]);
 
   useEffect(() => {
     if (paymentMethod === "split" && total > 0)
@@ -493,46 +482,9 @@ export default function OrdersPage() {
     return () => window.removeEventListener("resize", check);
   }, [categories]);
 
-  // ——— API ———
-  const fetchProducts = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch("/api/products/categories");
-      const data: CategoryData[] = await res.json();
-      const list: Product[] = [];
-      data.forEach((cat) =>
-        cat.products?.forEach((p) =>
-          list.push({ ...p, category: cat.name, menuType: cat.menuType }),
-        ),
-      );
-      setProducts(list);
-    } catch {
-      toast.error("Failed to load products");
-      playError();
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const fetchStockAlerts = async () => {
-    try {
-      const [criticalRes, lowStockRes] = await Promise.all([
-        fetch("/api/products/stocks/alerts/critical"),
-        fetch("/api/products/stocks/alerts/low-stock"),
-      ]);
-      if (criticalRes.ok && lowStockRes.ok) {
-        setStockAlerts([
-          ...(await criticalRes.json()),
-          ...(await lowStockRes.json()),
-        ]);
-      }
-    } catch {
-      /* silent */
-    }
-  };
-
-  const saveOrderToDatabase = async (order: SavedOrder) => {
-    try {
+  const saveOrderMutation = useMutation({
+    mutationFn: async (order: SavedOrder) => {
       const itemsWithRevenue = order.items.map((item) => {
         const itemTotal = item.price * item.quantity;
         return {
@@ -579,15 +531,14 @@ export default function OrdersPage() {
       if (!response.ok)
         throw new Error(`Failed to save payment: ${response.status}`);
       return await response.json();
-    } catch (error) {
+    },
+    onError: (error, order) => {
       toast.warning("Order saved locally only (database unavailable)", {
-        description:
-          error instanceof Error ? error.message : "Connection error",
+        description: error instanceof Error ? error.message : "Connection error",
       });
       saveOrderToLocal(order);
-      return null;
-    }
-  };
+    },
+  });
 
   // ——— Cart Actions ———
   const clearCart = useCallback(() => {
@@ -600,8 +551,13 @@ export default function OrdersPage() {
     setOrderNote("");
     setSeniorPwdIds([]);
     setActiveCustomerOrderId(null);
-    // clearStockCheck(); // Commented out - inventory tracking postponed
-  }, [clearCartItems]); // Removed clearStockCheck from dependencies
+  }, [clearCartItems]);
+
+  const handleClearCartClick = () => {
+    if (cart.length > 0) {
+      setConfirmClearCartOpen(true);
+    }
+  };
 
   const handleUpdateQuantity = useCallback(
     (id: string, delta: number) => {
@@ -706,13 +662,13 @@ export default function OrdersPage() {
         name: item.name,
         price: item.price,
         quantity: item.quantity,
-        hasDiscount: false, // Assuming no discount info at this level or not needed for kitchen
+        hasDiscount: false,
         menuType: item.menuType,
       })),
       subtotal: order.subtotal,
       discountTotal: 0,
       total: order.total,
-      paymentMethod: "cash" as const, // Placeholder
+      paymentMethod: "cash" as const,
       seniorPwdCount: 0,
       businessName: settings.businessName || "Rendezvous Cafe",
       businessAddress: settings.locationAddress,
@@ -802,9 +758,7 @@ export default function OrdersPage() {
       };
 
       const result = await printBoth(receiptInput);
-      if (result.receipt || result.kitchen) {
-        // toast.success("Printed successfully via Companion App");
-      } else {
+      if (!result.receipt && !result.kitchen) {
         toast.warning("Companion App received request but printers not ready");
       }
     } catch {
@@ -847,40 +801,12 @@ export default function OrdersPage() {
     try {
       setIsPaying(true);
 
-      const orderItems = cart.map((i) => ({
-        productId: i._id,
-        productName: i.name,
-        quantity: i.quantity,
-        ingredients: i.ingredients || [],
-      }));
       const orderNumber = generateOrderNumber();
       const orderId = `order-${Date.now()}`;
 
-      // TEMPORARILY COMMENTED OUT - Inventory deduction postponed
-      /*
-      try {
-        const stockCheck = await checkOrderStock(orderItems);
-        if (!stockCheck.allAvailable) {
-          setInsufficientStockItems(
-            stockCheck.insufficientItems.map((i) => ({
-              ...i,
-              shortBy: i.shortBy ?? 0,
-            })),
-          );
-          setShowInsufficientStockModal(true);
-          setIsCheckingStock(false);
-          playError();
-          return;
-        }
-        await processOrderDeductions(orderId, orderNumber, orderItems);
-      } catch {
-        // continue on stock check failure
-      }
-      */
-
       const completedOrder = buildOrder({
         cart,
-        customerName,
+        customerName: customerName || "Walk-in Customer",
         subtotal,
         discountTotal,
         total,
@@ -893,10 +819,10 @@ export default function OrdersPage() {
         seniorPwdCount,
         seniorPwdIds,
         cashier: staffName,
-        cashierId: session?.user?.id,
+        cashierId: session?.user?.id || "unknown",
       });
 
-      await saveOrderToDatabase(completedOrder);
+      await saveOrderMutation.mutateAsync(completedOrder);
       saveOrderToLocal(completedOrder);
 
       if (
@@ -924,7 +850,7 @@ export default function OrdersPage() {
           paymentMethod,
           splitPayment: paymentMethod === "split" ? splitPayment : undefined,
           amountPaid: paymentMethod === "cash" ? amountPaid : undefined,
-          change: paymentMethod === "cash" ? amountPaid - total : undefined,
+          change: paymentMethod === "cash" ? (amountPaid - total) : undefined,
           seniorPwdCount,
           seniorPwdIds: seniorPwdIds.length ? seniorPwdIds : undefined,
           businessName: settings.businessName || "Rendezvous Cafe",
@@ -935,18 +861,7 @@ export default function OrdersPage() {
 
         setIsPrinting(true);
         try {
-          const results = await printBoth(receiptInput); // from useSocket
-          if (results.receipt) {
-            /* toast.success("Receipt printed"); */
-          }
-          if (results.kitchen) {
-            /* toast.success("Kitchen order printed"); */
-          }
-          if (!results.receipt && !results.kitchen) {
-            toast.warning(
-              "Printers not connected — use browser fallback in printer settings",
-            );
-          }
+          await printBoth(receiptInput);
         } catch {
           /* silent */
         } finally {
@@ -954,30 +869,17 @@ export default function OrdersPage() {
         }
       }
 
-      // Receipt modal no longer auto-shows after payment.
-      // Reprint is still available via QueueBoard / Saved Orders.
-
-      // Complete the customer order so it transitions to the QueueBoard
       if (activeCustomerOrderId) {
-        try {
-          await fetch("/api/orders/queue", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              orderId: activeCustomerOrderId,
-              queueStatus: "paid",
-            }),
-          });
-        } catch (e) {
-          console.error("Failed to update active customer order to paid", e);
-        }
+        updateQueueStatusMutation.mutate({
+          orderId: activeCustomerOrderId,
+          status: "paid",
+        });
       }
 
       clearCart();
       toast.success("Payment successful!");
       playSuccess();
     } catch (error: unknown) {
-      // This catch block now only handles non-inventory errors
       toast.error("Payment failed", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
@@ -995,7 +897,7 @@ export default function OrdersPage() {
       const preview = document.createElement("div");
       preview.style.cssText =
         "position:absolute;top:-1000px;padding:12px;background:white;border:2px solid blue;border-radius:8px;width:160px";
-      preview.innerHTML = `<div style="font-weight:bold">${product.name}</div><div style="font-size:12px">${formatCurrency(product.price)}</div>`;
+      preview.innerHTML = `<div style="font-weight:bold text-black">${product.name}</div><div style="font-size:12px text-black">${formatCurrency(product.price)}</div>`;
       document.body.appendChild(preview);
       e.dataTransfer.setDragImage(preview, 80, 40);
       setTimeout(() => document.body.removeChild(preview), 0);
@@ -1047,7 +949,7 @@ export default function OrdersPage() {
       preview.className =
         "fixed z-50 w-[160px] bg-card border-2 border-primary shadow-lg rounded-lg p-3";
       preview.style.cssText = `left:${e.touches[0].clientX - 80}px;top:${e.touches[0].clientY - 60}px;pointer-events:none;position:fixed`;
-      preview.innerHTML = `<div class="font-bold text-sm">${product.name}</div><div class="text-xs text-p  rimary">${formatCurrency(product.price)}</div>`;
+      preview.innerHTML = `<div class="font-bold text-sm text-black">${product.name}</div><div class="text-xs text-primary">${formatCurrency(product.price)}</div>`;
       document.body.appendChild(preview);
       setTouchPreview(preview);
       window.navigator.vibrate?.(20);
@@ -1123,8 +1025,14 @@ export default function OrdersPage() {
   );
 
   // ——— Guards ———
-  // Show loading while attendance or session check is still resolving
-  if (attendanceLoading || (isLoading && !products.length) || settingsLoading || (isClockedIn && needsOpenRegister === null)) {
+  const isActuallyLoading =
+    attendanceLoading ||
+    productsLoading ||
+    settingsLoading ||
+    sessionLoading ||
+    shopStatusLoading;
+
+  if (isActuallyLoading) {
     return (
       <div className="min-h-screen bg-background overflow-x-hidden">
         <div className="container max-w-7xl mx-auto p-6">
@@ -1209,11 +1117,11 @@ export default function OrdersPage() {
 
               <button
                 onClick={handleConfirmStartingFund}
-                disabled={isOpeningSession}
+                disabled={openRegisterMutation.isPending}
                 className="w-full py-3.5 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60 text-sm"
               >
                 <CheckCircle className="h-4 w-4" />
-                {isOpeningSession ? "Opening..." : "Open Register"}
+                {openRegisterMutation.isPending ? "Opening..." : "Open Register"}
               </button>
             </div>
           </div>
@@ -1270,11 +1178,11 @@ export default function OrdersPage() {
 
               <button
                 onClick={handleConfirmStartingFund}
-                disabled={isOpeningSession}
+                disabled={openRegisterMutation.isPending}
                 className="w-full py-3.5 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60 text-sm"
               >
                 <CheckCircle className="h-4 w-4" />
-                {isOpeningSession ? "Opening..." : "Open Register"}
+                {openRegisterMutation.isPending ? "Opening..." : "Open Register"}
               </button>
             </div>
           </div>
@@ -1296,7 +1204,7 @@ export default function OrdersPage() {
         setShowOrderHistory={setShowOrderHistory}
         setShowSavedOrders={setShowSavedOrders}
         setShowStockAlertsModal={setShowStockAlertsModal}
-        onRefreshStock={fetchStockAlerts}
+        onRefreshStock={() => refetchStockAlerts()}
         currentReceipt={currentReceipt}
         onReprintReceipt={handleReprintReceipt}
         onPreviewReceipt={(type) =>
@@ -1316,7 +1224,7 @@ export default function OrdersPage() {
             setActiveTab(val as "pos" | "queue");
             if (val === "queue") setUnreadQueueCount(0);
           }}
-          className="w-full max-w-[1600px] mx-auto px-10 md:px-6"
+          className="w-full max-w-[1600px] mx-auto px-3 sm:px-4 md:px-6 overflow-hidden"
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between mt-4 md:mt-2 mb-4 md:mb-6 gap-4">
             <h1 className="text-2xl font-bold">Orders</h1>
@@ -1335,11 +1243,11 @@ export default function OrdersPage() {
             </TabsList>
           </div>
 
-          <TabsContent value="pos" className="m-0">
+          <TabsContent value="pos" className="m-0 w-full overflow-hidden">
             {/* Main Layout */}
-            <div className="flex flex-col lg:flex-row gap-5">
+            <div className="flex flex-col lg:flex-row gap-3 lg:gap-5 w-full overflow-hidden">
               {/* Left — Products */}
-              <div className="md:w-[65%] lg:w-[70%] flex flex-col w-full min-w-0 h-full">
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden h-full">
                 {/* Menu Type Filter */}
                 <div className="grid grid-cols-3 gap-1.5 xs:gap-2 md:gap-3 mb-4 md:mb-5">
                   {(["all", "food", "drink"] as const).map((type) => (
@@ -1352,7 +1260,7 @@ export default function OrdersPage() {
                         setSelectedMenuType(type);
                         setSelectedCategory("All");
                       }}
-                      className="h-9 md:h-11 text-[10px] xs:text-xs md:text-base capitalize px-1 md:px-4"
+                      className="h-9 md:h-10 lg:h-11 text-[10px] xs:text-xs md:text-sm lg:text-base capitalize px-1 md:px-2 lg:px-4"
                     >
                       {type === "food" && (
                         <Utensils className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
@@ -1383,28 +1291,26 @@ export default function OrdersPage() {
                 {/* Products Grid - Scrollable Area */}
                 <div
                   ref={productsContainerRef}
-                  className="overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1"
-                  style={{
-                    minHeight: "400px",
-                    maxHeight: "calc(100vh - 280px)",
-                  }}
+                  className="overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1"
+                  style={{ minHeight: "400px", maxHeight: "696px" }}
                 >
-                  {isLoading ? (
+                  {productsLoading ? (
                     <div className="flex items-center justify-center h-64">
                       <Loader2 className="w-8 h-8 animate-spin mr-3" />
-                      Loading...
+                      Loading products...
                     </div>
                   ) : !filteredProducts.length ? (
                     <div className="text-center py-10 text-muted-foreground text-base">
                       No products found
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 gap-3 pb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pb-4">
                       {filteredProducts.map((product) => (
                         <ProductCard
                           key={product._id}
                           product={product}
                           onAddToCart={addToCart}
+                          onOpenAddons={handleOpenAddons}
                         />
                       ))}
                     </div>
@@ -1412,8 +1318,8 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* Right — Cart - Fully visible, no scroll */}
-              <div className="lg:w-[30%] min-w-[320px]">
+              {/* Right — Cart */}
+              <div className="w-full lg:w-[300px] xl:w-[340px] shrink-0 min-w-0 max-h-[500px] lg:max-h-none overflow-y-auto">
                 <div
                   ref={cartDropZoneRef}
                   className="transition-all"
@@ -1452,9 +1358,10 @@ export default function OrdersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={clearCart}
+                            onClick={handleClearCartClick}
                             disabled={!cart.length || isDisabled}
-                            className="h-8 w-8 md:h-9 md:w-9 p-0"
+                            className="h-8 w-8 md:h-9 md:w-9 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            title="Clear Cart"
                           >
                             <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </Button>
@@ -1463,7 +1370,7 @@ export default function OrdersPage() {
                       {!cart.length && (
                         <div className="mt-2 p-3 border border-dashed rounded text-center bg-muted/30">
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            ↓ Drop products here ↓
+                            Click or drag products here
                           </p>
                         </div>
                       )}
@@ -1513,7 +1420,7 @@ export default function OrdersPage() {
                         >
                           {cart.map((item) => (
                             <CartItem
-                              key={item._id}
+                              key={item.cartKey ?? item._id}
                               item={item}
                               isDisabled={isDisabled}
                               onUpdateQuantity={handleUpdateQuantity}
@@ -1631,7 +1538,7 @@ export default function OrdersPage() {
                           value={selectedTable}
                           onChange={(e) => setSelectedTable(e.target.value)}
                           className="h-10 text-sm"
-                          disabled={isDisabled}
+                          disabled={isDisabled || openRegisterMutation.isPending}
                         />
                       )}
 
@@ -1642,15 +1549,17 @@ export default function OrdersPage() {
                           !cart.length ||
                           isDisabled ||
                           settingsLoading ||
-                          !canProcessPayment
+                          !canProcessPayment ||
+                          saveOrderMutation.isPending ||
+                          openRegisterMutation.isPending
                         }
                         className="w-full h-12 text-base font-semibold"
                         size="lg"
                         variant={canProcessPayment ? "default" : "secondary"}
                       >
-                        {isProcessing ? (
+                        {saveOrderMutation.isPending ? (
                           <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
                             Processing...
                           </>
                         ) : isPrinting ? (
@@ -1717,12 +1626,12 @@ export default function OrdersPage() {
             <ScrollArea className="max-h-[70vh] pr-3">
               <SavedOrdersPanel
                 orders={savedOrders}
-                isProcessing={isProcessing}
+                isProcessing={saveOrderMutation.isPending}
                 isPrinting={isPrinting}
                 onClose={() => setShowSavedOrders(false)}
                 onLoad={loadSavedOrder}
                 onReprint={handleReprintReceipt}
-                onDelete={deleteOrder}
+                onDelete={(orderId) => setConfirmDeleteSavedOrder({ open: true, orderId })}
                 onClearAll={clearAllSavedOrders}
               />
             </ScrollArea>
@@ -1746,7 +1655,7 @@ export default function OrdersPage() {
             setCurrentReceipt({
               ...order,
               cashier: order.cashier || staffName,
-              seniorPwdIds: order.seniorPwdIds,
+              seniorPwdIds: order.seniorPwdIds || [],
               isReprint: true,
             });
             setShowOrderHistory(false);
@@ -1764,7 +1673,6 @@ export default function OrdersPage() {
           />
         )}
 
-        {/* InsufficientStockModal - kept but won't be shown since stock check is disabled */}
         {showInsufficientStockModal && (
           <InsufficientStockModal
             items={insufficientStockItems}
@@ -1791,11 +1699,41 @@ export default function OrdersPage() {
           isOpen={showStockAlertsModal}
           onClose={setShowStockAlertsModal}
           stockAlerts={stockAlerts}
-          onRefresh={fetchStockAlerts}
+          onRefresh={() => refetchStockAlerts()}
         />
 
-        {/* IncomingOrderModal removed: customer orders now go directly into Queue Board */}
+        <AddonSelectionModal
+          product={addonModalProduct}
+          open={addonModalOpen}
+          onClose={() => setAddonModalOpen(false)}
+          onConfirm={handleAddonConfirm}
+        />
 
+        {/* Destructive Action Confirmations */}
+        <ConfirmDialog
+          open={confirmClearCartOpen}
+          onOpenChange={setConfirmClearCartOpen}
+          title="Clear Cart?"
+          description="This will remove all items from your current order. This action cannot be undone."
+          onConfirm={clearCart}
+          confirmText="Clear Cart"
+          variant="destructive"
+        />
+
+        <ConfirmDialog
+          open={confirmDeleteSavedOrder.open}
+          onOpenChange={(open) => setConfirmDeleteSavedOrder(prev => ({ ...prev, open }))}
+          title="Delete Saved Order?"
+          description="Are you sure you want to delete this saved order? This cannot be undone."
+          onConfirm={() => {
+            if (confirmDeleteSavedOrder.orderId) {
+              deleteOrder(confirmDeleteSavedOrder.orderId);
+              setConfirmDeleteSavedOrder({ open: false, orderId: null });
+            }
+          }}
+          confirmText="Delete"
+          variant="destructive"
+        />
 
       </>
     </div>

@@ -50,6 +50,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { SpreadsheetImport } from '@/app/(dashboard)/(admin)/inventory/stockalert/SpreadsheetImport';
 import { useInventorySocket } from '@/hooks/useInventorySocket';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface NewItemForm {
   name: string;
@@ -729,31 +730,33 @@ export default function InventoryPage() {
 
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                  >
-                    {categories.map(category => (
-                      <option key={category} value={category}>
-                        {category === 'all' ? 'All Categories' : category}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-40 bg-white dark:bg-black border-gray-300 dark:border-gray-700">
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(category => (
+                        <SelectItem key={category} value={category}>
+                          {category === 'all' ? 'All Categories' : category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="critical">Critical</option>
-                    <option value="low">Low</option>
-                    <option value="warning">Warning</option>
-                    <option value="ok">OK</option>
-                  </select>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-36 bg-white dark:bg-black border-gray-300 dark:border-gray-700">
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="warning">Warning</SelectItem>
+                      <SelectItem value="ok">OK</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <button
@@ -1037,20 +1040,24 @@ export default function InventoryPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Display Unit *</label>
-                <select
+                <Select
                   value={newItem.unit}
-                  onChange={(e) => setNewItem({...newItem, unit: e.target.value as Unit})}
-                  className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
+                  onValueChange={(value) => setNewItem({...newItem, unit: value as Unit})}
                 >
-                  <option value="kg">Kilograms (kg)</option>
-                  <option value="g">Grams (g)</option>
-                  <option value="L">Liters (L)</option>
-                  <option value="mL">Milliliters (mL)</option>
-                  <option value="pieces">Pieces</option>
-                  <option value="boxes">Boxes</option>
-                  <option value="bottles">Bottles</option>
-                  <option value="bags">Bags</option>
-                </select>
+                  <SelectTrigger className="mt-1 w-full bg-white dark:bg-black border-gray-300 dark:border-gray-700">
+                    <SelectValue placeholder="Select Unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg">Kilograms (kg)</SelectItem>
+                    <SelectItem value="g">Grams (g)</SelectItem>
+                    <SelectItem value="L">Liters (L)</SelectItem>
+                    <SelectItem value="mL">Milliliters (mL)</SelectItem>
+                    <SelectItem value="pieces">Pieces</SelectItem>
+                    <SelectItem value="boxes">Boxes</SelectItem>
+                    <SelectItem value="bottles">Bottles</SelectItem>
+                    <SelectItem value="bags">Bags</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   This is how the unit will be displayed in the UI
                 </p>
@@ -1072,17 +1079,21 @@ export default function InventoryPage() {
                         className="flex-1 rounded-l-lg border border-r-0 border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                         placeholder="0"
                       />
-                      <select
+                      <Select
                         value={newItem.currentStockUnit}
-                        onChange={(e) => setNewItem({...newItem, currentStockUnit: e.target.value as Unit})}
-                        className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                        onValueChange={(value) => setNewItem({...newItem, currentStockUnit: value as Unit})}
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="L">L</option>
-                        <option value="mL">mL</option>
-                        <option value="pieces">pcs</option>
-                      </select>
+                        <SelectTrigger className="w-24 rounded-l-none border-l-0 bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="L">L</SelectItem>
+                          <SelectItem value="mL">mL</SelectItem>
+                          <SelectItem value="pieces">pcs</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   
@@ -1097,17 +1108,21 @@ export default function InventoryPage() {
                         className="flex-1 rounded-l-lg border border-r-0 border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                         placeholder="10"
                       />
-                      <select
+                      <Select
                         value={newItem.minStockUnit}
-                        onChange={(e) => setNewItem({...newItem, minStockUnit: e.target.value as Unit})}
-                        className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                        onValueChange={(value) => setNewItem({...newItem, minStockUnit: value as Unit})}
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="L">L</option>
-                        <option value="mL">mL</option>
-                        <option value="pieces">pcs</option>
-                      </select>
+                        <SelectTrigger className="w-24 rounded-l-none border-l-0 bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="L">L</SelectItem>
+                          <SelectItem value="mL">mL</SelectItem>
+                          <SelectItem value="pieces">pcs</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -1125,17 +1140,21 @@ export default function InventoryPage() {
                         className="flex-1 rounded-l-lg border border-r-0 border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                         placeholder="50"
                       />
-                      <select
+                      <Select
                         value={newItem.maxStockUnit}
-                        onChange={(e) => setNewItem({...newItem, maxStockUnit: e.target.value as Unit})}
-                        className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                        onValueChange={(value) => setNewItem({...newItem, maxStockUnit: value as Unit})}
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="L">L</option>
-                        <option value="mL">mL</option>
-                        <option value="pieces">pcs</option>
-                      </select>
+                        <SelectTrigger className="w-24 rounded-l-none border-l-0 bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="L">L</SelectItem>
+                          <SelectItem value="mL">mL</SelectItem>
+                          <SelectItem value="pieces">pcs</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   
@@ -1150,17 +1169,21 @@ export default function InventoryPage() {
                         className="flex-1 rounded-l-lg border border-r-0 border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                         placeholder="15"
                       />
-                      <select
+                      <Select
                         value={newItem.reorderPointUnit}
-                        onChange={(e) => setNewItem({...newItem, reorderPointUnit: e.target.value as Unit})}
-                        className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                        onValueChange={(value) => setNewItem({...newItem, reorderPointUnit: value as Unit})}
                       >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="L">L</option>
-                        <option value="mL">mL</option>
-                        <option value="pieces">pcs</option>
-                      </select>
+                        <SelectTrigger className="w-24 rounded-l-none border-l-0 bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="L">L</SelectItem>
+                          <SelectItem value="mL">mL</SelectItem>
+                          <SelectItem value="pieces">pcs</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -1398,15 +1421,19 @@ export default function InventoryPage() {
                     className="flex-1 rounded-l-lg border border-r-0 border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-500 focus:outline-none"
                     placeholder="Enter quantity"
                   />
-                  <select
+                  <Select
                     value={adjustmentUnit}
-                    onChange={(e) => setAdjustmentUnit(e.target.value as Unit)}
-                    className="rounded-r-lg border border-l-0 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                    onValueChange={(value) => setAdjustmentUnit(value as Unit)}
                   >
-                    {getCompatibleUnits(showAdjustModal.unitCategory).map(unit => (
-                      <option key={unit} value={unit}>{unit}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-28 rounded-l-none border-l-0 bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getCompatibleUnits(showAdjustModal.unitCategory).map(unit => (
+                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Will be converted to {showAdjustModal.unit} (base unit)

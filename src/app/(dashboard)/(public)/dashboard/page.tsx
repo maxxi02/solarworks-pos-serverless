@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Package, Clock, RefreshCw, ShoppingCart } from "lucide-react";
+import { Package, Clock, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSocket } from "@/provider/socket-provider";
@@ -172,10 +172,6 @@ export default function AdminDashboard() {
               Last synced: {formatDateTime(lastUpdated.toISOString())}
             </p>
           </div>
-          <Button variant="default" onClick={loadAllData} disabled={isRefreshing} className="shadow-sm">
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            Refresh Data
-          </Button>
         </div>
 
         {error && (

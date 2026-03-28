@@ -1,47 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
-import { rateLimit, LIMITS } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/api-auth";
+import { CreateUserSchema } from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
   try {
-    // Get session to verify admin
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
-
-    // Check if user is admin
-    if (!session?.user || session.user.role !== "admin") {
-      return NextResponse.json(
-        { error: "Unauthorized - Admin access required" },
-        { status: 401 },
-      );
-    }
-
-    const { success: allowed, response: limitResponse } = rateLimit(request, LIMITS.createUser, session.user.id);
-    if (!allowed) return limitResponse!;
+    const authResult = await requireAuth(request, ["admin"]);
+    if (!authResult.authorized) return authResult.response!;
 
     const body = await request.json();
-    const { email, name, password, role } = body;
+    const parsed = CreateUserSchema.safeParse(body);
 
-    if (!email || !password) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Email and password are required" },
+        { success: false, error: "Invalid user data", details: parsed.error.format() },
         { status: 400 },
       );
     }
 
+    const { email, name, password, role } = parsed.data;
     const emailLower = email.trim().toLowerCase();
 
     // Use Better Auth's Admin API createUser
-    // This doesn't log the user in (unlike signUpEmail)
     const result = await auth.api.createUser({
       body: {
         email: emailLower,
-        name: name?.trim() || "",
+        name: name,
         password,
-        role: role || "staff",
+        role: role as any,
       },
     });
 
@@ -51,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const newUser = result.user;
 
-    // Manually mark as verified if needed, or rely on the fact that admin created it
+    // Manually mark as verified
     await MONGODB.collection("user").updateOne(
       { id: newUser.id },
       { $set: { emailVerified: true } }
@@ -64,8 +51,8 @@ export async function POST(request: NextRequest) {
       user: {
         id: newUser.id,
         email: emailLower,
-        name: name?.trim() || "",
-        role: role || (newUser.role as string) || "staff",
+        name: name,
+        role: role,
       },
     });
   } catch (error: unknown) {

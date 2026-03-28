@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   LineChart,
   Line,
@@ -724,7 +725,7 @@ export default function SalesAnalyticsPage() {
                         {recentTransactions.map((transaction) => (
                           <tr
                             key={transaction._id || transaction.orderNumber}
-                            className="border-b hover:bg-gray-50 dark:hover:bg-gray-900"
+                            className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
                           >
                             <td className="p-3 font-mono text-xs">
                               {transaction.orderNumber || "N/A"}
@@ -742,9 +743,9 @@ export default function SalesAnalyticsPage() {
                               {formatCurrency(transaction.total || 0)}
                             </td>
                             <td className="p-3">
-                              <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded-full capitalize">
+                              <Badge variant="secondary" className="capitalize">
                                 {transaction.paymentMethod || "cash"}
-                              </span>
+                              </Badge>
                             </td>
                             <td className="p-3 text-sm capitalize">
                               {transaction.orderType || "takeaway"}

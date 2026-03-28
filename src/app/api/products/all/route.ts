@@ -4,18 +4,36 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import MONGODB from "@/config/db";
+import { requireAuth } from "@/lib/api-auth";
+import { ProductQuerySchema } from "@/lib/validators";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = await requireAuth(req, ["admin", "staff"]);
+    if (!auth.authorized) return auth.response!;
+
     const { searchParams } = new URL(req.url);
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
-    const search = searchParams.get("search") || "";
-    const categoryId = searchParams.get("categoryId") || "";
+    const parsed = ProductQuerySchema.safeParse(Object.fromEntries(searchParams));
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: "Invalid query parameters", details: parsed.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const { page, limit, search, categoryId } = parsed.data;
 
     const query: any = {};
+    const sort: any = { name: 1 };
+    let project: any = {};
+
     if (search) {
-      query.name = { $regex: search, $options: "i" };
+      // Fix #6: Use $text search for better performance and relevance
+      query.$text = { $search: search };
+      // Sort by relevance score
+      project = { score: { $meta: "textScore" } };
+      sort.score = { $meta: "textScore" };
     }
     if (categoryId) {
       query.categoryId = categoryId;
@@ -25,8 +43,8 @@ export async function GET(req: NextRequest) {
 
     const [products, totalCount, categories] = await Promise.all([
       MONGODB.collection("products")
-        .find(query)
-        .sort({ name: 1 })
+        .find(query, { projection: project })
+        .sort(sort)
         .skip(skip)
         .limit(limit)
         .toArray(),

@@ -2,6 +2,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { MONGODB } from "@/config/db";
+import { requireAuth } from "@/lib/api-auth";
+
+import { UpdateOrderStatusSchema } from "@/lib/validators";
 
 const VALID_STATUSES = [
   "pending_payment",
@@ -23,11 +26,17 @@ const TIMESTAMP_MAP: Record<string, string> = {
 // GET orders by queue status
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, ["admin", "staff"]);
+    if (!auth.authorized) return auth.response!;
+
     const { searchParams } = new URL(request.url);
     const statusesParam = searchParams.get("statuses");
-    const statuses = statusesParam
+    let statuses = statusesParam
       ? statusesParam.split(",")
       : ["queueing", "serving"];
+    
+    // Quick validation for statuses
+    statuses = statuses.filter(s => VALID_STATUSES.includes(s));
 
     const orders = await MONGODB.collection("orders")
       .find({ queueStatus: { $in: statuses } })
@@ -55,24 +64,20 @@ export async function GET(request: NextRequest) {
 // PATCH update queue status
 export async function PATCH(request: NextRequest) {
   try {
+    const auth = await requireAuth(request, ["admin", "staff"]);
+    if (!auth.authorized) return auth.response!;
+
     const body = await request.json();
-    const { orderId, queueStatus } = body;
+    const parsed = UpdateOrderStatusSchema.safeParse(body);
 
-    if (!orderId || !queueStatus) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "orderId and queueStatus are required" },
-        { status: 400 },
+        { error: "Invalid request body", details: parsed.error.format() },
+        { status: 400 }
       );
     }
 
-    if (!VALID_STATUSES.includes(queueStatus)) {
-      return NextResponse.json(
-        {
-          error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}`,
-        },
-        { status: 400 },
-      );
-    }
+    const { orderId, queueStatus } = parsed.data;
 
     const updateData: Record<string, unknown> = {
       queueStatus,

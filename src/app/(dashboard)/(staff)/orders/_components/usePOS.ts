@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { CartItem, Product, SavedOrder } from "./pos.types";
+import { CartItem, Product, SavedOrder, SelectedAddon } from "./pos.types";
 import { generateOrderNumber, DISCOUNT_RATE } from "./pos.utils";
 
 export const useCart = (
@@ -13,14 +13,16 @@ export const useCart = (
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const subtotal = useMemo(
-    () => cart.reduce((sum, i) => sum + i.price * i.quantity, 0),
+    () => cart.reduce((sum, i) => sum + (i.effectivePrice ?? i.price) * i.quantity, 0),
     [cart],
   );
   const discountTotal = useMemo(
     () =>
       cart.reduce(
         (sum, i) =>
-          i.hasDiscount ? sum + i.price * i.quantity * DISCOUNT_RATE : sum,
+          i.hasDiscount
+            ? sum + (i.effectivePrice ?? i.price) * i.quantity * DISCOUNT_RATE
+            : sum,
         0,
       ),
     [cart],
@@ -28,23 +30,48 @@ export const useCart = (
   const total = subtotal - discountTotal;
   const seniorPwdCount = cart.filter((i) => i.hasDiscount).length;
 
-  const addToCart = useCallback((product: Product) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i._id === product._id);
-      return existing
-        ? prev.map((i) =>
-            i._id === product._id ? { ...i, quantity: i.quantity + 1 } : i,
-          )
-        : [...prev, { ...product, quantity: 1, hasDiscount: false }];
-    });
-    toast.success(`${product.name} added`);
-  }, []);
+  const addToCart = useCallback(
+    (product: Product, selectedAddons: SelectedAddon[] = [], quantity = 1) => {
+      const addonTotal = selectedAddons.reduce((s, a) => s + a.price, 0);
+      const effectivePrice = product.price + addonTotal;
+      // Unique key: same product + same addons = same line item
+      const cartKey =
+        product._id +
+        (selectedAddons.length > 0
+          ? ":" + selectedAddons.map((a) => a.addonName).sort().join(",")
+          : "");
 
-  const updateQuantity = useCallback((itemId: string, change: number) => {
+      setCart((prev) => {
+        const existing = prev.find((i) => i.cartKey === cartKey);
+        if (existing) {
+          return prev.map((i) =>
+            i.cartKey === cartKey
+              ? { ...i, quantity: i.quantity + quantity }
+              : i,
+          );
+        }
+        return [
+          ...prev,
+          {
+            ...product,
+            quantity,
+            hasDiscount: false,
+            selectedAddons,
+            effectivePrice,
+            cartKey,
+          },
+        ];
+      });
+      toast.success(`${product.name} added`);
+    },
+    [],
+  );
+
+  const updateQuantity = useCallback((cartKey: string, change: number) => {
     setCart((prev) =>
       prev
         .map((item) =>
-          item._id === itemId
+          (item.cartKey ?? item._id) === cartKey
             ? { ...item, quantity: Math.max(1, item.quantity + change) }
             : item,
         )
@@ -52,8 +79,8 @@ export const useCart = (
     );
   }, []);
 
-  const removeFromCart = useCallback((itemId: string) => {
-    setCart((prev) => prev.filter((i) => i._id !== itemId));
+  const removeFromCart = useCallback((cartKey: string) => {
+    setCart((prev) => prev.filter((i) => (i.cartKey ?? i._id) !== cartKey));
   }, []);
 
   const applyDiscount = useCallback(
@@ -71,10 +98,10 @@ export const useCart = (
     [playSuccess],
   );
 
-  const removeDiscount = useCallback((itemId: string) => {
+  const removeDiscount = useCallback((cartKey: string) => {
     setCart((prev) =>
       prev.map((item) =>
-        item._id === itemId ? { ...item, hasDiscount: false } : item,
+        (item.cartKey ?? item._id) === cartKey ? { ...item, hasDiscount: false } : item,
       ),
     );
     toast.info("Discount removed");
@@ -222,8 +249,8 @@ export const buildOrder = ({
     total,
     paymentMethod,
     splitPayment: paymentMethod === "split" ? splitPayment : undefined,
-    amountPaid: paymentMethod === "cash" ? amountPaid : undefined,
-    change: paymentMethod === "cash" ? amountPaid - total : undefined,
+    amountPaid: paymentMethod === "cash" ? amountPaid : total,
+    change: paymentMethod === "cash" ? Math.max(0, amountPaid - total) : 0,
     orderType,
     tableNumber: orderType === "dine-in" ? selectedTable : undefined,
     timestamp: new Date(),

@@ -30,6 +30,7 @@ function formatProduct(p: WithId<Document>): FormattedProduct {
     available: p.available !== undefined ? (p.available as boolean) : true,
     categoryId: p.categoryId as string,
     imageUrl: (p.imageUrl as string) || "",
+    addonGroups: Array.isArray(p.addonGroups) ? p.addonGroups : [],
     createdAt: p.createdAt as Date | undefined,
     updatedAt: p.updatedAt as Date | undefined,
   };

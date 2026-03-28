@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { useSocket } from '@/provider/socket-provider'
 import type { ReceiptBuildInput } from '@/provider/socket-provider'
 import { CompanionPrintButton } from '@/components/ui/companion-print-button'
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 interface TransactionItem {
   name: string
   quantity: number
@@ -461,37 +461,49 @@ const History = () => {
         {/* Filters */}
         <div className="bg-card rounded-lg border border-border p-4 mb-6">
           <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px] relative">
+            <div className="flex-1 min-w-52 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
               <input type="text" placeholder="Search by order #, customer, or cashier..."
                 value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
             </div>
 
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-              <option value="all">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="refunded">Refunded</option>
-            </select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+              </SelectContent>
+            </Select>
 
-            <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
-              className="px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-              <option value="all">All Payments</option>
-              <option value="cash">Cash</option>
-              <option value="gcash">GCash</option>
-              <option value="split">Split</option>
-            </select>
+            <Select value={filterPayment} onValueChange={setFilterPayment}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Payments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="gcash">GCash</SelectItem>
+                <SelectItem value="split">Split</SelectItem>
+              </SelectContent>
+            </Select>
 
-            <select value={dateRange} onChange={e => setDateRange(e.target.value as any)}
-              className="px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-              <option value="today">Today</option>
-              <option value="week">Last 7 Days</option>
-              <option value="month">Last 30 Days</option>
-              <option value="custom">Custom Range</option>
-              <option value="all">All Time</option>
-            </select>
+            <Select value={dateRange} onValueChange={(v: any) => setDateRange(v)}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Date Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">Last 7 Days</SelectItem>
+                <SelectItem value="month">Last 30 Days</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
 
             {dateRange === 'custom' && (
               <div className="flex gap-2 items-center">
@@ -504,12 +516,16 @@ const History = () => {
             )}
 
             <div className="flex gap-2">
-              <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
-                className="px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-                <option value="date">Sort by Date</option>
-                <option value="amount">Sort by Amount</option>
-                <option value="name">Sort by Customer</option>
-              </select>
+              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Sort by Date</SelectItem>
+                  <SelectItem value="amount">Sort by Amount</SelectItem>
+                  <SelectItem value="name">Sort by Customer</SelectItem>
+                </SelectContent>
+              </Select>
               <button onClick={() => setSortOrder(p => p === 'asc' ? 'desc' : 'asc')}
                 className="px-3 py-2 border border-border rounded-lg hover:bg-muted/50">
                 <ArrowUpDown className={`w-4 h-4 ${sortOrder === 'asc' ? 'text-primary' : ''}`} />

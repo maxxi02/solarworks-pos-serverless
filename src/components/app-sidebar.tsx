@@ -249,11 +249,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   if (isPending) {
     return (
-      <Sidebar collapsible="icon" {...props}>
+      <Sidebar collapsible="icon" {...props} className="flex flex-col h-full min-h-screen">
         <SidebarHeader>
           <TeamSwitcher teams={[storeData]} />
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="flex-1 overflow-y-auto">
           <div className="space-y-2 px-2">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="h-8 animate-pulse rounded-md bg-muted" />
@@ -261,7 +261,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
         </SidebarContent>
         {state !== "collapsed" && (
-          <SidebarFooter>
+          <SidebarFooter className="mt-auto border-t">
             <UserProfileFooter />
           </SidebarFooter>
         )}
@@ -273,15 +273,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   if (!session?.user) return null;
 
   return (
-    <Sidebar collapsible="icon" {...props}>
+    <Sidebar collapsible="icon" {...props} className="flex flex-col h-full min-h-screen">
       <SidebarHeader>
         <TeamSwitcher teams={[storeData]} />
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="flex-1 overflow-y-auto">
         <NavMain items={navigationItems} />
       </SidebarContent>
       {state !== "collapsed" && (
-        <SidebarFooter>
+        <SidebarFooter className="mt-auto border-t">
           <UserProfileFooter />
         </SidebarFooter>
       )}

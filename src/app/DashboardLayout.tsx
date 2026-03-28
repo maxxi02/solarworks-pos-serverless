@@ -20,19 +20,12 @@ export default function DashboardLayout({
   if (!user) return null;
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="overflow-hidden">
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="min-w-0 overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <h1 className="text-xl font-bold text-foreground">
-              RENDEZVOUS CAFÉ
-            </h1>
           </div>
         </header>
         {children}
