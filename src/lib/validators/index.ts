@@ -49,6 +49,7 @@ export const CreatePaymentSchema = z.object({
   change: z.number().nonnegative().default(0),
   cashierId: z.string().optional(),
   cashierName: z.string().optional(),
+  cashier: z.string().optional(),
   shopId: z.string().optional(),
   orderType: z.enum(["dine-in", "takeaway"]).optional().default("takeaway"),
   tableNumber: z.string().optional().nullable(),
