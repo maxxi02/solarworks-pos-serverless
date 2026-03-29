@@ -240,7 +240,31 @@ export function useReceiptSettings() {
       }
 
       if (response.ok) {
-        setSettings(data.settings);
+        // Deep merge like loadSettings so nested defaults are preserved
+        setSettings(() => ({
+          ...DEFAULT_SETTINGS,
+          ...data.settings,
+          customerPrinter: {
+            ...DEFAULT_SETTINGS.customerPrinter,
+            ...data.settings?.customerPrinter,
+          },
+          kitchenPrinter: {
+            ...DEFAULT_SETTINGS.kitchenPrinter,
+            ...data.settings?.kitchenPrinter,
+          },
+          zreading: {
+            ...DEFAULT_SETTINGS.zreading,
+            ...data.settings?.zreading,
+            discountTypes: {
+              ...DEFAULT_SETTINGS.zreading.discountTypes,
+              ...data.settings?.zreading?.discountTypes,
+            },
+            showPayments: {
+              ...DEFAULT_SETTINGS.zreading.showPayments,
+              ...data.settings?.zreading?.showPayments,
+            },
+          },
+        }));
         localStorage.setItem("receipt_settings", JSON.stringify(data.settings));
         toast.success("Settings saved successfully");
         return true;

@@ -118,11 +118,33 @@ export default function ReceiptSettingsPage() {
 
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSettings(prev => ({
-          ...prev,
-          logo: reader.result as string,
-          logoPreview: reader.result as string
-        }));
+        const img = new Image();
+        img.onload = () => {
+          // Resize to max 384px wide (58mm thermal printer resolution)
+          const MAX_WIDTH = 384;
+          const scale = Math.min(1, MAX_WIDTH / img.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            setSettings(prev => ({
+              ...prev,
+              logo: compressed,
+              logoPreview: compressed
+            }));
+          } else {
+            // Fallback: use original
+            setSettings(prev => ({
+              ...prev,
+              logo: reader.result as string,
+              logoPreview: reader.result as string
+            }));
+          }
+        };
+        img.src = reader.result as string;
       };
       reader.readAsDataURL(file);
 
@@ -142,10 +164,7 @@ export default function ReceiptSettingsPage() {
 
   // Save settings
   const handleSave = async () => {
-    const success = await saveSettings(settings);
-    if (success) {
-      toast.success('Settings saved successfully');
-    }
+    await saveSettings(settings);
   };
 
   // Reset settings

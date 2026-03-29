@@ -754,6 +754,7 @@ export default function OrdersPage() {
         businessName: settings.businessName || "Rendezvous Cafe",
         businessAddress: settings.locationAddress,
         businessPhone: settings.phoneNumber,
+        businessLogo: settings.showLogo ? (settings.logo || settings.logoPreview || undefined) : undefined,
         receiptMessage: settings.receiptMessage,
       };
 
@@ -856,6 +857,7 @@ export default function OrdersPage() {
           businessName: settings.businessName || "Rendezvous Cafe",
           businessAddress: settings.locationAddress,
           businessPhone: settings.phoneNumber,
+          businessLogo: settings.showLogo ? (settings.logo || settings.logoPreview || undefined) : undefined,
           receiptMessage: settings.receiptMessage,
         };
 

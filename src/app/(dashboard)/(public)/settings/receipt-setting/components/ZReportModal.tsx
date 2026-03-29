@@ -107,6 +107,7 @@ export default function ZReportModal({
         businessName: settings.businessName || "RENDEZVOUS CAFE",
         locationAddress: settings.locationAddress || "123 Coffee St.",
         taxPin: settings.taxPin || "123-456-789-000",
+        businessLogo: settings.showLogo ? (settings.logo || settings.logoPreview || undefined) : undefined,
         today: new Date().toLocaleDateString(),
         timeNow: new Date().toLocaleTimeString(),
         cashierName: session.cashierName,
@@ -152,6 +153,7 @@ export default function ZReportModal({
         disclaimer: settings.disclaimer || "This is an official receipt",
         showCashierSignature: zreading.showCashierSignature,
       };
+
 
       if (isConnected && (companionStatus.usb || companionStatus.bt)) {
         if (includeXReceipt) {
