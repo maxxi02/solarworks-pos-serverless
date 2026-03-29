@@ -345,6 +345,7 @@ export async function GET(request: NextRequest) {
             refundedBy: 1,
             refundReason: 1,
             timestamp: 1,
+            splitPayment: 1,
           },
         })
         .sort({ createdAt: -1 })
@@ -369,6 +370,7 @@ export async function GET(request: NextRequest) {
                 paymentReference: 1,
                 queueStatus: 1,
                 updatedAt: 1,
+                splitPayment: 1,
               },
             })
             .sort({ createdAt: -1 })
