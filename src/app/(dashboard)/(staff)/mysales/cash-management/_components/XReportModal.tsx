@@ -50,11 +50,11 @@ export default function XReportModal({ session, summary, settings, expectedCash,
   const zreading = settings?.zreading || {};
   const showReturnSummary = zreading.showReturnSummary !== false;
 
-  // Filter active tenders — include all nonzero
+  // We use Direct here to prevent double counting in the Breakdown section
   const tenders = {
-    cash: summary.cashSales || 0,
-    gcash: summary.gcashSales || 0,
-    split: summary.splitSales || 0,
+    cash: summary.cashSalesDirect ?? summary.cashSales ?? 0,
+    gcash: summary.gcashSalesDirect ?? summary.gcashSales ?? 0,
+    split: summary.splitSales ?? 0,
   };
   const totalTendered = todayEarnings; // net sales = total tendered
   const cashOuts      = summary.cashOuts || 0;

@@ -52,6 +52,7 @@
     "react-hook-form": "^7.71.1",
     "react-hot-toast": "^2.6.0",
     "react-qr-code": "^2.0.18",
+    "react-query-devtools": "^2.6.3",
     "react-resizable-panels": "^3.0.6",
     "react-swipeable": "^7.0.2",
     "recharts": "^2.15.4",

@@ -125,8 +125,8 @@ export default function ZReportModal({
         actualCash: summary.actualCash,
         difference: summary.difference,
         tenders: {
-          cash:        summary.tenders?.cash        ?? summary.cashSales  ?? 0,
-          gcash:       summary.tenders?.gcash       ?? summary.gcashSales ?? 0,
+          cash:        summary.tenders?.cash        ?? 0,
+          gcash:       summary.tenders?.gcash       ?? 0,
           split:       summary.tenders?.split       ?? summary.splitSales ?? 0,
           credit_card: summary.tenders?.credit_card ?? 0,
           pay_later:   summary.tenders?.pay_later   ?? 0,
@@ -414,27 +414,24 @@ export default function ZReportModal({
                     <span></span>
                   </div>
 
-                  {/* Cash — already includes split cash portion */}
                   {zreading.showPayments.cash && (
                     <div className="flex justify-between font-bold mb-1">
-                      <span>Cash{(summary.splitSales ?? 0) > 0 ? ' (incl. Split)' : ''}:</span>
-                      <span>{fmtP(summary.tenders?.cash || summary.cashSales || 0)}</span>
+                      <span>Cash:</span>
+                      <span>{fmtP(summary.tenders?.cash || 0)}</span>
                     </div>
                   )}
 
-                  {/* GCash — already includes split gcash portion */}
                   {zreading.showPayments.gcash && (
                     <div className="flex justify-between font-bold mb-1">
-                      <span>GCash{(summary.splitSales ?? 0) > 0 ? ' (incl. Split)' : ''}:</span>
-                      <span>{fmtP(summary.tenders?.gcash || summary.gcashSales || 0)}</span>
+                      <span>GCash:</span>
+                      <span>{fmtP(summary.tenders?.gcash || 0)}</span>
                     </div>
                   )}
 
-                  {/* Note about split breakdown (no separate total to avoid double-count) */}
-                  {(summary.splitSales ?? 0) > 0 && (
-                    <div className="flex justify-between font-bold mb-1 text-muted-foreground text-xs italic">
-                      <span>↳ Split orders ({fmtP(summary.splitSales ?? 0)} total)</span>
-                      <span>split into above</span>
+                  {(summary.tenders?.split ?? summary.splitSales ?? 0) > 0 && (
+                    <div className="flex justify-between font-bold mb-1">
+                      <span>Split:</span>
+                      <span>{fmtP(summary.tenders?.split ?? summary.splitSales ?? 0)}</span>
                     </div>
                   )}
 
@@ -487,7 +484,7 @@ export default function ZReportModal({
 
               <div className="flex justify-between font-bold mb-1">
                 <span>Cash Sales:</span>
-                <span>{fmtP(summary.tenders?.cash || summary.cashSales || 0)}</span>
+                <span>{fmtP(summary.cashSales || 0)}</span>
               </div>
 
               {summary.cashOuts > 0 && (

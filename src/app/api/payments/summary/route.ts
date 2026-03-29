@@ -140,9 +140,12 @@ export async function GET(request: Request) {
 
     const splitData = result.splitBreakdown?.[0] ?? { cash: 0, gcash: 0 };
 
-    // Fold split amounts directly into cash and gcash variables
-    const cashSales = (methodMap["cash"]?.amount ?? 0) + splitData.cash;
-    const gcashSales = (methodMap["gcash"]?.amount ?? 0) + splitData.gcash;
+    // Fold split amounts directly into cash and gcash variables for total collected purposes
+    const cashSalesDirect = methodMap["cash"]?.amount ?? 0;
+    const gcashSalesDirect = methodMap["gcash"]?.amount ?? 0;
+    const cashSales = cashSalesDirect + splitData.cash;
+    const gcashSales = gcashSalesDirect + splitData.gcash;
+    const splitSales = methodMap["split"]?.amount ?? 0;
 
     const hourlySales = (result.hourly ?? []).map((h: { _id: number; sales: number }) => ({
       hour: `${h._id}:00`,
@@ -163,7 +166,10 @@ export async function GET(request: Request) {
         totalDiscounts: completed.discountAmount,
         totalRefunds: refunded.totalAmount,
         cashSales,
+        cashSalesDirect,
         gcashSales,
+        gcashSalesDirect,
+        splitSales,
         totalCollected: cashSales + gcashSales - refunded.totalAmount,
         transactionCount: completed.count,
         // itemCount computed from topItems isn't reliable for total — keep a separate facet if needed
