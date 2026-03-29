@@ -117,9 +117,9 @@ export default function CloseRegisterPage() {
       const cashSales  = cashSalesDirect  + cashFromSplit;
       const gcashSales = gcashSalesDirect + gcashFromSplit;
 
-      const refunds        = refunded.filter((p: Payment) => p.paymentMethod === 'cash').reduce((s: number, p: Payment) => s + p.total, 0);
+      const refunds        = refunded.reduce((s: number, p: Payment) => s + p.total, 0);
 
-      const expectedCash = dbSession.openingFund + cashSales - refunds - totalCashOuts;
+      const expectedCash = dbSession.openingFund + cashSales + gcashSales - refunds - totalCashOuts;
       const txCount      = completed.length;
       const itemCount    = completed.reduce((s: number, p: Payment) => s + (p.items?.length || 0), 0);
       const openedAtStr  = typeof dbSession.openedAt === 'string' ? dbSession.openedAt : new Date(dbSession.openedAt).toLocaleString();
@@ -155,7 +155,7 @@ export default function CloseRegisterPage() {
       toast.error('Failed to load closing data');
     } finally {
       setLoading(false);
-    }
+    } 
   };
 
   const counted    = actualCash === '' ? 0 : actualCash;

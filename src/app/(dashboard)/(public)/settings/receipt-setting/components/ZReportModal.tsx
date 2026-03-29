@@ -121,6 +121,7 @@ export default function ZReportModal({
         netSales: summary.netSales,
         openingFund: summary.openingFund,
         cashEarned: summary.cashSales || summary.tenders?.cash || 0,
+        gcashEarned: summary.gcashSales || summary.tenders?.gcash || 0,
         expectedCash: summary.expectedCash,
         cashOuts: summary.cashOuts || 0,
         actualCash: summary.actualCash,
@@ -488,6 +489,13 @@ export default function ZReportModal({
                 <span>Cash Sales:</span>
                 <span>{fmtP(summary.cashSales || 0)}</span>
               </div>
+
+              {(summary.gcashSales || 0) > 0 && (
+                <div className="flex justify-between font-bold mb-1">
+                  <span>GCash Sales:</span>
+                  <span>{fmtP(summary.gcashSales || 0)}</span>
+                </div>
+              )}
 
               {summary.cashOuts > 0 && (
                 <div className="flex justify-between text-red-600 font-bold mb-1">

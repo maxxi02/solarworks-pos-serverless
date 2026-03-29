@@ -74,7 +74,7 @@ function toReceiptBuildInput(
     seniorPwdCount: receipt.seniorPwdCount,
     seniorPwdIds: receipt.seniorPwdIds,
     isReprint: receipt.isReprint,
-    businessName: settings.businessName || "Rendezvous Cafe",
+    businessName: settings.businessName,
     businessAddress: settings.locationAddress,
     businessPhone: settings.phoneNumber,
     businessLogo:
