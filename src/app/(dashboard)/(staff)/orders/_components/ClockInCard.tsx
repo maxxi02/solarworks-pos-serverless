@@ -22,9 +22,11 @@ export function ClockInCard() {
 
         const update = () => {
             const diff = Date.now() - new Date(attendance.clockInTime).getTime();
-            const h = Math.floor(diff / 3600000);
-            const m = Math.floor((diff % 3600000) / 60000);
-            const s = Math.floor((diff % 60000) / 1000);
+            const MAX_SHIFT_MS = 9 * 3600000;
+            const capped = Math.min(diff, MAX_SHIFT_MS);
+            const h = Math.floor(capped / 3600000);
+            const m = Math.floor((capped % 3600000) / 60000);
+            const s = Math.floor((capped % 60000) / 1000);
             setCurrentDuration(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`);
         };
 
@@ -89,13 +91,13 @@ export function ClockInCard() {
                                 <div className="flex items-center justify-center gap-2 mb-1.5">
                                     <Timer className="h-4 w-4 text-blue-600 animate-pulse" />
                                     <span className="text-xs font-medium uppercase tracking-wide text-blue-700">
-                                        Time Elapsed
+                                        Time on Shift
                                     </span>
                                 </div>
                                 <div className="text-4xl font-bold font-mono tracking-tight text-blue-700">
                                     {currentDuration}
                                 </div>
-                                <div className="text-xs text-blue-600/80 mt-1">HH:MM:SS</div>
+                                <div className="text-xs text-blue-600/80 mt-1">HH:MM:SS · max 9h</div>
                             </div>
                         )}
 

@@ -25,7 +25,7 @@ export interface EarningsBreakdown {
   effectiveRate: number; // Average rate per hour
 }
 
-const STANDARD_WORKDAY_HOURS = 8;
+const STANDARD_WORKDAY_HOURS = 9;
 
 /**
  * Calculate earnings for a single work period
@@ -136,6 +136,6 @@ export function isWeekend(date: Date): boolean {
  */
 export function estimateMonthlyEarnings(salaryPerHour: number): number {
   const workingDaysPerMonth = 22; // Average
-  const hoursPerDay = 8;
+  const hoursPerDay = 9;
   return salaryPerHour * hoursPerDay * workingDaysPerMonth;
 }

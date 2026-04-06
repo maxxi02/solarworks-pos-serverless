@@ -1005,8 +1005,8 @@ const AdminAttendancePage = () => {
                         <tbody className="divide-y divide-border">
                           {sorted.map((r, idx) => {
                             const hours = r.hoursWorked ?? 0;
-                            const regH = Math.min(8, hours);
-                            const otH = Math.max(0, hours - 8);
+                            const regH = Math.min(9, hours);
+                            const otH = Math.max(0, hours - 9);
                             const approvedOt = approvedOtByDateUser.get(`${r.date}__${r.userId}`) ?? 0;
                             const total = hours;
 
