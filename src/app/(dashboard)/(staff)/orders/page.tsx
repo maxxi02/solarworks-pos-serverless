@@ -180,6 +180,9 @@ export default function OrdersPage() {
   // ——— Mutations ———
   const openRegisterMutation = useMutation({
     mutationFn: async (amount: number) => {
+      const name = session?.user?.name;
+      if (!name) throw new Error("Session not loaded");
+
       await fetch("/api/shop-status", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -189,7 +192,7 @@ export default function OrdersPage() {
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ openingFund: amount, cashierName: staffName }),
+        body: JSON.stringify({ openingFund: amount, cashierName: name }),
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || "Failed to open register");
@@ -1127,7 +1130,7 @@ export default function OrdersPage() {
 
               <button
                 onClick={handleConfirmStartingFund}
-                disabled={openRegisterMutation.isPending}
+                disabled={openRegisterMutation.isPending || !session?.user?.name}
                 className="w-full py-3.5 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60 text-sm"
               >
                 <CheckCircle className="h-4 w-4" />
@@ -1192,7 +1195,7 @@ export default function OrdersPage() {
 
               <button
                 onClick={handleConfirmStartingFund}
-                disabled={openRegisterMutation.isPending}
+                disabled={openRegisterMutation.isPending || !session?.user?.name}
                 className="w-full py-3.5 bg-primary text-primary-foreground font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-60 text-sm"
               >
                 <CheckCircle className="h-4 w-4" />
