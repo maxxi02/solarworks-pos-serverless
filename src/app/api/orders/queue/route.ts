@@ -39,7 +39,18 @@ export async function GET(request: NextRequest) {
     statuses = statuses.filter(s => VALID_STATUSES.includes(s));
 
     const orders = await MONGODB.collection("orders")
-      .find({ queueStatus: { $in: statuses } })
+      .find({
+        queueStatus: { $in: statuses },
+        // Queue board is ONLY for customer-facing orders (portal / kiosk).
+        // Exclude POS walk-in orders that were mistakenly saved to the orders collection:
+        //  - new POS orders have source:"pos"
+        //  - old POS orders have no source AND no sessionId
+        $or: [
+          { source: "kiosk" },
+          { source: "portal" },
+          { sessionId: { $exists: true, $nin: [null, ""] } },
+        ],
+      })
       .sort({ createdAt: 1 })
       .toArray();
 

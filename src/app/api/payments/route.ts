@@ -152,36 +152,42 @@ export async function POST(request: NextRequest) {
         );
 
         if (existingOrder) {
-          // Update existing order status (Fix #4)
+          // Update existing portal/kiosk order to paid — preserve its queue flow
+          // Only update queueStatus if it hasn't progressed past pending_payment
+          const queueUpdate: Record<string, unknown> = {
+            paymentStatus: "paid",
+            paidAt: new Date(),
+            updatedAt: new Date(),
+          };
+          if (existingOrder.queueStatus === "pending_payment") {
+            queueUpdate.queueStatus = "queueing";
+            queueUpdate.queueingAt = new Date();
+          }
           await ordersCollection.updateOne(
             { orderId },
-            {
-              $set: {
-                paymentStatus: "paid",
-                queueStatus: "queueing",
-                paidAt: new Date(),
-                updatedAt: new Date(),
-              },
-            },
+            { $set: queueUpdate },
             { session },
           );
           console.log(`Order ${orderId} updated to paid.`);
         } else {
-          // Create a new order if it doesn't exist (POS Direct flow)
+          // Create a new order record for POS direct walk-in checkout.
+          // Mark source:"pos" and queueStatus:"done" so it NEVER appears
+          // on the customer queue board (which is only for portal/kiosk orders).
           const newOrder = {
             orderId,
             orderNumber: orderNumber || "POS-WALKIN",
             customerName: parsed.data.customerName || "Walk-in Customer",
             items: items.map((item) => ({
               ...item,
-              _id: item.productId, // Compatibility with POS structure
-              ingredients: [], // Defaulting for POS creations
+              _id: item.productId,
+              ingredients: [],
             })),
             subtotal: parsed.data.subtotal || total,
             total,
             paymentMethod: parsed.data.paymentMethod,
             paymentStatus: "paid",
-            queueStatus: "queueing",
+            queueStatus: "done",   // POS walk-ins bypass the queue entirely
+            source: "pos",         // Marks this as a cashier-processed order
             orderType: parsed.data.orderType || "takeaway",
             tableNumber: parsed.data.tableNumber,
             orderNote: parsed.data.orderNote,
@@ -195,7 +201,7 @@ export async function POST(request: NextRequest) {
           };
 
           await ordersCollection.insertOne(newOrder, { session });
-          console.log(`Order ${orderId} created (not found during payment).`);
+          console.log(`Order ${orderId} created (POS walk-in, source:pos, queueStatus:done).`);
         }
       }
 
