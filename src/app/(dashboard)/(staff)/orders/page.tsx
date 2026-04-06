@@ -174,6 +174,8 @@ export default function OrdersPage() {
 
   const isRegisterClosed = shopStatus === false && !sessionStatus;
   const needsOpenRegister = isClockedIn && shopStatus !== false && !sessionStatus;
+  // Register is open but opened by someone else
+  const registerOpenedByOther = !!sessionStatus && sessionStatus.cashierName !== staffName;
 
   // ——— Mutations ———
   const openRegisterMutation = useMutation({
@@ -187,10 +189,10 @@ export default function OrdersPage() {
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ openingFund: amount }),
+        body: JSON.stringify({ openingFund: amount, cashierName: staffName }),
       });
       const result = await res.json();
-      if (!result.success) throw new Error("Failed to open register");
+      if (!result.success) throw new Error(result.error || "Failed to open register");
       
       await fetch("/api/shop-status", {
         method: "PATCH",
@@ -207,8 +209,14 @@ export default function OrdersPage() {
       setStartingFundInput("");
       setStartingFundError("");
     },
-    onError: () => {
-      toast.error("Failed to open register");
+    onError: (error: Error) => {
+      if (error.message === "Register already open") {
+        toast.info("Register is already open. Refreshing...");
+        queryClient.invalidateQueries({ queryKey: ["session"] });
+        queryClient.invalidateQueries({ queryKey: ["shop-status"] });
+      } else {
+        toast.error("Failed to open register");
+      }
     },
   });
 
@@ -1132,6 +1140,10 @@ export default function OrdersPage() {
     );
   }
 
+  // Register is open but by another cashier — this staff can still take orders
+  // (they share the same register session), so just fall through to the POS.
+  // But if they somehow land here before sessionStatus loads, show nothing extra.
+
   // Clocked in but no cash session open — must open register before taking orders
   if (needsOpenRegister) {
     return (
@@ -1218,6 +1230,23 @@ export default function OrdersPage() {
           )
         }
       />
+
+      {/* Active register banner — visible to all staff */}
+      {sessionStatus && registerOpenedByOther && (
+        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-4 md:px-6 mt-3">
+          <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-4 py-2 text-sm">
+            <Wallet className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-foreground">
+              Register opened by <span className="font-semibold text-primary">{sessionStatus.cashierName}</span>
+              {sessionStatus.openedAt && (
+                <span className="text-muted-foreground ml-1">
+                  at {new Date(sessionStatus.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
 
       <>
         <Tabs

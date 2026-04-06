@@ -55,10 +55,14 @@ export async function POST(req: NextRequest) {
       registerName = "Main Register",
     } = body;
 
-    await col().updateMany(
-      { status: "open" },
-      { $set: { status: "closed", closedAt: new Date() } },
-    );
+    // Block if a session is already open — only one register at a time
+    const existing = await col().findOne({ status: "open" }, { sort: { openedAt: -1 } });
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: "Register already open", openedBy: existing.cashierName, openedAt: existing.openedAt },
+        { status: 409 },
+      );
+    }
 
     const now = new Date();
     const newSession: Omit<Session, "_id"> = {
