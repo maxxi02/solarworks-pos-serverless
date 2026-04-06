@@ -54,6 +54,7 @@ import {
   LogIn,
   LogOut,
   Zap,
+  Search,
 } from "lucide-react";
 import {
   Line,
@@ -74,6 +75,9 @@ import {
 import { DataTable } from "@/components/data-table";
 import { ColumnDef } from "@tanstack/react-table";
 import { AttendanceModal } from "@/components/attendance/AttendanceModal";
+import { StaffCard } from "@/components/attendance/StaffCard";
+import { AttendanceSummaryBar } from "@/components/attendance/AttendanceSummaryBar";
+import { ClockInModal } from "@/components/attendance/ClockInModal";
 import type { LeaveRequest } from "@/models/leave-request.model";
 import type { ShiftSchedule } from "@/models/shift-schedule.model";
 import type { OvertimeRequest } from "@/models/overtime-request.model";
@@ -155,6 +159,11 @@ const AdminAttendancePage = () => {
   // ── UI state ───────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("pending");
   const [selectedStaffModal, setSelectedStaffModal] = useState<StaffMember | null>(null);
+
+  // ── Roster search / filter ─────────────────────────────────────────────────
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [rosterFilter, setRosterFilter] = useState<"all" | "in" | "out" | "leave">("all");
+  const [clockInTarget, setClockInTarget] = useState<{ staffId: string; name: string; isCurrentlyIn: boolean } | null>(null);
 
   // ── Leave Requests tab ─────────────────────────────────────────────────────
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -659,51 +668,70 @@ const AdminAttendancePage = () => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="container mx-auto p-6 space-y-8">
+    <div className="container mx-auto p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Staff Attendance</h1>
-          <p className="text-muted-foreground">
-            Review pending entries and view attendance analytics
+          <h1 className="text-2xl font-bold tracking-tight text-white">Staff Attendance</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            Manage clock-ins, schedules, leave &amp; overtime requests
           </p>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-[#161616] px-3 py-1.5">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs font-medium text-zinc-400">Live</span>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full max-w-3xl grid-cols-5">
-          <TabsTrigger value="pending" className="gap-2">
-            <Clock className="h-4 w-4" />
+        <TabsList className="h-auto gap-1 rounded-2xl border border-white/[0.06] bg-[#161616] p-1.5 flex flex-wrap">
+          <TabsTrigger
+            value="pending"
+            className="gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-zinc-400 transition-all data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-red-900/30"
+          >
+            <Clock className="h-3.5 w-3.5" />
             Pending
             {pendingRecords.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
+              <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
                 {pendingRecords.length}
-              </Badge>
+              </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="dashboard" className="gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Dashboard
+          <TabsTrigger
+            value="dashboard"
+            className="gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-zinc-400 transition-all data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-red-900/30"
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+            Staff Roster
           </TabsTrigger>
-          <TabsTrigger value="schedule" className="gap-2">
-            <CalendarDays className="h-4 w-4" />
+          <TabsTrigger
+            value="schedule"
+            className="gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-zinc-400 transition-all data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-red-900/30"
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
             Schedule
           </TabsTrigger>
-          <TabsTrigger value="leave" className="gap-2">
-            <FileText className="h-4 w-4" />
+          <TabsTrigger
+            value="leave"
+            className="gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-zinc-400 transition-all data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-red-900/30"
+          >
+            <FileText className="h-3.5 w-3.5" />
             Leave Requests
             {leaveRequests.filter(r => r.status === "pending").length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
+              <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
                 {leaveRequests.filter(r => r.status === "pending").length}
-              </Badge>
+              </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="overtime" className="gap-2">
-            <Zap className="h-4 w-4" />
+          <TabsTrigger
+            value="overtime"
+            className="gap-2 rounded-xl px-4 py-2 text-xs font-semibold text-zinc-400 transition-all data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-red-900/30"
+          >
+            <Zap className="h-3.5 w-3.5" />
             Overtime
             {overtimeRequests.filter(r => r.status === "pending").length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 px-2 text-xs">
+              <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
                 {overtimeRequests.filter(r => r.status === "pending").length}
-              </Badge>
+              </span>
             )}
           </TabsTrigger>
         </TabsList>
@@ -785,121 +813,114 @@ const AdminAttendancePage = () => {
         </TabsContent>
 
 
-        {/* ── Dashboard/Staff Roster Tab ──────────────────────────────────────── */}
-        <TabsContent value="dashboard" className="space-y-6">
+        {/* ── Dashboard/Staff Roster Tab ────────────────────────────────────── */}
+        <TabsContent value="dashboard" className="space-y-5">
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-            <h2 className="text-2xl font-bold tracking-tight">Staff Roster</h2>
+          {/* Summary bar */}
+          <AttendanceSummaryBar
+            total={dailyStaff.length}
+            clockedIn={dailyStaff.filter(s => s.isCurrentlyIn).length}
+            notIn={dailyStaff.filter(s => !s.isCurrentlyIn && s.status === "absent").length}
+            onLeave={leaveRequests.filter(r => r.status === "approved" && r.startDate <= dailyDate && r.endDate >= dailyDate).length}
+          />
 
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchDailyData}
-                disabled={dailyLoading}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${dailyLoading ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
+          {/* Search + Filter + Refresh row */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search staff by name…"
+                value={rosterSearch}
+                onChange={e => setRosterSearch(e.target.value)}
+                className="w-full rounded-xl border border-white/[0.08] bg-[#161616] pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-red-600/60 focus:ring-1 focus:ring-red-600/30 transition-colors"
+              />
             </div>
+            <div className="flex gap-2">
+              {(["all", "in", "out", "leave"] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setRosterFilter(f)}
+                  className={`rounded-xl px-3.5 py-2.5 text-xs font-semibold capitalize transition-colors ${
+                    rosterFilter === f
+                      ? "bg-red-600 text-white shadow-lg shadow-red-900/30"
+                      : "border border-white/[0.08] bg-[#161616] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
+                  }`}
+                >
+                  {f === "in" ? "Clocked In" : f === "out" ? "Not In" : f === "leave" ? "On Leave" : "All"}
+                </button>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchDailyData}
+              disabled={dailyLoading}
+              className="shrink-0 rounded-xl border-white/[0.08] bg-[#161616] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${dailyLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </div>
 
-          <Card>
-            <CardHeader className="pb-3 border-b border-border/50">
-              <CardTitle>All Staff Members</CardTitle>
-              <CardDescription>
-                Click on a staff member to view their complete attendance history.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4">
-              {dailyLoading ? (
-                <div className="grid gap-3">
-                  {Array(6).fill(0).map((_, i) => (
-                    <Skeleton key={i} className="h-16 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-border bg-card">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="border-b border-border bg-muted/50">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12">Avatar</th>
-                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Staff Name</th>
-                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
-                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Today's Status</th>
-                          <th className="px-4 py-3 text-left font-medium text-muted-foreground">Hours Today</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {dailyStaff.map(s => {
-                          const statusColor =
-                            s.status === "present" || s.status === "late"
-                              ? { badge: "bg-green-600 hover:bg-green-600", dot: "bg-green-500" }
-                              : { badge: "bg-rose-600 hover:bg-rose-600", dot: "bg-gray-300" };
+          {/* Staff card grid */}
+          {dailyLoading ? (
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+              {Array(8).fill(0).map((_, i) => (
+                <Skeleton key={i} className="h-52 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : (() => {
+            const approvedLeaveStaffIds = new Set(
+              leaveRequests
+                .filter(r => r.status === "approved" && r.startDate <= dailyDate && r.endDate >= dailyDate)
+                .map((r: any) => r.userId)
+            );
 
-                          return (
-                            <tr
-                              key={s.staffId}
-                              className="hover:bg-accent/50 transition-colors cursor-pointer"
-                              onClick={() => {
-                                setSelectedStaff(s.staffId);
-                                setSelectedStaffModal({
-                                  id: s.staffId,
-                                  name: s.name,
-                                  email: "",
-                                  role: s.role,
-                                });
-                              }}
-                            >
-                              <td className="px-4 py-3">
-                                <div className="relative inline-block">
-                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                    {s.name.charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${statusColor.dot}`} />
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 font-semibold text-foreground">
-                                {s.name}
-                              </td>
-                              <td className="px-4 py-3 text-muted-foreground capitalize">
-                                {s.role}
-                              </td>
-                              <td className="px-4 py-3">
-                                <Badge className={`text-[10px] px-2 py-0.5 ${statusColor.badge}`}>
-                                  {(s.status === "present" || s.status === "late") ? "Present" : "Absent"}
-                                </Badge>
-                                {s.isCurrentlyIn && (
-                                  <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-blue-400 text-blue-600 ml-2">
-                                    On Floor
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                {s.hoursWorked != null ? (
-                                  <span className="text-sm font-medium">
-                                    {s.hoursWorked.toFixed(2)} h
-                                    {s.overtimeHours > 0 && (
-                                      <span className="ml-1.5 text-amber-600 font-semibold text-xs">
-                                        +{s.overtimeHours.toFixed(2)} OT
-                                      </span>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <span className="text-sm text-muted-foreground">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+            const filtered = dailyStaff.filter(s => {
+              const matchesSearch = s.name.toLowerCase().includes(rosterSearch.toLowerCase());
+              if (!matchesSearch) return false;
+              if (rosterFilter === "in") return s.isCurrentlyIn;
+              if (rosterFilter === "out") return !s.isCurrentlyIn && !approvedLeaveStaffIds.has(s.staffId);
+              if (rosterFilter === "leave") return approvedLeaveStaffIds.has(s.staffId);
+              return true;
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Users className="h-12 w-12 text-zinc-700 mb-4" />
+                  <p className="text-sm font-medium text-zinc-400">No staff match your filters</p>
+                  <p className="text-xs text-zinc-600 mt-1">Try adjusting the search or filter</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              );
+            }
+
+            return (
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                {filtered.map(s => (
+                  <StaffCard
+                    key={s.staffId}
+                    staffId={s.staffId}
+                    name={s.name}
+                    role={s.role}
+                    image={s.image}
+                    status={s.status}
+                    isCurrentlyIn={s.isCurrentlyIn}
+                    clockInTime={s.clockInTime}
+                    clockOutTime={s.clockOutTime}
+                    shift={s.shift}
+                    hoursWorked={s.hoursWorked}
+                    onClockIn={(staffId, name) => setClockInTarget({ staffId, name, isCurrentlyIn: s.isCurrentlyIn })}
+                    onClick={() => {
+                      setSelectedStaff(s.staffId);
+                      setSelectedStaffModal({ id: s.staffId, name: s.name, email: "", role: s.role });
+                    }}
+                  />
+                ))}
+              </div>
+            );
+          })()}
 
           {/* ── Staff Hours Tracking (Day-by-Day) ─────────────────────────────── */}
           <Card>
@@ -1348,6 +1369,38 @@ const AdminAttendancePage = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ── Clock In/Out Confirmation Modal ──────────────────────────────────── */}
+      <ClockInModal
+        open={!!clockInTarget}
+        staffName={clockInTarget?.name ?? ""}
+        isClockOut={clockInTarget?.isCurrentlyIn ?? false}
+        onCancel={() => setClockInTarget(null)}
+        onConfirm={async () => {
+          if (!clockInTarget) return;
+          try {
+            const endpoint = clockInTarget.isCurrentlyIn
+              ? "/api/attendance/admin/clock-out"
+              : "/api/attendance/admin/clock-in";
+            const res = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ staffId: clockInTarget.staffId }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              toast.success(clockInTarget.isCurrentlyIn ? `${clockInTarget.name} clocked out` : `${clockInTarget.name} clocked in`);
+              fetchDailyData();
+            } else {
+              toast.error(data.message || "Action failed");
+            }
+          } catch {
+            toast.error("Network error");
+          } finally {
+            setClockInTarget(null);
+          }
+        }}
+      />
 
       {/* ── Assign Shift Modal ────────────────────────────────────────────────── */}
       <AttendanceModal
