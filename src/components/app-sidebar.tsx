@@ -21,7 +21,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TeamSwitcher } from "./team-switcher";
@@ -100,9 +99,10 @@ const UserProfileContent = ({
 }) => {
   const initials = getUserInitials(user.name);
   const userRole = getUserRole(user);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
 
   return (
-    <div className="flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent">
+    <div className="flex w-full items-center gap-3 rounded-lg p-2">
       <div className="relative">
         {user.image ? (
           <div className="relative h-8 w-8 shrink-0">
@@ -139,21 +139,25 @@ const UserProfileContent = ({
       </div>
 
       <div className="ml-auto flex items-center gap-1">
-        <Dialog>
-          <DialogTrigger asChild>
-            <button
-              disabled={isLoggingOut}
-              className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-              title="Logout"
-              aria-label="Logout"
-            >
-              {isLoggingOut ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <LogOut className="h-4 w-4" />
-              )}
-            </button>
-          </DialogTrigger>
+        {/* Logout button — controlled dialog to prevent event-bubbling close */}
+        <button
+          disabled={isLoggingOut}
+          onClick={(e) => {
+            e.stopPropagation();
+            setDialogOpen(true);
+          }}
+          className="ml-auto rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+          title="Logout"
+          aria-label="Logout"
+        >
+          {isLoggingOut ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          ) : (
+            <LogOut className="h-4 w-4" />
+          )}
+        </button>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Logout?</DialogTitle>
@@ -222,7 +226,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   };
 
-  const UserProfileFooter = () => {
+  const renderUserProfileFooter = () => {
     if (isPending) {
       return (
         <div className="flex w-full items-center gap-3 rounded-lg p-2">
@@ -237,7 +241,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     if (!user) return null;
 
-    // Wrap the profile content with SocketProvider
     return (
       <UserProfileContent
         user={user}
@@ -262,7 +265,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarContent>
         {state !== "collapsed" && (
           <SidebarFooter className="mt-auto border-t">
-            <UserProfileFooter />
+            {renderUserProfileFooter()}
           </SidebarFooter>
         )}
         <SidebarRail />
@@ -282,7 +285,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       {state !== "collapsed" && (
         <SidebarFooter className="mt-auto border-t">
-          <UserProfileFooter />
+          {renderUserProfileFooter()}
         </SidebarFooter>
       )}
       <SidebarRail />
