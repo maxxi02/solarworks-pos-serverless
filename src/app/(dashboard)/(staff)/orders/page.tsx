@@ -183,12 +183,6 @@ export default function OrdersPage() {
       const name = session?.user?.name;
       if (!name) throw new Error("Session not loaded");
 
-      await fetch("/api/shop-status", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
-      });
-
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,13 +190,14 @@ export default function OrdersPage() {
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error || "Failed to open register");
-      
+
+      // Only open the shop after the session is confirmed created
       await fetch("/api/shop-status", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isOpen: true, updatedBy: "staff" }),
       });
-      
+
       return result;
     },
     onSuccess: (result, amount) => {
@@ -433,16 +428,19 @@ export default function OrdersPage() {
   }, [isConnected, activeTab, onQueueUpdated, offQueueUpdated, playOrder, emitPosJoin]);
 
   // Whenever the user is clocked in, verify a cash session is open.
+  // NOTE: We intentionally do NOT force-close the shop here.
+  // The needsOpenRegister guard already shows the "Open Register" screen.
+  // Forcing isOpen=false here caused a race condition: sessionStatus is null
+  // while the query is still loading, which incorrectly closed the shop for
+  // all customers even when a register was already open.
   useEffect(() => {
     if (!isClockedIn) return;
+    // Just re-validate queries so the UI reflects the latest state
     if (needsOpenRegister) {
-      fetch("/api/shop-status", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isOpen: false, updatedBy: "staff" }),
-      }).catch(err => console.error("Failed to sync shop status to closed:", err));
+      queryClient.invalidateQueries({ queryKey: ["session"] });
+      queryClient.invalidateQueries({ queryKey: ["shop-status"] });
     }
-  }, [isClockedIn, needsOpenRegister]);
+  }, [isClockedIn, needsOpenRegister, queryClient]);
 
   // Real-time: listen for shop status changes
   useEffect(() => {
