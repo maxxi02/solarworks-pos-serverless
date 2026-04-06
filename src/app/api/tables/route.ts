@@ -55,8 +55,18 @@ export async function POST(request: NextRequest) {
     const suffix = crypto.randomBytes(2).toString("hex").toUpperCase();
     const tableId = `TABLE-${suffix}`;
 
-    const customerPortalUrl =
+    let customerPortalUrl =
       process.env.CUSTOMER_PORTAL_URL || "http://localhost:3001";
+      
+    // Ensure the URL has a protocol so that QR scanners recognize it as a link
+    if (customerPortalUrl && !/^https?:\/\//i.test(customerPortalUrl)) {
+      if (customerPortalUrl.includes("localhost") || customerPortalUrl.includes("127.0.0.1")) {
+        customerPortalUrl = `http://${customerPortalUrl}`;
+      } else {
+        customerPortalUrl = `https://${customerPortalUrl}`;
+      }
+    }
+    
     const qrCodeUrl = `${customerPortalUrl}/menu?table=${tableId}&type=${qrType || "dine-in"}`;
 
     const newTable = {
