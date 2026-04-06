@@ -737,6 +737,89 @@ export default function ReceiptSettingsPage() {
                 </div>
 
                 <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">GCash / Kiosk Payments</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Displayed to customers on the kiosk when they choose GCash.
+                  </p>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        GCash Account Name
+                      </label>
+                      <input
+                        type="text"
+                        value={(settings as any).gcashSettings?.accountName ?? ""}
+                        onChange={(e) => setSettings(prev => ({ ...prev, gcashSettings: { ...(prev as any).gcashSettings, accountName: e.target.value } } as any))}
+                        placeholder="e.g. Juan Dela Cruz"
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        GCash Number
+                      </label>
+                      <input
+                        type="text"
+                        value={(settings as any).gcashSettings?.accountNumber ?? ""}
+                        onChange={(e) => setSettings(prev => ({ ...prev, gcashSettings: { ...(prev as any).gcashSettings, accountNumber: e.target.value } } as any))}
+                        placeholder="e.g. 09171234567"
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2 text-gray-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        GCash QR Code Image
+                      </label>
+                      {(settings as any).gcashSettings?.qrImage ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <img
+                            src={(settings as any).gcashSettings.qrImage}
+                            alt="GCash QR"
+                            className="h-40 w-40 object-contain rounded-xl border border-border bg-white p-2"
+                          />
+                          <button
+                            onClick={() => setSettings(prev => ({ ...prev, gcashSettings: { ...(prev as any).gcashSettings, qrImage: null } } as any))}
+                            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white text-sm hover:bg-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" /> Remove QR
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center">
+                          <Upload className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+                          <p className="text-sm text-gray-500 mb-3">Upload your GCash QR code image</p>
+                          <input
+                            type="file"
+                            id="gcashQrUpload"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setSettings(prev => ({ ...prev, gcashSettings: { ...(prev as any).gcashSettings, qrImage: reader.result as string } } as any));
+                              };
+                              reader.readAsDataURL(file);
+                              toast.success('GCash QR uploaded');
+                            }}
+                          />
+                          <label
+                            htmlFor="gcashQrUpload"
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white text-sm hover:bg-blue-700 cursor-pointer"
+                          >
+                            <Upload className="h-4 w-4" /> Upload QR
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-card border border-border p-6 shadow-sm">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receipt Messages</h3>
 
                   <div className="space-y-4">

@@ -141,7 +141,7 @@ export default function KioskPage() {
     setCart((prev) => prev.filter((i) => i._id !== id));
   };
 
-  const handleConfirmOrder = async (method: "cash" | "qrph") => {
+  const handleConfirmOrder = async (method: "cash" | "gcash") => {
     const body = {
       customerName: customerName || "Kiosk Guest",
       items: cart.map((i) => ({
@@ -154,7 +154,7 @@ export default function KioskPage() {
       })),
       subtotal,
       total: subtotal,
-      paymentMethod: method,
+      paymentMethod: method === "gcash" ? "qrph" : method,
       orderType,
     };
     const res = await fetch("/api/kiosk/orders", {

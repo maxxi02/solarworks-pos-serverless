@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { QrCode, Banknote, CheckCircle, Clock, Loader2, ArrowLeft } from "lucide-react";
+import { QrCode, Banknote, CheckCircle, Loader2, ArrowLeft, Copy, CheckCheck } from "lucide-react";
 
-type PaymentMethod = "cash" | "qrph";
+type PaymentMethod = "cash" | "gcash";
+
+interface GCashInfo {
+  accountName: string;
+  accountNumber: string;
+  qrImage: string | null;
+}
 
 interface KioskPaymentPanelProps {
   total: number;
@@ -20,43 +26,25 @@ export function KioskPaymentPanel({
   onSuccess,
   onConfirmOrder,
 }: KioskPaymentPanelProps) {
-  const [step, setStep] = useState<"select" | "cash" | "qrph" | "qrph_pending" | "success">("select");
+  const [step, setStep] = useState<"select" | "cash" | "gcash" | "success">("select");
   const [isLoading, setIsLoading] = useState(false);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
-  const [pollCount, setPollCount] = useState(0);
+  const [gcashInfo, setGcashInfo] = useState<GCashInfo | null>(null);
+  const [gcashRef, setGcashRef] = useState("");
+  const [copied, setCopied] = useState(false);
 
-  // Poll for QR PH payment status
+  // Fetch GCash info once on mount
   useEffect(() => {
-    if (step !== "qrph_pending" || !orderId) return;
-    if (pollCount > 120) return; // 2 min timeout
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/kiosk/orders/status?orderId=${orderId}`);
-        const data = await res.json();
-        if (data.queueStatus === "queueing") {
-          setStep("success");
-          onSuccess("qrph");
-        } else {
-          setPollCount((c) => c + 1);
-        }
-      } catch {
-        setPollCount((c) => c + 1);
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [step, orderId, pollCount, onSuccess]);
-
-  const handleCashSelect = async () => {
-    setStep("cash");
-  };
+    fetch("/api/kiosk/gcash-info")
+      .then((r) => r.json())
+      .then(setGcashInfo)
+      .catch(() => {});
+  }, []);
 
   const handleCashConfirm = async () => {
     setIsLoading(true);
     try {
       const result = await onConfirmOrder("cash");
-      setOrderId(result.orderId);
       setOrderNumber(result.orderNumber);
       setStep("success");
       onSuccess("cash");
@@ -65,41 +53,26 @@ export function KioskPaymentPanel({
     }
   };
 
-  const handleQrphSelect = async () => {
+  const handleGcashConfirm = async () => {
     setIsLoading(true);
     try {
-      // Create order first (pending_payment)
-      const result = await onConfirmOrder("qrph");
-      setOrderId(result.orderId);
+      const result = await onConfirmOrder("gcash");
       setOrderNumber(result.orderNumber);
-
-      // Create PayMongo source
-      const sourceRes = await fetch("/api/kiosk/paymongo/create-source", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: total,
-          orderId: result.orderId,
-          orderNumber: result.orderNumber,
-          description: `Kiosk Order ${result.orderNumber}`,
-        }),
-      });
-      const sourceData = await sourceRes.json();
-      if (sourceData.qrCode) {
-        setQrCode(sourceData.qrCode);
-        setStep("qrph_pending");
-      } else {
-        // PayMongo not configured — show mock QR
-        setQrCode(null);
-        setStep("qrph_pending");
-      }
-    } catch {
-      setStep("qrph");
+      setStep("success");
+      onSuccess("gcash");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const copyNumber = () => {
+    if (!gcashInfo?.accountNumber) return;
+    navigator.clipboard.writeText(gcashInfo.accountNumber).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ── Success ────────────────────────────────────────────────────────────────
   if (step === "success") {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 text-center p-8">
@@ -109,7 +82,9 @@ export function KioskPaymentPanel({
         <div>
           <h2 className="text-3xl font-black text-foreground">Order Placed!</h2>
           {orderNumber && (
-            <p className="text-muted-foreground mt-2 text-lg">Order # <span className="font-bold text-primary">{orderNumber}</span></p>
+            <p className="text-muted-foreground mt-2 text-lg">
+              Order # <span className="font-bold text-primary">{orderNumber}</span>
+            </p>
           )}
           <p className="text-muted-foreground mt-1 text-sm">
             {customerName ? `Thank you, ${customerName}!` : "Thank you for your order!"}
@@ -123,45 +98,108 @@ export function KioskPaymentPanel({
     );
   }
 
-  if (step === "qrph_pending") {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-5 text-center p-6">
-        <h2 className="text-2xl font-black text-foreground">Scan to Pay via QR PH</h2>
-        <p className="text-4xl font-black text-primary">₱{total.toFixed(2)}</p>
+  // ── GCash step ─────────────────────────────────────────────────────────────
+  if (step === "gcash") {
+    const hasQR = !!gcashInfo?.qrImage;
+    const hasNumber = !!gcashInfo?.accountNumber;
 
-        {/* QR Code area */}
-        <div className="bg-white rounded-2xl p-6 shadow-xl border-4 border-primary/20">
-          {qrCode ? (
-            <img src={qrCode} alt="QR Code" className="w-52 h-52 object-contain" />
+    return (
+      <div className="flex flex-col h-full p-6 gap-4 overflow-y-auto">
+        <div className="text-center">
+          <h2 className="text-2xl font-black text-foreground">Pay via GCash</h2>
+          <p className="text-4xl font-black text-primary mt-1">₱{total.toFixed(2)}</p>
+        </div>
+
+        {/* QR + manual side by side or stacked */}
+        <div className="flex flex-col items-center gap-4">
+
+          {/* QR image */}
+          {hasQR ? (
+            <div className="bg-white rounded-2xl p-4 shadow-xl border-4 border-[#0070BA]/20">
+              <img src={gcashInfo!.qrImage!} alt="GCash QR" className="w-52 h-52 object-contain" />
+            </div>
           ) : (
-            <div className="w-52 h-52 flex items-center justify-center bg-muted rounded-xl">
+            <div className="w-52 h-52 flex items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/20">
               <div className="text-center space-y-2">
-                <QrCode className="w-16 h-16 mx-auto text-muted-foreground opacity-40" />
-                <p className="text-xs text-muted-foreground px-4">QR PH unavailable.<br/>Ask staff to assist.</p>
+                <QrCode className="w-14 h-14 mx-auto text-muted-foreground/40" />
+                <p className="text-xs text-muted-foreground px-4">No QR set up.<br />Use the number below.</p>
               </div>
+            </div>
+          )}
+
+          {/* Account info */}
+          {(hasNumber || gcashInfo?.accountName) && (
+            <div className="w-full rounded-2xl border border-border bg-card p-4 space-y-3">
+              {gcashInfo?.accountName && (
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Account Name</p>
+                  <p className="font-black text-lg text-foreground mt-0.5">{gcashInfo.accountName}</p>
+                </div>
+              )}
+              {hasNumber && (
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">GCash Number</p>
+                  <div className="flex items-center justify-center gap-2 mt-0.5">
+                    <p className="font-black text-2xl tracking-widest text-[#0070BA]">
+                      {gcashInfo!.accountNumber}
+                    </p>
+                    <button
+                      onClick={copyNumber}
+                      className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
+                    >
+                      {copied ? <CheckCheck className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* No info configured */}
+          {!hasQR && !hasNumber && !gcashInfo?.accountName && (
+            <div className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-center">
+              <p className="text-sm font-semibold text-amber-600">GCash not configured</p>
+              <p className="text-xs text-muted-foreground mt-1">Ask staff to assist with payment.</p>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Clock className="w-4 h-4 animate-pulse" />
-          <span>Waiting for payment confirmation…</span>
+        {/* Optional reference input */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            GCash Reference No. <span className="normal-case text-muted-foreground/60">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={gcashRef}
+            onChange={(e) => setGcashRef(e.target.value)}
+            placeholder="e.g. 1234567890"
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[#0070BA]/60 focus:ring-1 focus:ring-[#0070BA]/20 transition-colors"
+          />
+          <p className="text-xs text-muted-foreground">Enter the reference number from your GCash receipt after paying.</p>
         </div>
 
-        <div className="text-xs text-muted-foreground bg-muted/20 rounded-xl px-4 py-2">
-          Open your banking app → scan the QR code → confirm payment
+        <div className="flex gap-3 mt-auto">
+          <button
+            onClick={() => setStep("select")}
+            className="flex-1 py-3 rounded-xl border border-border text-muted-foreground hover:bg-accent transition-colors font-semibold"
+          >
+            Back
+          </button>
+          <button
+            onClick={handleGcashConfirm}
+            disabled={isLoading}
+            className="flex-1 py-3.5 rounded-xl bg-[#0070BA] text-white font-bold hover:bg-[#005fa3] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            I've Paid
+          </button>
         </div>
-
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Cancel & Go Back
-        </button>
       </div>
     );
   }
 
+  // ── Cash step ──────────────────────────────────────────────────────────────
   if (step === "cash") {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 text-center p-8">
@@ -178,7 +216,7 @@ export function KioskPaymentPanel({
         </div>
         <div className="flex gap-3 w-full max-w-xs">
           <button
-            onClick={onBack}
+            onClick={() => setStep("select")}
             className="flex-1 py-3 rounded-xl border border-border text-muted-foreground hover:bg-accent transition-colors font-semibold"
           >
             Back
@@ -196,7 +234,7 @@ export function KioskPaymentPanel({
     );
   }
 
-  // Default: select payment method
+  // ── Method select ──────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full p-6 gap-6">
       <div className="text-center">
@@ -208,25 +246,23 @@ export function KioskPaymentPanel({
       </div>
 
       <div className="flex-1 flex flex-col gap-4 justify-center">
-        {/* QR PH */}
+        {/* GCash */}
         <button
-          onClick={handleQrphSelect}
-          disabled={isLoading}
-          className="flex items-center gap-5 p-6 rounded-2xl border-2 border-border bg-card hover:border-primary/60 hover:bg-primary/5 active:scale-[0.98] transition-all group"
+          onClick={() => setStep("gcash")}
+          className="flex items-center gap-5 p-6 rounded-2xl border-2 border-border bg-card hover:border-[#0070BA]/60 hover:bg-[#0070BA]/5 active:scale-[0.98] transition-all"
         >
-          <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
-            <QrCode className="w-8 h-8" />
+          <div className="p-3 rounded-xl bg-[#0070BA]/10">
+            <QrCode className="w-8 h-8 text-[#0070BA]" />
           </div>
           <div className="text-left">
-            <p className="font-black text-lg text-foreground">QR PH</p>
-            <p className="text-sm text-muted-foreground">Scan & pay via your banking app</p>
+            <p className="font-black text-lg text-foreground">GCash</p>
+            <p className="text-sm text-muted-foreground">Scan QR or send to number</p>
           </div>
-          {isLoading && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground ml-auto" />}
         </button>
 
         {/* Cash */}
         <button
-          onClick={handleCashSelect}
+          onClick={() => setStep("cash")}
           className="flex items-center gap-5 p-6 rounded-2xl border-2 border-border bg-card hover:border-emerald-500/60 hover:bg-emerald-500/5 active:scale-[0.98] transition-all"
         >
           <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500">
