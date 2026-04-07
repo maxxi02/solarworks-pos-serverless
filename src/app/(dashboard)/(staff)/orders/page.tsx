@@ -15,6 +15,7 @@ import {
 } from "@/lib/use-notification-sound";
 import {
   ShoppingCart,
+  Search,
   Trash2,
   DollarSign,
   Smartphone,
@@ -302,6 +303,8 @@ export default function OrdersPage() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [showSavedOrders, setShowSavedOrders] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"pos" | "queue">("pos");
   const [unreadQueueCount, setUnreadQueueCount] = useState(0);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -384,9 +387,10 @@ export default function OrdersPage() {
         (p) =>
           p.available &&
           (selectedMenuType === "all" || p.menuType === selectedMenuType) &&
-          (selectedCategory === "All" || p.category === selectedCategory),
+          (selectedCategory === "All" || p.category === selectedCategory) &&
+          (!searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.toLowerCase())),
       ),
-    [products, selectedMenuType, selectedCategory],
+    [products, selectedMenuType, selectedCategory, searchQuery],
   );
 
   // ——— Effects ———
@@ -1231,6 +1235,8 @@ export default function OrdersPage() {
             type,
           )
         }
+        showSearch={showSearch}
+        onToggleSearch={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
       />
 
       {/* Active register banner — visible to all staff */}
@@ -1321,6 +1327,18 @@ export default function OrdersPage() {
                   onMouseLeave={() => setIsDraggingCategory(false)}
                 />
 
+                {showSearch && (
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      autoFocus
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 h-10 mb-3"
+                    />
+                  </div>
+                )}
                 {/* Products Grid - Scrollable Area */}
                 <div
                   ref={productsContainerRef}

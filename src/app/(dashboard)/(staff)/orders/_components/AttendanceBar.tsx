@@ -28,6 +28,9 @@ interface AttendanceBarProps {
   currentReceipt: ReceiptOrder | null;
   onReprintReceipt: (order: SavedOrder) => void;
   onPreviewReceipt: (type: "customer" | "kitchen") => void;
+  // Search bar toggle
+  showSearch: boolean;
+  onToggleSearch: () => void;
 }
 
 export const AttendanceBar = ({
@@ -45,6 +48,8 @@ export const AttendanceBar = ({
   currentReceipt,
   onReprintReceipt,
   onPreviewReceipt,
+  showSearch,
+  onToggleSearch,
 }: AttendanceBarProps) => {
   return (
     <div className="border-b bg-card sticky top-0 z-20 backdrop-blur-sm mb-5">
@@ -69,7 +74,7 @@ export const AttendanceBar = ({
           )}
         </div>
 
-        {/* Right — single sheet trigger */}
+        {/* Right — sheet trigger */}
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2 h-9">
@@ -98,6 +103,8 @@ export const AttendanceBar = ({
               currentReceipt={currentReceipt}
               onReprintReceipt={onReprintReceipt}
               onPreviewReceipt={onPreviewReceipt}
+              showSearch={showSearch}
+              onToggleSearch={onToggleSearch}
             />
           </SheetContent>
         </Sheet>

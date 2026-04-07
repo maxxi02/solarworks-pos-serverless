@@ -9,7 +9,8 @@ import {
     RefreshCw,
     Eye,
     Utensils,
-    Loader2
+    Loader2,
+    Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,6 +34,9 @@ interface SidebarActionsProps {
     currentReceipt: ReceiptOrder | null;
     onReprintReceipt: (order: SavedOrder) => void;
     onPreviewReceipt: (type: "customer" | "kitchen") => void;
+    // Search bar toggle
+    showSearch: boolean;
+    onToggleSearch: () => void;
 }
 
 export const SidebarActions = ({
@@ -50,30 +54,25 @@ export const SidebarActions = ({
     currentReceipt,
     onReprintReceipt,
     onPreviewReceipt,
+    showSearch,
+    onToggleSearch,
 }: SidebarActionsProps) => {
     return (
         <div className="space-y-6 overflow-y-auto h-[calc(100vh-80px)] p-2" data-lenis-prevent>
+
             {/* Shift Status */}
             <div className="space-y-3">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Shift
-                </p>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Shift</p>
                 <ClockInCard />
                 {!attendance?.clockOutTime && (
                     <Button
-                        onClick={() => {
-                            clockOut();
-                            playSuccess();
-                        }}
+                        onClick={() => { clockOut(); playSuccess(); }}
                         disabled={attendanceLoading}
                         variant="destructive"
                         className="w-full"
                     >
                         {attendanceLoading ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Ending shift…
-                            </>
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Ending shift…</>
                         ) : (
                             "Clock Out – End Shift"
                         )}
@@ -83,11 +82,24 @@ export const SidebarActions = ({
 
             <Separator />
 
+            {/* View */}
+            <div className="space-y-2">
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">View</p>
+                <Button
+                    variant={showSearch ? "default" : "outline"}
+                    className="w-full justify-start gap-2"
+                    onClick={onToggleSearch}
+                >
+                    <Search className="w-4 h-4" />
+                    {showSearch ? "Hide Search Bar" : "Show Search Bar"}
+                </Button>
+            </div>
+
+            <Separator />
+
             {/* Printer */}
             <div className="space-y-3">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Printer
-                </p>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Printer</p>
                 {settings && <PrinterStatus settings={settings} />}
             </div>
 
@@ -95,21 +107,11 @@ export const SidebarActions = ({
 
             {/* Orders */}
             <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Orders
-                </p>
-                <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={showOrderHistory}
-                >
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Orders</p>
+                <Button variant="outline" className="w-full justify-start gap-2" onClick={showOrderHistory}>
                     <History className="w-4 h-4" /> Order History
                 </Button>
-                <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={showSavedOrders}
-                >
+                <Button variant="outline" className="w-full justify-start gap-2" onClick={showSavedOrders}>
                     <Save className="w-4 h-4" /> Saved Orders ({savedOrders.length})
                 </Button>
             </div>
@@ -118,63 +120,37 @@ export const SidebarActions = ({
 
             {/* Stock */}
             <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Stock
-                </p>
-                <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={showStockAlertsModal}
-                >
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stock</p>
+                <Button variant="outline" className="w-full justify-start gap-2" onClick={showStockAlertsModal}>
                     <AlertTriangle className="w-4 h-4 text-yellow-500" />
                     Stock Alerts
                     {stockAlerts.length > 0 && (
-                        <Badge variant="destructive" className="ml-auto">
-                            {stockAlerts.length}
-                        </Badge>
+                        <Badge variant="destructive" className="ml-auto">{stockAlerts.length}</Badge>
                     )}
                 </Button>
-                <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={onRefreshStock}
-                >
+                <Button variant="outline" className="w-full justify-start gap-2" onClick={onRefreshStock}>
                     <RefreshCw className="w-4 h-4" /> Refresh Stock
                 </Button>
             </div>
 
             <Separator />
 
-            {/* Test Printing & Preview */}
+            {/* Receipts */}
             <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Receipts
-                </p>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Receipts</p>
                 <Button
                     variant="outline"
                     className="w-full justify-start gap-2"
-                    onClick={() =>
-                        savedOrders.length
-                            ? onReprintReceipt(savedOrders[0])
-                            : null
-                    }
+                    onClick={() => savedOrders.length ? onReprintReceipt(savedOrders[0]) : null}
                 >
                     <RefreshCw className="w-4 h-4" /> Test Print (Reprint Last)
                 </Button>
                 {currentReceipt && (
                     <>
-                        <Button
-                            variant="outline"
-                            className="w-full justify-start gap-2"
-                            onClick={() => onPreviewReceipt("customer")}
-                        >
+                        <Button variant="outline" className="w-full justify-start gap-2" onClick={() => onPreviewReceipt("customer")}>
                             <Eye className="w-4 h-4" /> Preview Customer Receipt
                         </Button>
-                        <Button
-                            variant="outline"
-                            className="w-full justify-start gap-2"
-                            onClick={() => onPreviewReceipt("kitchen")}
-                        >
+                        <Button variant="outline" className="w-full justify-start gap-2" onClick={() => onPreviewReceipt("kitchen")}>
                             <Utensils className="w-4 h-4" /> Preview Kitchen Order
                         </Button>
                     </>
