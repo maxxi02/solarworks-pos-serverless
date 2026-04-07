@@ -187,13 +187,12 @@ export function buildCustomerReceiptLines(
   const lines: ReceiptLine[] = [];
   const fmt = (n: number) => `P${n.toFixed(2)}`;
 
-  // Header
+  // Header — normal bold, no large font (let receipt settings control the look)
   lines.push({
     type: "text",
     text: data.businessName,
     align: "center",
     bold: true,
-    doubleHeight: true,
   });
   if (data.businessAddress) {
     lines.push({ type: "text", text: data.businessAddress, align: "center" });
