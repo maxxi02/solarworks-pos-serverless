@@ -1287,6 +1287,20 @@ export default function OrdersPage() {
             <div className="flex flex-col lg:flex-row gap-3 lg:gap-5 w-full overflow-hidden">
               {/* Left — Products */}
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden h-full">
+                {/* Search Bar */}
+                {showSearch && (
+                  <div className="relative w-full mb-4">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
+                    <Input
+                      autoFocus
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-12 pr-4 h-12 text-base rounded-xl w-full"
+                    />
+                  </div>
+                )}
+
                 {/* Menu Type Filter */}
                 <div className="grid grid-cols-3 gap-1.5 xs:gap-2 md:gap-3 mb-4 md:mb-5">
                   {(["all", "food", "drink"] as const).map((type) => (
@@ -1327,18 +1341,6 @@ export default function OrdersPage() {
                   onMouseLeave={() => setIsDraggingCategory(false)}
                 />
 
-                {showSearch && (
-                  <div className="relative mb-3">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                      autoFocus
-                      placeholder="Search products..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 h-10 mb-3"
-                    />
-                  </div>
-                )}
                 {/* Products Grid - Scrollable Area */}
                 <div
                   ref={productsContainerRef}
