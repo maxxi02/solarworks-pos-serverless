@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -59,8 +60,7 @@ export const OrderHistoryModal = ({
     const matchesSearch =
       order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      filterStatus === "all" || order.status === filterStatus;
+    const matchesStatus = filterStatus === "all" || order.status === filterStatus;
     const dateFilter = getDateFilter(dateRange);
     const matchesDate = !dateFilter || new Date(order.timestamp) >= dateFilter;
     return matchesSearch && matchesStatus && matchesDate;
@@ -72,160 +72,115 @@ export const OrderHistoryModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <History className="w-6 h-6" />
+            <History className="w-5 h-5" />
             Order History
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-5">
+        <DialogBody className="space-y-4">
           {/* Filters */}
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
             <Input
               placeholder="Search by order # or customer..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 min-w-64 h-10 text-base"
+              className="flex-1 min-w-48 h-9"
             />
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-40 h-10 text-base">
-                <Filter className="w-5 h-5 mr-2" />
+              <SelectTrigger className="w-36 h-9">
+                <Filter className="w-4 h-4 mr-1.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["all", "completed", "pending", "cancelled", "refunded"].map(
-                  (s) => (
-                    <SelectItem
-                      key={s}
-                      value={s}
-                      className="text-base capitalize"
-                    >
-                      {s === "all" ? "All Status" : s}
-                    </SelectItem>
-                  ),
-                )}
+                {["all", "completed", "pending", "cancelled", "refunded"].map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">
+                    {s === "all" ? "All Status" : s}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Select
-              value={dateRange}
-              onValueChange={(v: DateRange) => setDateRange(v)}
-            >
-              <SelectTrigger className="w-24 h-10 text-base">
-                <Calendar className="w-5 h-5 mr-2" />
+            <Select value={dateRange} onValueChange={(v: DateRange) => setDateRange(v)}>
+              <SelectTrigger className="w-32 h-9">
+                <Calendar className="w-4 h-4 mr-1.5" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {[
                   { value: "today", label: "Today" },
-                  { value: "week", label: "This Week" },
+                  { value: "week",  label: "This Week" },
                   { value: "month", label: "This Month" },
-                  { value: "all", label: "All Time" },
+                  { value: "all",   label: "All Time" },
                 ].map(({ value, label }) => (
-                  <SelectItem key={value} value={value} className="text-base">
-                    {label}
-                  </SelectItem>
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Orders List */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="max-h-[60vh] overflow-y-auto divide-y">
-              {!filteredOrders.length ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <History className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                  <p className="text-base">No orders found</p>
-                </div>
-              ) : (
-                filteredOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="p-5 hover:bg-gray-50 dark:hover:bg-gray-900"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono font-medium text-base">
-                            {order.orderNumber}
-                          </span>
-                          <Badge
-                            variant={
-                              order.status === "completed"
-                                ? "default"
-                                : order.status === "pending"
-                                  ? "secondary"
-                                  : order.status === "refunded"
-                                    ? "outline"
-                                    : "destructive"
-                            }
-                            className={`text-xs px-2 py-1 ${order.status === "refunded" ? "border-orange-500 text-orange-600" : ""}`}
-                          >
-                            {order.status}
-                          </Badge>
-                        </div>
-                        <p className="text-base">
-                          <span className="font-medium">
-                            {order.customerName}
-                          </span>
-                          <span className="text-muted-foreground ml-2">
-                            • {order.items.length} items •{" "}
-                            {formatCurrency(order.total)}
-                          </span>
-                        </p>
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          {formatDate(order.timestamp)}
-                        </p>
-                        {order.paymentMethod === "cash" && order.amountPaid && (
-                          <p className="text-xs text-muted-foreground">
-                            Paid: {formatCurrency(order.amountPaid)} | Change:{" "}
-                            {formatCurrency(order.change || 0)}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="default"
-                          variant="ghost"
-                          onClick={() => onViewDetails(order)}
-                          className="h-9 w-9"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </Button>
-                        <Button
-                          size="default"
-                          variant="ghost"
-                          onClick={() => onReprint(order)}
-                          className="h-9 w-9"
-                        >
-                          <Printer className="w-5 h-5" />
-                        </Button>
-                      </div>
+          {/* Orders list */}
+          <div className="border rounded-lg overflow-hidden divide-y">
+            {!filteredOrders.length ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <History className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">No orders found</p>
+              </div>
+            ) : (
+              filteredOrders.map((order) => (
+                <div key={order.id} className="flex items-start justify-between px-4 py-4 hover:bg-muted/30 transition-colors">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-semibold text-sm">{order.orderNumber}</span>
+                      <Badge
+                        variant={
+                          order.status === "completed" ? "default" :
+                          order.status === "pending"   ? "secondary" :
+                          order.status === "refunded"  ? "outline" : "destructive"
+                        }
+                        className={`text-xs ${order.status === "refunded" ? "border-orange-500 text-orange-600" : ""}`}
+                      >
+                        {order.status}
+                      </Badge>
                     </div>
+                    <p className="text-sm">
+                      <span className="font-medium">{order.customerName}</span>
+                      <span className="text-muted-foreground ml-2">
+                        · {order.items.length} items · {formatCurrency(order.total)}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" />
+                      {formatDate(order.timestamp)}
+                    </p>
+                    {order.paymentMethod === "cash" && order.amountPaid && (
+                      <p className="text-xs text-muted-foreground">
+                        Paid: {formatCurrency(order.amountPaid)} · Change: {formatCurrency(order.change || 0)}
+                      </p>
+                    )}
                   </div>
-                ))
-              )}
-            </div>
+                  <div className="flex gap-1 ml-3 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onViewDetails(order)}>
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onReprint(order)}>
+                      <Printer className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
-          <div className="flex justify-between text-base">
-            <span>Total Orders: {filteredOrders.length}</span>
-            <span>Total Sales: {formatCurrency(totalSales)}</span>
+          <div className="flex justify-between text-sm text-muted-foreground pt-1">
+            <span>Total Orders: <span className="font-semibold text-foreground">{filteredOrders.length}</span></span>
+            <span>Total Sales: <span className="font-semibold text-foreground">{formatCurrency(totalSales)}</span></span>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            size="lg"
-            className="text-base h-11"
-          >
-            Close
-          </Button>
+        <DialogFooter className="border-t pt-4">
+          <Button variant="outline" onClick={onClose} className="h-10">Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

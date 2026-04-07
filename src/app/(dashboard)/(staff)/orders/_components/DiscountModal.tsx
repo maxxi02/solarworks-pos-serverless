@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { CartItem } from './pos.types';
 import { formatCurrency } from './pos.utils';
@@ -51,64 +51,66 @@ export const DiscountModal = ({ isOpen, onClose, onApply, cartItems }: DiscountM
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-xl">Apply Senior/PWD Discount</DialogTitle>
-          <DialogDescription className="text-base">Select items and enter IDs for 20% discount</DialogDescription>
+          <DialogDescription>Select items and enter IDs for 20% discount</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-5">
+        <DialogBody className="space-y-5">
           {/* ID Numbers */}
-          <div className="space-y-3">
-            <Label className="text-base">ID Numbers</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">ID Numbers</Label>
             {ids.map((id, index) => (
-              <div key={index} className="flex gap-3">
+              <div key={index} className="flex gap-2">
                 <Input
                   placeholder={`ID #${index + 1}`}
                   value={id}
                   onChange={(e) => handleIdChange(index, e.target.value)}
-                  className="flex-1 h-10 text-base"
+                  className="flex-1 h-10"
                 />
                 {ids.length > 1 && (
-                  <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveId(index)} className="h-10 w-10">
-                    <Trash2 className="h-5 w-5" />
+                  <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveId(index)} className="h-10 w-10 shrink-0">
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
               </div>
             ))}
-            <Button type="button" variant="outline" size="default" onClick={handleAddId} className="mt-3 h-10 text-base">
-              <Plus className="h-5 w-5 mr-2" />Add ID
+            <Button type="button" variant="outline" size="sm" onClick={handleAddId} className="h-9 mt-1">
+              <Plus className="h-4 w-4 mr-1.5" /> Add ID
             </Button>
           </div>
 
           {/* Item Selection */}
-          <div className="space-y-3">
-            <Label className="text-base">Select Items</Label>
-            <div className="max-h-72 overflow-y-auto border rounded-lg p-3 space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Select Items</Label>
+            <div className="border rounded-lg divide-y overflow-hidden">
               {cartItems.map(item => (
                 <div
                   key={item._id}
-                  className={`flex items-center justify-between p-3 rounded cursor-pointer transition-colors ${
-                    selectedItems.includes(item._id) ? 'bg-primary/10 border border-primary' : 'hover:bg-muted/50'
+                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
+                    selectedItems.includes(item._id)
+                      ? 'bg-primary/5 border-l-2 border-l-primary'
+                      : 'hover:bg-muted/50'
                   }`}
                   onClick={() => handleToggleItem(item._id)}
                 >
-                  <div className="flex-1">
-                    <p className="text-base font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">Qty: {item.quantity} • {formatCurrency(item.price)} each</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">Qty: {item.quantity} · {formatCurrency(item.price)} each</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-base font-medium">{formatCurrency(item.price * item.quantity)}</p>
+                  <div className="text-right ml-4 shrink-0">
+                    <p className="text-sm font-semibold">{formatCurrency(item.price * item.quantity)}</p>
                     {selectedItems.includes(item._id) && (
-                      <Badge variant="default" className="text-xs mt-2">Selected</Badge>
+                      <Badge variant="default" className="text-[10px] mt-1">Selected</Badge>
                     )}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-3">
-          <Button variant="outline" onClick={onClose} size="lg" className="text-base h-11">Cancel</Button>
-          <Button onClick={handleApply} size="lg" className="text-base h-11">Apply Discount</Button>
+        <DialogFooter className="border-t pt-4 gap-2">
+          <Button variant="outline" onClick={onClose} className="h-10">Cancel</Button>
+          <Button onClick={handleApply} className="h-10">Apply Discount</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

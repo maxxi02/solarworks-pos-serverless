@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  BluetoothConnected,
-  BluetoothOff,
-  FileText,
-} from "lucide-react";
+import { BluetoothConnected, BluetoothOff, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CompanionPrintButton } from "@/components/ui/companion-print-button";
 import { ReceiptOrder } from "./pos.types";
@@ -13,6 +9,7 @@ import { useMemo } from "react";
 import { useSocket } from "@/provider/socket-provider";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -27,13 +24,7 @@ interface ReceiptModalProps {
   isPrinting?: boolean;
 }
 
-export const ReceiptModal = ({
-  receipt,
-  settings,
-  onClose,
-  onPrint,
-  isPrinting,
-}: ReceiptModalProps) => {
+export const ReceiptModal = ({ receipt, settings, onClose, onPrint, isPrinting }: ReceiptModalProps) => {
   const { isConnected: companionConnected } = useSocket();
 
   const rawText = useMemo(() => {
@@ -44,13 +35,11 @@ export const ReceiptModal = ({
     const dash = "-".repeat(W);
     const eq = "=".repeat(W);
 
-    // Center a string within W chars
     const center = (text: string) => {
       const pad = Math.max(0, Math.floor((W - text.length) / 2));
       return " ".repeat(pad) + text;
     };
 
-    // Left-right justify within W chars (no tag awareness needed)
     const lr = (left: string, right: string) => {
       const maxLeft = W - right.length - 1;
       const l = left.length > maxLeft ? left.substring(0, maxLeft - 1) + "…" : left;
@@ -58,27 +47,21 @@ export const ReceiptModal = ({
       return l + " ".repeat(gap) + right;
     };
 
-    // Item row columns: Name (W-13), Qty (4), Price (8)  → sum = W
-    const NAME_W = W - 13; // 19 for 32-wide
+    const NAME_W = W - 13;
     const itemRow = (name: string, qty: string, price: string) => {
       const n = name.length > NAME_W ? name.substring(0, NAME_W - 1) + "…" : name.padEnd(NAME_W);
-      const q = qty.padStart(4);
-      const p = price.padStart(8);
-      return `${n}${q}${p}`;
+      return `${n}${qty.padStart(4)}${price.padStart(8)}`;
     };
 
     const fmt = (n: number) => `P${n.toFixed(2)}`;
-
     let lines: string[] = [];
 
-    // Header
     if (receipt.isReprint) lines.push(center("*** REPRINT ***"));
     lines.push(center((settings.businessName || "RENDEZVOUS CAFE").toUpperCase()));
     if (settings.locationAddress) lines.push(center(settings.locationAddress));
     if (settings.phoneNumber) lines.push(center(settings.phoneNumber));
     lines.push(eq);
 
-    // Order Info
     lines.push(lr("Order #:", receipt.orderNumber));
     lines.push(lr("Date:", new Date(receipt.timestamp).toLocaleString()));
     lines.push(lr("Cashier:", receipt.cashier || "Staff"));
@@ -87,36 +70,28 @@ export const ReceiptModal = ({
     if (receipt.customerName) lines.push(lr("Customer:", receipt.customerName));
     lines.push(dash);
 
-    // Items header
     lines.push(itemRow("ITEM", "QTY", "AMOUNT"));
     lines.push(dash);
 
     receipt.items.forEach((item) => {
       const price = item.hasDiscount ? item.price * (1 - DISCOUNT_RATE) : item.price;
-      const total = price * item.quantity;
-      lines.push(itemRow(item.name, String(item.quantity), fmt(total)));
+      lines.push(itemRow(item.name, String(item.quantity), fmt(price * item.quantity)));
       if (item.hasDiscount) lines.push("  (20% Senior/PWD Discount)");
     });
     lines.push(dash);
 
-    // Totals
     lines.push(lr("Subtotal:", fmt(receipt.subtotal)));
-    if (receipt.discountTotal > 0) {
-      lines.push(lr("Discount:", `-${fmt(receipt.discountTotal)}`));
-    }
+    if (receipt.discountTotal > 0) lines.push(lr("Discount:", `-${fmt(receipt.discountTotal)}`));
     lines.push(eq);
     lines.push(lr("TOTAL:", `PHP ${receipt.total.toFixed(2)}`));
     lines.push(eq);
 
-    // Payment Method section
     const method = receipt.paymentMethod;
-
     if (method === "split" && receipt.splitPayment) {
       lines.push(lr("Payment Method:", "Split (Cash+GCash)"));
       lines.push(lr("  Cash:", fmt(receipt.splitPayment.cash)));
       lines.push(lr("  GCash:", fmt(receipt.splitPayment.gcash)));
-      const splitChange = (receipt.amountPaid ?? 0) > receipt.total
-        ? (receipt.amountPaid ?? 0) - receipt.total : 0;
+      const splitChange = (receipt.amountPaid ?? 0) > receipt.total ? (receipt.amountPaid ?? 0) - receipt.total : 0;
       lines.push(dash);
       lines.push(lr("Change:", fmt(splitChange)));
     } else if (method === "gcash") {
@@ -131,7 +106,6 @@ export const ReceiptModal = ({
     }
     lines.push(dash);
 
-    // Footer
     if (settings.receiptMessage) lines.push(center(settings.receiptMessage));
 
     return lines.join("\n");
@@ -141,54 +115,40 @@ export const ReceiptModal = ({
 
   return (
     <Dialog open={!!receipt} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md sm:max-w-[450px] p-0 overflow-hidden border-none shadow-2xl">
-        <DialogHeader className="px-6 py-4 border-b bg-muted/30">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+      <DialogContent className="max-w-md sm:max-w-[450px]">
+        <DialogHeader className="border-b pb-4 bg-muted/30">
+          <div className="flex items-center justify-between pr-8">
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
               <FileText className="w-5 h-5 text-primary" />
               {receipt.isReprint ? "Reprint Receipt" : "Order Receipt"}
             </DialogTitle>
-            <div className="flex items-center gap-2 mr-6">
-              <span
-                className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${companionConnected ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
-              >
-                {companionConnected ? (
-                  <>
-                    <BluetoothConnected className="w-3 h-3" />
-                    Online
-                  </>
-                ) : (
-                  <>
-                    <BluetoothOff className="w-3 h-3" />
-                    Offline
-                  </>
-                )}
-              </span>
-            </div>
+            <span className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${
+              companionConnected ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+            }`}>
+              {companionConnected
+                ? <><BluetoothConnected className="w-3 h-3" />Online</>
+                : <><BluetoothOff className="w-3 h-3" />Offline</>}
+            </span>
           </div>
         </DialogHeader>
 
-        <div className="p-6 bg-white dark:bg-black">
+        <DialogBody>
           <div className="rounded-lg border bg-slate-50 dark:bg-zinc-950 p-4 font-mono text-[13px] leading-relaxed shadow-inner overflow-x-auto">
-            <pre className="whitespace-pre whitespace-pre-wrap break-words text-slate-800 dark:text-slate-200">
+            <pre className="whitespace-pre-wrap break-words text-slate-800 dark:text-slate-200">
               {rawText}
             </pre>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="px-6 py-4 border-t bg-muted/30 flex sm:flex-row gap-3">
+        <DialogFooter className="border-t pt-4 gap-2">
           <CompanionPrintButton
             onClick={onPrint}
             isPrinting={isPrinting}
             label="Print Receipt"
-            iconSize="w-5 h-5"
-            className="flex-1 h-11 text-base rounded-md"
+            iconSize="w-4 h-4"
+            className="flex-1 h-10"
           />
-          <Button
-            onClick={onClose}
-            variant="outline"
-            className="flex-1 h-11 text-base font-bold border-2"
-          >
+          <Button onClick={onClose} variant="outline" className="flex-1 h-10 font-semibold">
             Close
           </Button>
         </DialogFooter>

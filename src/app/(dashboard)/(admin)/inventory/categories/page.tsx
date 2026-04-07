@@ -223,7 +223,7 @@ function CategoryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <DialogBody><div className="space-y-4">
           <div className="space-y-2">
             <Label>Category Type</Label>
             <div className="flex gap-2">
@@ -268,9 +268,9 @@ function CategoryDialog({
               rows={3}
             />
           </div>
-        </div>
+        </div></DialogBody>
 
-        <DialogFooter>
+        <DialogFooter className="border-t pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
