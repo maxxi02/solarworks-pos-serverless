@@ -45,6 +45,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -1655,7 +1656,7 @@ export default function OrdersPage() {
                 Saved Orders ({savedOrders.length})
               </DialogTitle>
             </DialogHeader>
-            <ScrollArea className="max-h-[70vh] pr-3">
+            <DialogBody>
               <SavedOrdersPanel
                 orders={savedOrders}
                 isProcessing={saveOrderMutation.isPending}
@@ -1666,7 +1667,7 @@ export default function OrdersPage() {
                 onDelete={(orderId) => setConfirmDeleteSavedOrder({ open: true, orderId })}
                 onClearAll={clearAllSavedOrders}
               />
-            </ScrollArea>
+            </DialogBody>
           </DialogContent>
         </Dialog>
 

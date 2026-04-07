@@ -4,7 +4,8 @@ import React from "react";
 import { ShoppingCart, Coffee, Utensils } from "lucide-react";
 import {
     Dialog,
-    DialogContent,
+  DialogBody,
+  DialogContent,
     DialogHeader,
     DialogTitle,
     DialogDescription,
@@ -47,7 +48,7 @@ export const IncomingOrderModal = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[50vh] pr-3">
+                <DialogBody>
                     <div className="space-y-2">
                         {order.items.map((item, idx) => (
                             <div
@@ -88,7 +89,7 @@ export const IncomingOrderModal = ({
                             </div>
                         )}
                     </div>
-                </ScrollArea>
+                </DialogBody>
 
                 <div className="flex justify-between font-bold text-base pt-2 border-t">
                     <span>Total</span>

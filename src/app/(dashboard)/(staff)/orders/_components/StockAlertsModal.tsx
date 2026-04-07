@@ -4,7 +4,8 @@ import React from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import {
     Dialog,
-    DialogContent,
+  DialogBody,
+  DialogContent,
     DialogHeader,
     DialogTitle,
     DialogDescription,
@@ -41,7 +42,7 @@ export const StockAlertsModal = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[60vh] pr-3">
+                <DialogBody>
                     {stockAlerts.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground text-sm">
                             No stock alerts at the moment.
@@ -77,7 +78,7 @@ export const StockAlertsModal = ({
                             ))}
                         </div>
                     )}
-                </ScrollArea>
+                </DialogBody>
 
                 <DialogFooter>
                     <Button

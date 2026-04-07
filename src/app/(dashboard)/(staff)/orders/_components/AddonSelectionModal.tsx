@@ -4,6 +4,7 @@ import React, { useState, useCallback } from "react";
 import { Plus, Minus, Check } from "lucide-react";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -122,7 +123,7 @@ export function AddonSelectionModal({
         </DialogHeader>
 
         {/* Addon Groups */}
-        <ScrollArea className="max-h-[50vh]">
+        <DialogBody>
           <div className="px-6 py-4 space-y-5">
             {groups.map((group) => {
               const isMissing =
@@ -201,7 +202,7 @@ export function AddonSelectionModal({
               );
             })}
           </div>
-        </ScrollArea>
+        </DialogBody>
 
         <Separator />
 

@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/card';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -468,7 +469,7 @@ function ProductDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-4">
+        <DialogBody>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="product-name">Product Name</Label>
@@ -689,7 +690,7 @@ function ProductDialog({
               ))}
             </div>
           </div>
-        </ScrollArea>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
