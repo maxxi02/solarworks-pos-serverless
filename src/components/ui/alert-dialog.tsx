@@ -5,11 +5,27 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useSmoothScroll } from "@/components/SmoothScrollProvider"
 
 function AlertDialog({
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+  const lenisRef = useSmoothScroll()
+
+  const handleOpenChange = React.useCallback(
+    (open: boolean) => {
+      if (open) {
+        lenisRef.current?.stop()
+      } else {
+        lenisRef.current?.start()
+      }
+      onOpenChange?.(open)
+    },
+    [lenisRef, onOpenChange]
+  )
+
+  return <AlertDialogPrimitive.Root data-slot="alert-dialog" onOpenChange={handleOpenChange} {...props} />
 }
 
 function AlertDialogTrigger({

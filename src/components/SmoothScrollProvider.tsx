@@ -1,40 +1,52 @@
 "use client";
 
-import { useEffect, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, ReactNode, MutableRefObject } from "react";
 import Lenis from "lenis";
 
+const SmoothScrollContext = createContext<MutableRefObject<Lenis | null>>({ current: null });
+
+export function useSmoothScroll() {
+  return useContext(SmoothScrollContext);
+}
+
 export function SmoothScrollProvider({ children }: { children: ReactNode }) {
-    useEffect(() => {
-        const lenis = new Lenis({
-            duration: 1.2,
-            easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-            orientation: "vertical",
-            gestureOrientation: "vertical",
-            smoothWheel: true,
-            wheelMultiplier: 1,
-            touchMultiplier: 2,
-            infinite: false,
-        });
+  const lenisRef = useRef<Lenis | null>(null);
 
-        function raf(time: number) {
-            lenis.raf(time);
-            requestAnimationFrame(raf);
-        }
+  useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      orientation: "vertical",
+      gestureOrientation: "vertical",
+      smoothWheel: true,
+      wheelMultiplier: 1,
+      touchMultiplier: 2,
+      infinite: false,
+    });
 
-        requestAnimationFrame(raf);
+    lenisRef.current = lenis;
 
-        // Initial check for hash scrolling on load
-        if (window.location.hash) {
-            const el = document.querySelector(window.location.hash);
-            if (el) {
-                lenis.scrollTo(el as HTMLElement);
-            }
-        }
+    function raf(time: number) {
+      lenis.raf(time);
+      requestAnimationFrame(raf);
+    }
 
-        return () => {
-            lenis.destroy();
-        };
-    }, []);
+    requestAnimationFrame(raf);
 
-    return <>{children}</>;
+    if (window.location.hash) {
+      const el = document.querySelector(window.location.hash);
+      if (el) lenis.scrollTo(el as HTMLElement);
+    }
+
+    return () => {
+      lenis.destroy();
+      lenisRef.current = null;
+    };
+  }, []);
+
+  return (
+    <SmoothScrollContext.Provider value={lenisRef}>
+      {children}
+    </SmoothScrollContext.Provider>
+  );
 }

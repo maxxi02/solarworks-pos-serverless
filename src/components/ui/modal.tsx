@@ -3,6 +3,7 @@
 import React from "react"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -27,24 +28,16 @@ export function Modal({
   onClose,
   children,
   footer,
-  className
+  className,
 }: ModalProps) {
-  const onChange = (open: boolean) => {
-    if (!open) {
-      onClose()
-    }
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={onChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className={className}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <div className="py-4">
-          {children}
-        </div>
+        {children && <DialogBody>{children}</DialogBody>}
         {footer && <DialogFooter>{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>
