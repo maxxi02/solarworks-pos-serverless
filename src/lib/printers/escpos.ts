@@ -316,7 +316,7 @@ export function buildCustomerReceiptLines(
     lines.push({ type: "divider" });
     lines.push({
       type: "text",
-      text: "*** REPRINT ***",
+      text: "REPRINT",
       align: "center",
       bold: true,
     });
