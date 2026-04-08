@@ -331,7 +331,7 @@ export function buildKitchenOrderLines(data: ReceiptBuildInput): ReceiptLine[] {
 
   lines.push({
     type: "text",
-    text: "*** KITCHEN ORDER ***",
+    text: "KITCHEN ORDER",
     align: "center",
     bold: true,
     doubleHeight: true,
@@ -399,7 +399,7 @@ export function buildKitchenOrderLines(data: ReceiptBuildInput): ReceiptLine[] {
 
   lines.push({
     type: "text",
-    text: "*** PLEASE PREPARE ***",
+    text: "PLEASE PREPARE",
     align: "center",
     bold: true,
   });
