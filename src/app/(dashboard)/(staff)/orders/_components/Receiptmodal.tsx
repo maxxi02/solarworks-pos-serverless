@@ -107,6 +107,9 @@ export const ReceiptModal = ({ receipt, settings, onClose, onPrint, isPrinting }
     lines.push(dash);
 
     if (settings.receiptMessage) lines.push(center(settings.receiptMessage));
+    if (!settings.sections?.disclaimer?.disabled && settings.disclaimer) {
+      lines.push(center(settings.disclaimer));
+    }
 
     return lines.join("\n");
   }, [receipt, settings]);

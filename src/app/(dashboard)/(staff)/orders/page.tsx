@@ -770,6 +770,7 @@ export default function OrdersPage() {
         businessPhone: settings.phoneNumber,
         businessLogo: settings.showLogo ? (settings.logo || settings.logoPreview || undefined) : undefined,
         receiptMessage: settings.receiptMessage,
+        disclaimer: !settings.sections?.disclaimer?.disabled ? settings.disclaimer : undefined,
       };
 
       const result = await printBoth(receiptInput);
@@ -878,6 +879,7 @@ export default function OrdersPage() {
           businessPhone: settings.phoneNumber,
           businessLogo: settings.showLogo ? (settings.logo || settings.logoPreview || undefined) : undefined,
           receiptMessage: settings.receiptMessage,
+          disclaimer: !settings.sections?.disclaimer?.disabled ? settings.disclaimer : undefined,
         };
 
         setIsPrinting(true);

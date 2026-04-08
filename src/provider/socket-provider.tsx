@@ -48,6 +48,7 @@ export interface ReceiptBuildInput {
   businessPhone?: string;
   businessLogo?: string;
   receiptMessage?: string;
+  disclaimer?: string;
 }
 
 const SOCKET_URL =
