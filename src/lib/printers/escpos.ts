@@ -162,6 +162,7 @@ export interface ReceiptBuildInput {
     quantity: number;
     hasDiscount?: boolean;
     menuType?: "food" | "drink";
+    isCookable?: boolean;
   }>;
   subtotal: number;
   discountTotal: number;
@@ -377,9 +378,9 @@ export function buildKitchenOrderLines(data: ReceiptBuildInput): ReceiptLine[] {
 
   lines.push({ type: "divider", char: "=" });
 
-  // Filter out drinks for kitchen - only food categories are printed in kitchen
+  // Only print items explicitly marked as cookable
   for (const item of data.items) {
-    if (item.menuType !== "food") continue;
+    if (!item.isCookable) continue;
     lines.push({
       type: "text",
       text: `${item.quantity}x  ${item.name}`,

@@ -585,8 +585,8 @@ export function SocketProvider({
     input: ReceiptBuildInput,
   ): Promise<boolean> => {
     if (!socketRef.current?.connected) return false;
-    const hasFood = input.items.some((item) => item.menuType === "food");
-    if (!hasFood) return true; // Pretend success since nothing to cook
+    const hasCookable = input.items.some((item) => item.isCookable);
+    if (!hasCookable) return true; // Pretend success since nothing to cook
     socketRef.current.emit("print:request", {
       jobId: generateJobId(),
       target: "kitchen",
