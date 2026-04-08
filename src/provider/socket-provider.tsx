@@ -228,6 +228,7 @@ interface SocketContextValue {
     input: ReceiptBuildInput,
   ) => Promise<{ receipt: boolean; kitchen: boolean }>;
   emitPrintZReport: (data: any) => void;
+  emitCompanionPing: () => void;
 }
 
 const defaultContext: SocketContextValue = {
@@ -271,6 +272,7 @@ const defaultContext: SocketContextValue = {
   companionStatus: { usb: false, bt: false },
   printBoth: async () => ({ receipt: false, kitchen: false }),
   emitPrintZReport: () => {},
+  emitCompanionPing: () => {},
 };
 
 const SocketContext = createContext<SocketContextValue>(defaultContext);
@@ -472,6 +474,11 @@ export function SocketProvider({
     socketRef.current.emit("print:zreport", { jobId: generateJobId(), data });
   };
 
+  const emitCompanionPing = () => {
+    if (!socketRef.current?.connected) return;
+    socketRef.current.emit("companion:ping");
+  };
+
   // ─── Listeners ────────────────────────────────────────────────────────────
   const onStatusChanged = (cb: (d: UserStatusUpdate) => void) =>
     socketRef.current?.on("user:status:changed", cb);
@@ -662,6 +669,7 @@ export function SocketProvider({
       companionStatus,
       printBoth,
       emitPrintZReport,
+      emitCompanionPing,
     }),
     [
       isConnected,
@@ -701,6 +709,7 @@ export function SocketProvider({
       companionStatus,
       printBoth,
       emitPrintZReport,
+      emitCompanionPing,
     ],
   );
 

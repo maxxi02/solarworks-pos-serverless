@@ -13,8 +13,11 @@ import {
   AlertCircle,
   Usb,
   Bluetooth,
+  RefreshCw,
 } from "lucide-react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useSocket } from "@/provider/socket-provider";
 import { usePrinterStatus } from "@/hooks/usePrinterStatus";
 import { ReceiptSettings } from "@/types/receipt";
@@ -24,7 +27,14 @@ interface PrinterStatusProps {
 }
 
 export function PrinterStatus({ settings }: PrinterStatusProps) {
-  const { isConnected, companionStatus } = useSocket();
+  const { isConnected, companionStatus, emitCompanionPing } = useSocket();
+  const [pinging, setPinging] = useState(false);
+
+  const handlePing = () => {
+    setPinging(true);
+    emitCompanionPing();
+    setTimeout(() => setPinging(false), 1500);
+  };
   const localPrinters = usePrinterStatus();
 
   // Determine effective printer states:
@@ -51,7 +61,14 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
             </p>
           </div>
         </div>
-        <StatusBadge status={isConnected ? "connected" : "offline"} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={isConnected ? "connected" : "offline"} />
+          {isConnected && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePing} disabled={pinging} title="Refresh printer status">
+              <RefreshCw className={cn("h-3.5 w-3.5", pinging && "animate-spin")} />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Printer Status */}
