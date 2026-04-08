@@ -884,25 +884,7 @@ export default function OrdersPage() {
 
         setIsPrinting(true);
         try {
-          // If there are cookable items, print kitchen slip
-          if (hasKitchenItems && settings?.kitchenPrinter?.enabled) {
-            const kitchenInput = {
-              ...receiptInput,
-              items: cookableItems.map((item) => ({
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity,
-                hasDiscount: item.hasDiscount,
-                menuType: item.menuType,
-              })),
-            };
-            await printKitchenOrder(kitchenInput);
-          }
-          
-          // Always print receipt if enabled
-          if (settings?.printReceipt) {
-            await printBoth(receiptInput);
-          }
+          await printBoth(receiptInput);
         } catch {
           /* silent */
         } finally {

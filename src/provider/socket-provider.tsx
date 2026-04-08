@@ -619,8 +619,8 @@ export function SocketProvider({
 
       pendingJobs.current.set(jobId, { resolve, reject, timer });
 
-      const hasFood = input.items.some((item) => item.menuType === "food");
-      const target = hasFood ? "both" : "receipt";
+      const hasCookable = input.items.some((item) => (item as any).isCookable);
+      const target = hasCookable ? "both" : "receipt";
 
       socket.emit("print:request", { jobId, target, input });
       console.log("[Socket] print:request emitted", jobId, "target:", target);
