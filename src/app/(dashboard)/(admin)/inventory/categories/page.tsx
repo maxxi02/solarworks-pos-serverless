@@ -776,10 +776,10 @@ export default function CategoriesPage() {
   const { data: inventoryItems = [], isLoading: inventoryLoading, refetch: fetchInventoryItems } = useQuery<InventoryItem[]>({
     queryKey: ['inventoryItems'],
     queryFn: async () => {
-      const res = await fetch('/api/inventory');
+      const res = await fetch('/api/products/stocks');
       if (!res.ok) throw new Error('Failed to fetch inventory');
       const data = await res.json();
-      return data.data || [];
+      return Array.isArray(data) ? data : (data.data || []);
     },
   });
 

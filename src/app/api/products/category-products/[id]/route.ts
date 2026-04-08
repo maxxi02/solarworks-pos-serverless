@@ -209,9 +209,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         body.available !== undefined
           ? Boolean(body.available)
           : existingProduct.available,
+      isCookable:
+        body.isCookable !== undefined
+          ? Boolean(body.isCookable)
+          : existingProduct.isCookable ?? false,
       categoryId: body.categoryId!,
       imageUrl,
-      // Preserve existing addon groups unless explicitly provided
       addonGroups: Array.isArray(body.addonGroups)
         ? body.addonGroups
         : (existingProduct.addonGroups || []),
