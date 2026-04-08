@@ -21,6 +21,7 @@ export interface ReceiptBuildItem {
   quantity: number;
   hasDiscount?: boolean;
   menuType?: "food" | "drink";
+  isCookable?: boolean;
 }
 
 export interface ReceiptBuildInput {
