@@ -11,8 +11,7 @@ import {
   XCircle,
   Loader2,
   AlertCircle,
-  Usb,
-  Bluetooth,
+  Printer,
   RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
@@ -73,7 +72,7 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
 
       {/* Printer Status */}
       <div className="grid grid-cols-2 gap-2">
-        {/* Receipt / USB */}
+        {/* Receipt */}
         <div
           className={cn(
             "p-2.5 rounded-lg border text-center transition-colors",
@@ -83,7 +82,7 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
           )}
         >
           <div className="flex items-center justify-center gap-1 mb-1">
-            <Usb className="h-3 w-3 text-muted-foreground" />
+            <Printer className="h-3 w-3 text-muted-foreground" />
             <p className="text-[10px] font-bold uppercase text-muted-foreground">
               Receipt
             </p>
@@ -102,7 +101,7 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
           </p>
         </div>
 
-        {/* Kitchen / Bluetooth */}
+        {/* Kitchen */}
         <div
           className={cn(
             "p-2.5 rounded-lg border text-center transition-colors",
@@ -112,7 +111,7 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
           )}
         >
           <div className="flex items-center justify-center gap-1 mb-1">
-            <Bluetooth className="h-3 w-3 text-muted-foreground" />
+            <Printer className="h-3 w-3 text-muted-foreground" />
             <p className="text-[10px] font-bold uppercase text-muted-foreground">
               Kitchen
             </p>
