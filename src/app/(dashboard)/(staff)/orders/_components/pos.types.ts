@@ -31,6 +31,7 @@ export interface Product {
   menuType?: "food" | "drink";
   imageUrl?: string;
   addonGroups?: AddonGroup[];
+  isCookable?: boolean;
 }
 
 export interface CartItem extends Product {

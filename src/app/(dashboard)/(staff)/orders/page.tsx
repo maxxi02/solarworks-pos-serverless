@@ -840,6 +840,10 @@ export default function OrdersPage() {
       await saveOrderMutation.mutateAsync(completedOrder);
       saveOrderToLocal(completedOrder);
 
+      // Separate cookable items for kitchen printing
+      const cookableItems = cart.filter(item => item.isCookable);
+      const hasKitchenItems = cookableItems.length > 0;
+
       if (
         (settings?.printReceipt || settings?.kitchenPrinter?.enabled) &&
         isConnected
@@ -858,6 +862,7 @@ export default function OrdersPage() {
             quantity: item.quantity,
             hasDiscount: item.hasDiscount,
             menuType: item.menuType,
+            isCookable: item.isCookable,
           })),
           subtotal,
           discountTotal,
@@ -877,7 +882,25 @@ export default function OrdersPage() {
 
         setIsPrinting(true);
         try {
-          await printBoth(receiptInput);
+          // If there are cookable items, print kitchen slip
+          if (hasKitchenItems && settings?.kitchenPrinter?.enabled) {
+            const kitchenInput = {
+              ...receiptInput,
+              items: cookableItems.map((item) => ({
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                hasDiscount: item.hasDiscount,
+                menuType: item.menuType,
+              })),
+            };
+            await printKitchenOrder(kitchenInput);
+          }
+          
+          // Always print receipt if enabled
+          if (settings?.printReceipt) {
+            await printBoth(receiptInput);
+          }
         } catch {
           /* silent */
         } finally {

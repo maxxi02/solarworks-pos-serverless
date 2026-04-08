@@ -11,7 +11,8 @@ import {
   MoreHorizontal,
   AlertCircle,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  ChefHat
 } from 'lucide-react';
 import { ProductIngredientsForm, ProductIngredient } from '@/components/forms/ProductIngredientsForm';
 import { toast } from 'sonner';
@@ -113,6 +114,7 @@ interface Product {
   description: string;
   ingredients: ProductIngredient[];
   available: boolean;
+  isCookable?: boolean;
   categoryId?: string;
   category?: string;
   menuType?: MenuType;
@@ -137,6 +139,7 @@ interface ProductFormData {
   description: string;
   ingredients: ProductIngredient[];
   available: boolean;
+  isCookable?: boolean;
   categoryId?: string;
   menuType?: MenuType;
   imageUrl?: string;
@@ -312,6 +315,7 @@ function ProductDialog({
   const [price, setPrice] = useState(product?.price?.toString() || '');
   const [description, setDescription] = useState(product?.description || '');
   const [available, setAvailable] = useState(product?.available ?? true);
+  const [isCookable, setIsCookable] = useState(product?.isCookable ?? false);
   const [ingredients, setIngredients] = useState<ProductIngredient[]>(product?.ingredients || []);
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState(product?.imageUrl || '');
@@ -387,6 +391,7 @@ function ProductDialog({
       setPrice(product?.price?.toString() || '');
       setDescription(product?.description || '');
       setAvailable(product?.available ?? true);
+      setIsCookable(product?.isCookable ?? false);
       setImageUrl(product?.imageUrl || '');
       setImagePreview(product?.imageUrl || '');
       setAddonGroups(product?.addonGroups || []);
@@ -437,6 +442,7 @@ function ProductDialog({
         description: description.trim(),
         ingredients,
         available,
+        isCookable,
         categoryId: category?._id,
         menuType: category?.menuType,
         imageUrl,
@@ -549,6 +555,15 @@ function ProductDialog({
                 onCheckedChange={setAvailable}
               />
               <Label htmlFor="product-available">Product is available for sale</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="product-cookable"
+                checked={isCookable}
+                onCheckedChange={setIsCookable}
+              />
+              <Label htmlFor="product-cookable">Cookable (sends to kitchen printer)</Label>
             </div>
 
             <Separator />
@@ -1216,24 +1231,32 @@ export default function CategoriesPage() {
                     </TableCell>
                     <TableCell className="font-medium">{formatCurrency(product.price)}</TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => handleToggleAvailability(product)}
-                      >
-                        {product.available ? (
-                          <>
-                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                            Active
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="mr-2 h-4 w-4 text-muted-foreground" />
-                            Inactive
-                          </>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => handleToggleAvailability(product)}
+                        >
+                          {product.available ? (
+                            <>
+                              <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                              Active
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="mr-2 h-4 w-4 text-muted-foreground" />
+                              Inactive
+                            </>
+                          )}
+                        </Button>
+                        {product.isCookable && (
+                          <Badge variant="outline" className="text-orange-600 border-orange-300 gap-1">
+                            <ChefHat className="h-3 w-3" />
+                            Kitchen
+                          </Badge>
                         )}
-                      </Button>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-muted-foreground max-w-50">
