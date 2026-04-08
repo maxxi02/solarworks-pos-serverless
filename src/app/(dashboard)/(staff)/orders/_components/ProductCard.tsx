@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { Plus, Coffee, Utensils, Sparkles } from "lucide-react";
+import { Plus, Coffee, Utensils, Sparkles, ChefHat } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +57,16 @@ export const ProductCard = memo(
                 <Badge className="h-5 px-1.5 text-[9px] font-bold bg-primary/90 backdrop-blur-sm gap-1">
                   <Sparkles className="w-2.5 h-2.5" />
                   Customize
+                </Badge>
+              </div>
+            )}
+
+            {/* Kitchen badge */}
+            {product.isCookable && (
+              <div className="absolute top-1.5 left-1.5">
+                <Badge className="h-5 px-1.5 text-[9px] font-bold bg-orange-500/90 backdrop-blur-sm gap-1">
+                  <ChefHat className="w-2.5 h-2.5" />
+                  Kitchen
                 </Badge>
               </div>
             )}
