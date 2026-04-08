@@ -117,6 +117,7 @@ export interface ProductInput {
   description?: string;
   ingredients?: IngredientInput[];
   available?: boolean;
+  isCookable?: boolean;
   categoryId?: string;
   imageUrl?: string;
   addonGroups?: AddonGroup[];
