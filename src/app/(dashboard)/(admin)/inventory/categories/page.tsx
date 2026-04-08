@@ -548,22 +548,26 @@ function ProductDialog({
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="product-available"
-                checked={available}
-                onCheckedChange={setAvailable}
-              />
-              <Label htmlFor="product-available">Product is available for sale</Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="product-cookable"
-                checked={isCookable}
-                onCheckedChange={setIsCookable}
-              />
-              <Label htmlFor="product-cookable">Cookable (sends to kitchen printer)</Label>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="product-available"
+                  checked={available}
+                  onCheckedChange={setAvailable}
+                />
+                <Label htmlFor="product-available">Product is available for sale</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="product-cookable"
+                  checked={isCookable}
+                  onCheckedChange={setIsCookable}
+                />
+                <Label htmlFor="product-cookable" className="flex items-center gap-1.5">
+                  <ChefHat className="h-4 w-4 text-orange-500" />
+                  Cookable (sends to kitchen printer)
+                </Label>
+              </div>
             </div>
 
             <Separator />
