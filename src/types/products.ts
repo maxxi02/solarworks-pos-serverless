@@ -87,6 +87,7 @@ export interface FormattedProduct {
   description: string;
   ingredients: ProductIngredient[];
   available: boolean;
+  isCookable?: boolean;
   categoryId: string;
   imageUrl: string;
   addonGroups?: AddonGroup[];

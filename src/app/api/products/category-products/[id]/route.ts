@@ -37,6 +37,7 @@ function formatProduct(product: WithId<Document>): FormattedProduct {
       : [],
     available:
       product.available !== undefined ? (product.available as boolean) : true,
+    isCookable: (product.isCookable as boolean) ?? false,
     categoryId: product.categoryId as string,
     imageUrl: (product.imageUrl as string) || "",
     addonGroups: Array.isArray(product.addonGroups) ? product.addonGroups : [],
