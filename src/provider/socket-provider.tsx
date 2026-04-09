@@ -621,7 +621,16 @@ export function SocketProvider({
       pendingJobs.current.set(jobId, { resolve, reject, timer });
 
       const hasCookable = input.items.some((item) => (item as any).isCookable);
-      const target = hasCookable ? "both" : "receipt";
+
+      // Only request printing for printers actually connected in the companion.
+      // Prevents a failed-receipt enqueue when only the kitchen (BT) printer is set up.
+      const wantReceipt = companionStatus.usb;
+      const wantKitchen = companionStatus.bt && hasCookable;
+
+      let target: "receipt" | "kitchen" | "both";
+      if (wantReceipt && wantKitchen) target = "both";
+      else if (wantKitchen) target = "kitchen";
+      else target = "receipt"; // default — receipt printer handles it (or fails gracefully)
 
       socket.emit("print:request", { jobId, target, input });
       console.log("[Socket] print:request emitted", jobId, "target:", target);
