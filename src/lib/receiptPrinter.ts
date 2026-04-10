@@ -20,6 +20,7 @@ export interface ReceiptData {
     category?: string;
     menuType?: "food" | "drink";
     notes?: string;
+    addons?: Array<{ addonName: string; price: number }>;
   }>;
   subtotal: number;
   discountTotal: number;
@@ -63,6 +64,7 @@ function toReceiptBuildInput(
       quantity: item.quantity,
       hasDiscount: item.hasDiscount,
       menuType: item.menuType,
+      addons: item.addons,
     })),
     subtotal: receipt.subtotal,
     discountTotal: receipt.discountTotal,
@@ -241,6 +243,12 @@ function buildReceiptText(
     const tot = (p * item.quantity).toFixed(2);
     s += itemRow(item.name, String(item.quantity), `P${tot}`) + "\n";
     if (item.hasDiscount) s += "  [Senior/PWD 20% off]\n";
+    const addons = item.addons ?? (item as any).selectedAddons;
+    if (addons?.length) {
+      addons.forEach((a: { addonName: string; price: number }) => {
+        s += "  + " + a.addonName + (a.price > 0 ? " (P" + a.price.toFixed(2) + ")" : "") + "\n";
+      });
+    }
   });
   s += div + "\n";
   s += lr("Subtotal:", fmt(receipt.subtotal)) + "\n";
@@ -305,6 +313,12 @@ function buildKitchenText(receipt: ReceiptData): string {
   receipt.items.forEach((item) => {
     if (item.menuType !== "food") return;
     s += `${item.quantity}x  ${item.name}\n`;
+    const addons = item.addons ?? (item as any).selectedAddons;
+    if (addons?.length) {
+      addons.forEach((a: { addonName: string; price: number }) => {
+        s += `  + ${a.addonName}\n`;
+      });
+    }
   });
   s += dbDiv + "\n";
   if (receipt.orderNote) s += `NOTE: ${receipt.orderNote}\n` + dbDiv + "\n";

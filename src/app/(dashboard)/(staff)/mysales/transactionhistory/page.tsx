@@ -30,6 +30,7 @@ interface TransactionItem {
   quantity: number;
   price: number;
   hasDiscount?: boolean;
+  addons?: Array<{ addonName: string; price: number }>;
 }
 
 interface Transaction {
@@ -306,6 +307,7 @@ const History = () => {
           price: item.price,
           quantity: item.quantity,
           hasDiscount: item.hasDiscount,
+          addons: item.addons,
         })),
         subtotal: transaction.subtotal,
         discountTotal: transaction.discountTotal ?? transaction.discount ?? 0,

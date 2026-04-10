@@ -163,6 +163,7 @@ export interface ReceiptBuildInput {
     hasDiscount?: boolean;
     menuType?: "food" | "drink";
     isCookable?: boolean;
+    addons?: Array<{ addonName: string; price: number }>;
   }>;
   subtotal: number;
   discountTotal: number;
@@ -255,6 +256,12 @@ export function buildCustomerReceiptLines(
     lines.push({ type: "text", text: `${nameCol}${qtyCol} ${amtCol}` });
     if (item.hasDiscount) {
       lines.push({ type: "text", text: "  [20% Senior/PWD Disc]" });
+    }
+    if (item.addons?.length) {
+      for (const a of item.addons) {
+        const addonLabel = a.price > 0 ? `  + ${a.addonName} (P${a.price.toFixed(2)})` : `  + ${a.addonName}`;
+        lines.push({ type: "text", text: addonLabel });
+      }
     }
   }
 
@@ -387,6 +394,11 @@ export function buildKitchenOrderLines(data: ReceiptBuildInput): ReceiptLine[] {
       bold: true,
       doubleHeight: true,
     });
+    if (item.addons?.length) {
+      for (const a of item.addons) {
+        lines.push({ type: "text", text: `  + ${a.addonName}` });
+      }
+    }
   }
 
   lines.push({ type: "divider", char: "=" });
