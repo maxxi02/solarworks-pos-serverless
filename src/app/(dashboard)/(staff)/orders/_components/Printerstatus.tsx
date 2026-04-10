@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Printer,
   RefreshCw,
+  Unplug,
 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +27,7 @@ interface PrinterStatusProps {
 }
 
 export function PrinterStatus({ settings }: PrinterStatusProps) {
-  const { isConnected, companionStatus, emitCompanionPing } = useSocket();
+  const { isConnected, companionStatus, emitCompanionPing, emitCompanionPrinterDisconnect } = useSocket();
   const [pinging, setPinging] = useState(false);
 
   const handlePing = () => {
@@ -99,6 +100,17 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
                 ? "Ready"
                 : "Not Found"}
           </p>
+          {isConnected && usbReady && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 mt-1 mx-auto text-destructive hover:text-destructive"
+              title="Disconnect receipt printer"
+              onClick={() => emitCompanionPrinterDisconnect("usb")}
+            >
+              <Unplug className="h-3 w-3" />
+            </Button>
+          )}
         </div>
 
         {/* Kitchen */}
@@ -128,6 +140,17 @@ export function PrinterStatus({ settings }: PrinterStatusProps) {
                 ? "Ready"
                 : "Not Found"}
           </p>
+          {isConnected && btReady && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 mt-1 mx-auto text-destructive hover:text-destructive"
+              title="Disconnect kitchen printer"
+              onClick={() => emitCompanionPrinterDisconnect("bt")}
+            >
+              <Unplug className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </div>
 

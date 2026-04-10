@@ -230,6 +230,7 @@ interface SocketContextValue {
   ) => Promise<{ receipt: boolean; kitchen: boolean }>;
   emitPrintZReport: (data: any) => void;
   emitCompanionPing: () => void;
+  emitCompanionPrinterDisconnect: (target: "usb" | "bt") => void;
 }
 
 const defaultContext: SocketContextValue = {
@@ -274,6 +275,7 @@ const defaultContext: SocketContextValue = {
   printBoth: async () => ({ receipt: false, kitchen: false }),
   emitPrintZReport: () => {},
   emitCompanionPing: () => {},
+  emitCompanionPrinterDisconnect: () => {},
 };
 
 const SocketContext = createContext<SocketContextValue>(defaultContext);
@@ -480,6 +482,11 @@ export function SocketProvider({
     socketRef.current.emit("companion:ping");
   };
 
+  const emitCompanionPrinterDisconnect = (target: "usb" | "bt") => {
+    if (!socketRef.current?.connected) return;
+    socketRef.current.emit("companion:printer:disconnect", { target });
+  };
+
   // ─── Listeners ────────────────────────────────────────────────────────────
   const onStatusChanged = (cb: (d: UserStatusUpdate) => void) =>
     socketRef.current?.on("user:status:changed", cb);
@@ -680,6 +687,7 @@ export function SocketProvider({
       printBoth,
       emitPrintZReport,
       emitCompanionPing,
+      emitCompanionPrinterDisconnect,
     }),
     [
       isConnected,
@@ -720,6 +728,7 @@ export function SocketProvider({
       printBoth,
       emitPrintZReport,
       emitCompanionPing,
+      emitCompanionPrinterDisconnect,
     ],
   );
 
