@@ -161,17 +161,17 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        grossSales: completed.subtotalAmount,
+        grossSales: completed.subtotalAmount + refunded.subtotalAmount,
         netSales: completed.totalAmount,
-        totalDiscounts: completed.discountAmount,
+        totalDiscounts: completed.discountAmount + refunded.discountAmount,
         totalRefunds: refunded.totalAmount,
         cashSales,
         cashSalesDirect,
         gcashSales,
         gcashSalesDirect,
         splitSales,
-        totalCollected: cashSales + gcashSales - refunded.totalAmount,
-        transactionCount: completed.count,
+        totalCollected: cashSales + gcashSales,
+        transactionCount: completed.count + refunded.count,
         // itemCount computed from topItems isn't reliable for total — keep a separate facet if needed
         hourlySales,
         topItems,

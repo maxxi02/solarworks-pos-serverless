@@ -82,6 +82,8 @@ function toReceiptBuildInput(
     businessLogo:
       settings.showLogo && settings.logo ? settings.logo : undefined,
     receiptMessage: settings.receiptMessage,
+    disclaimer: settings.disclaimer,
+    sections: settings.sections as any,
   };
 }
 

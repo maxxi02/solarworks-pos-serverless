@@ -102,9 +102,12 @@ export default function CloseRegisterPage() {
       const completed       = sessionPayments.filter((p: Payment) => p.status === 'completed');
       const refunded        = sessionPayments.filter((p: Payment) => p.status === 'refunded');
 
-      const totalSales     = completed.reduce((s: number, p: Payment) => s + p.total, 0);
-      const totalDiscounts = completed.reduce((s: number, p: Payment) => s + (p.discountTotal || p.discount || 0), 0);
+      // Gross totals include both completed and refunded transactions to accurately represent gross revenue.
+      const validPayments  = sessionPayments.filter((p: Payment) => p.status === 'completed' || p.status === 'refunded');
+      const totalSales     = validPayments.reduce((s: number, p: Payment) => s + p.total, 0);
+      const totalDiscounts = validPayments.reduce((s: number, p: Payment) => s + (p.discountTotal || p.discount || 0), 0);
 
+      // Drawer income (Only from completed; refunded transactions naturally take cash out so they exclude themselves)
       // Cash-only payments
       const cashSalesDirect  = completed.filter((p: Payment) => p.paymentMethod === 'cash').reduce((s: number, p: Payment) => s + p.total, 0);
       const gcashSalesDirect = completed.filter((p: Payment) => p.paymentMethod === 'gcash').reduce((s: number, p: Payment) => s + p.total, 0);
@@ -119,8 +122,9 @@ export default function CloseRegisterPage() {
 
       const refunds        = refunded.reduce((s: number, p: Payment) => s + p.total, 0);
 
-      const expectedCash = dbSession.openingFund + cashSales + gcashSales - refunds - totalCashOuts;
-      const txCount      = completed.length;
+      // Expected Cash is ONLY physical cash: Opening Fund + Net Cash Income - Cash Outs.
+      const expectedCash = dbSession.openingFund + cashSales - totalCashOuts;
+      const txCount      = validPayments.length;
       const itemCount    = completed.reduce((s: number, p: Payment) => s + (p.items?.length || 0), 0);
       const openedAtStr  = typeof dbSession.openedAt === 'string' ? dbSession.openedAt : new Date(dbSession.openedAt).toLocaleString();
 
@@ -145,7 +149,7 @@ export default function CloseRegisterPage() {
         transactions: txCount, items: itemCount,
         splitSales: splitPayments.reduce((s: number, p: Payment) => s + p.total, 0),
         tenders: { cash: cashSales, gcash: gcashSales, split: 0, credit_card: 0, pay_later: 0, online: 0, invoice: 0, e_wallet: 0, pay_in: 0 },
-        discounts: { sc: completed.reduce((s: number, p: Payment) => s + (p.discountTotal || 0), 0), pwd: 0, naac: 0, solo_parent: 0, other: 0 },
+        discounts: { sc: validPayments.reduce((s: number, p: Payment) => s + (p.discountTotal || 0), 0), pwd: 0, naac: 0, solo_parent: 0, other: 0 },
         openingFund: dbSession.openingFund, actualCash: 0,
         presentAccumulatedSales, previousAccumulatedSales,
         gcashSales,

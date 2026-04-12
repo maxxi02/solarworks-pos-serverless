@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSocket } from "@/provider/socket-provider";
+import { useReceiptSettings } from "@/hooks/useReceiptSettings";
 
 interface ClosedRegister {
   _id: string;
@@ -53,6 +54,7 @@ export default function ClosedRegistersPage() {
   >("today");
   const [printingId, setPrintingId] = useState<string | null>(null);
   const { socket } = useSocket();
+  const { settings } = useReceiptSettings();
 
   useEffect(() => {
     loadClosedRegisters();
@@ -93,98 +95,55 @@ export default function ClosedRegistersPage() {
     setPrintingId(register._id);
 
     try {
-      const businessName = "Rendezvous Cafe";
-      const businessAddress = "Your Store Address";
-      const businessPhone = "123-456-7890";
-
-      // Prepare items for receipt
-      const items = [
-        {
-          name: "OPENING FUND",
-          price: register.openingFund,
-          quantity: 1,
-        },
-        {
-          name: "CASH SALES",
-          price: register.snapshot?.cashSales || 0,
-          quantity: 1,
-        },
-        {
-          name: "GCASH SALES",
-          price: register.snapshot?.gcashSales || 0,
-          quantity: 1,
-        },
-        {
-          name: "SPLIT SALES",
-          price: register.snapshot?.splitSales || 0,
-          quantity: 1,
-        },
-      ];
-
-      // Add discounts if any
-      if ((register.snapshot?.totalDiscounts || 0) > 0) {
-        items.push({
-          name: "TOTAL DISCOUNTS",
-          price: -(register.snapshot?.totalDiscounts || 0),
-          quantity: 1,
-        });
-      }
-
-      // Add refunds if any
-      if ((register.snapshot?.totalRefunds || 0) > 0) {
-        items.push({
-          name: "TOTAL REFUNDS",
-          price: -(register.snapshot?.totalRefunds || 0),
-          quantity: 1,
-        });
-      }
-
-      // Add cash outs if any
-      if (register.cashOuts && register.cashOuts.length > 0) {
-        register.cashOuts.forEach((cashOut) => {
-          items.push({
-            name: `CASH OUT: ${cashOut.reason}`,
-            price: -cashOut.amount,
-            quantity: 1,
-          });
-        });
-      }
-
-      // Calculate totals
-      const totalSales = register.snapshot?.totalSales || 0;
-      const expectedCash = register.expectedCash || 0;
-      const actualCash = register.actualCash || 0;
-      const difference = register.difference || 0;
-
+      const totalCashOuts = register.cashOuts ? register.cashOuts.reduce((sum, c) => sum + c.amount, 0) : 0;
+      
       const printData = {
-        jobId: `close-${register._id}-${Date.now()}`,
-        target: "receipt" as const,
-        input: {
-          orderNumber: `Z-${new Date(register.closedAt).toLocaleDateString().replace(/\//g, "")}-${register.cashierName}`,
-          customerName: register.cashierName,
-          cashier: register.cashierName,
-          timestamp: new Date(register.closedAt),
-          orderType: "dine-in" as const,
-          items: items,
-          subtotal: totalSales,
-          discountTotal: register.snapshot?.totalDiscounts || 0,
-          total: expectedCash,
-          paymentMethod: "cash",
-          amountPaid: actualCash,
-          change: difference,
-          businessName,
-          businessAddress,
-          businessPhone,
-          receiptMessage: getStatusMessage(
-            register.closeStatus || "balanced",
-            difference,
-          ),
-          isReprint: false,
-        },
+        jobId: `zreport-${register._id}-${Date.now()}`,
+        data: {
+          businessName: settings?.businessName || "Rendezvous Cafe",
+          locationAddress: settings?.locationAddress || "Your Store Address",
+          taxPin: settings?.taxPin || "",
+          businessLogo: settings?.showLogo ? (settings.logo || settings.logoPreview || undefined) : undefined,
+          today: new Date(register.closedAt).toLocaleDateString(),
+          timeNow: new Date(register.closedAt).toLocaleTimeString(),
+          cashierName: register.cashierName,
+          registerName: register.registerName || "Main Register",
+          openedAt: new Date(register.openedAt).toLocaleString(),
+          closedAt: new Date(register.closedAt).toLocaleString(),
+          totalSales: register.snapshot?.totalSales || 0,
+          totalDiscounts: register.snapshot?.totalDiscounts || 0,
+          totalRefunds: register.snapshot?.totalRefunds || 0,
+          totalVoids: totalCashOuts,
+          netSales: register.snapshot?.netSales || 0,
+          openingFund: register.openingFund || 0,
+          cashEarned: register.snapshot?.cashSales || 0,
+          gcashEarned: register.snapshot?.gcashSales || 0,
+          expectedCash: register.expectedCash || 0,
+          cashOuts: totalCashOuts,
+          actualCash: register.actualCash || 0,
+          difference: register.difference || 0,
+          tenders: {
+            cash: register.snapshot?.cashSales || 0,
+            gcash: register.snapshot?.gcashSales || 0,
+            split: register.snapshot?.splitSales || 0,
+            credit_card: 0,
+            pay_later: 0,
+            online: 0,
+            invoice: 0,
+            e_wallet: 0,
+            pay_in: 0
+          },
+          transactions: register.snapshot?.transactions || 0,
+          items: register.snapshot?.items || 0,
+          receiptMessage: settings?.receiptMessage,
+          disclaimer: settings?.disclaimer,
+          showCashierSignature: settings?.zreading?.showCashierSignature ?? true,
+          isXReading: false
+        }
       };
 
-      // Emit print request
-      socket.emit("print:request", printData);
+      // Emit Z-Report print request
+      socket.emit("print:zreport", printData);
 
       toast.success("Print job sent to printer");
     } catch (error) {

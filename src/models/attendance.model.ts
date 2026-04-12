@@ -8,10 +8,17 @@ const COLLECTION_NAME = "attendance";
 const TEMP_COLLECTION_NAME = "attendance_temp";
 const REJECTED_COLLECTION_NAME = "attendance_rejected";
 
-// Helper function to get current shift
+// Helper functions for Manila Time (UTC+8)
+function getManilaDateString(): string {
+  const now = new Date();
+  const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
+  return manilaDate.toISOString().split("T")[0]; // YYYY-MM-DD
+}
+
 function getCurrentShift(): "morning" | "afternoon" {
   const now = new Date();
-  const hours = now.getHours();
+  const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
+  const hours = manilaDate.getUTCHours();
   // Morning shift: 12:00 AM - 11:59 AM (0-11)
   // Afternoon shift: 12:00 PM - 11:59 PM (12-23)
   return hours < 12 ? "morning" : "afternoon";
@@ -32,7 +39,7 @@ export class AttendanceModel {
 
   // Clock in a staff member (saves to temp collection)
   static async clockIn(userId: string): Promise<Attendance | null> {
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const today = getManilaDateString();
     const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
 
@@ -75,7 +82,7 @@ export class AttendanceModel {
 
   // Clock out a staff member (updates record in either temp or confirmed collection)
   static async clockOut(userId: string): Promise<Attendance | null> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getManilaDateString();
     const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
     const collection = this.getCollection();
@@ -143,7 +150,7 @@ export class AttendanceModel {
 
   // Get today's attendance for a user (check both temp and confirmed, current shift)
   static async getTodayAttendance(userId: string): Promise<Attendance | null> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getManilaDateString();
     const currentShift = getCurrentShift();
 
     // First check temp collection
@@ -174,7 +181,7 @@ export class AttendanceModel {
 
   // Get all attendance records for today (both shifts)
   static async getAllTodayAttendance(userId: string): Promise<Attendance[]> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getManilaDateString();
     const tempCollection = this.getTempCollection();
     const collection = this.getCollection();
 
@@ -307,13 +314,13 @@ export class AttendanceModel {
     const collection = this.getCollection();
     const tempCollection = this.getTempCollection();
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      .toISOString()
-      .split("T")[0];
+    const manilaDate = new Date(Date.now() + 8 * 3600 * 1000);
+    const year = manilaDate.getUTCFullYear();
+    const month = manilaDate.getUTCMonth();
+    
+    const startOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const endOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     // Get confirmed records
     const confirmedRecords = await collection
