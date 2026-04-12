@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DAILY_QUOTA_HOURS, OT_THRESHOLD_HOURS } from "@/lib/overtime";
 
 interface StaffMember {
   id: string;
@@ -397,7 +398,7 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <h3 className="font-bold text-base">8-Hour Limit Reached</h3>
+                <h3 className="font-bold text-base">{OT_THRESHOLD_HOURS}-Hour Limit Reached</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Worked <strong>{Math.floor(overtimePrompt.hoursWorked)}h {Math.round((overtimePrompt.hoursWorked % 1) * 60)}m</strong>
                 </p>
@@ -408,7 +409,7 @@ export function AttendanceDialog({ open, onOpenChange }: AttendanceDialogProps) 
             <div className="rounded-xl bg-muted/40 p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Regular hours</span>
-                <span className="font-semibold">8h 0m</span>
+                <span className="font-semibold">{DAILY_QUOTA_HOURS}h 0m</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Overtime</span>

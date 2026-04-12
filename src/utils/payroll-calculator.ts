@@ -3,6 +3,12 @@
  * Handles regular hours, overtime, and earnings estimation
  */
 
+import {
+  DAILY_QUOTA_HOURS,
+  OT_THRESHOLD_HOURS,
+  splitRegularAndOvertime,
+} from "@/lib/overtime";
+
 export interface PayrollConfig {
   salaryPerHour: number;
   overtimeMultiplier?: number; // Default 1.5x
@@ -25,10 +31,22 @@ export interface EarningsBreakdown {
   effectiveRate: number; // Average rate per hour
 }
 
-const STANDARD_WORKDAY_HOURS = 9;
+// Re-export DAILY_QUOTA_HOURS as STANDARD_WORKDAY_HOURS for backward compatibility
+export const STANDARD_WORKDAY_HOURS = DAILY_QUOTA_HOURS; // 9 hours
 
 /**
- * Calculate earnings for a single work period
+ * Overtime threshold (quota + 1h buffer = 10h).
+ * Exported so callers can reference it without importing from lib/overtime directly.
+ */
+export { OT_THRESHOLD_HOURS };
+
+/**
+ * Calculate earnings for a single work period.
+ *
+ * OT rules:
+ *  - Regular hours capped at DAILY_QUOTA_HOURS (9h)
+ *  - OT applies only after OT_THRESHOLD_HOURS (10h = 9h + 1h buffer)
+ *  - OT hours are whole numbers only (floor-based)
  */
 export function calculateEarnings(
   config: PayrollConfig,
@@ -41,27 +59,15 @@ export function calculateEarnings(
   } = config;
   const { hoursWorked, isWeekend, isHoliday } = period;
 
-  let regularHours = 0;
-  let overtimeHours = 0;
-  let regularPay = 0;
-  let overtimePay = 0;
-
   // Determine multiplier based on day type
   const baseMultiplier = isWeekend || isHoliday ? weekendMultiplier : 1;
 
-  if (hoursWorked <= STANDARD_WORKDAY_HOURS) {
-    // All regular hours
-    regularHours = hoursWorked;
-    regularPay = hoursWorked * salaryPerHour * baseMultiplier;
-  } else {
-    // Split into regular + overtime
-    regularHours = STANDARD_WORKDAY_HOURS;
-    overtimeHours = hoursWorked - STANDARD_WORKDAY_HOURS;
+  // Split into regular and overtime using centralized rules
+  const { regularHours, overtimeHours } = splitRegularAndOvertime(hoursWorked);
 
-    regularPay = STANDARD_WORKDAY_HOURS * salaryPerHour * baseMultiplier;
-    overtimePay =
-      overtimeHours * salaryPerHour * overtimeMultiplier * baseMultiplier;
-  }
+  const regularPay = regularHours * salaryPerHour * baseMultiplier;
+  const overtimePay =
+    overtimeHours * salaryPerHour * overtimeMultiplier * baseMultiplier;
 
   const totalPay = regularPay + overtimePay;
   const effectiveRate = hoursWorked > 0 ? totalPay / hoursWorked : 0;

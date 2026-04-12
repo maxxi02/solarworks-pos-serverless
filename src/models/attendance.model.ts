@@ -3,6 +3,7 @@
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
 import type { Attendance, AttendanceStatus } from "@/types/attendance";
+import { computeOvertimeHours, DAILY_QUOTA_HOURS } from "@/lib/overtime";
 
 const COLLECTION_NAME = "attendance";
 const TEMP_COLLECTION_NAME = "attendance_temp";
@@ -436,6 +437,14 @@ export class AttendanceModel {
   }
 }
 
+/**
+ * Calculate daily earnings for a single confirmed attendance record.
+ *
+ * OT rules (from @/lib/overtime):
+ *  - Regular hours capped at DAILY_QUOTA_HOURS (9h)
+ *  - OT = whole hours beyond the 10h threshold (9h quota + 1h buffer)
+ *  - 10h 59m → 0 OT; 11h → 1 OT; 12h → 2 OT
+ */
 export function calculateDailyEarnings(
   record: Attendance,
   hourlyRate: number = 56.25,
@@ -454,8 +463,10 @@ export function calculateDailyEarnings(
     return { total: 0, regular: 0, overtime: 0, otHours: 0 };
   }
 
-  const regularHours = Math.min(8, hours);
-  const otHours = Math.max(0, hours - 8);
+  // Regular hours capped at the 9-hour daily quota
+  const regularHours = Math.min(DAILY_QUOTA_HOURS, hours);
+  // OT = whole hours beyond 10h threshold (floor-based)
+  const otHours = computeOvertimeHours(hours);
 
   const regular = regularHours * hourlyRate;
   const overtime = otHours * hourlyRate * 1.25;
