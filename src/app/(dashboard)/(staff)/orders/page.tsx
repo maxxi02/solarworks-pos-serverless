@@ -303,7 +303,9 @@ export default function OrdersPage() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [showSavedOrders, setShowSavedOrders] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const [showSearch, setShowSearch] = useState<boolean>(
+    () => typeof window !== 'undefined' && localStorage.getItem('pos:showSearch') === 'true'
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"pos" | "queue">("pos");
   const [unreadQueueCount, setUnreadQueueCount] = useState(0);
@@ -1245,7 +1247,14 @@ export default function OrdersPage() {
           )
         }
         showSearch={showSearch}
-        onToggleSearch={() => { setShowSearch((v) => !v); setSearchQuery(""); }}
+        onToggleSearch={() => {
+          setShowSearch((v) => {
+            const next = !v;
+            localStorage.setItem('pos:showSearch', String(next));
+            return next;
+          });
+          setSearchQuery("");
+        }}
       />
 
       {/* Active register banner — visible to all staff */}
