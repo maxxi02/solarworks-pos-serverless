@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner'
 import { useSocket } from '@/provider/socket-provider'
 import type { ReceiptBuildInput } from '@/provider/socket-provider'
+import { useSession } from '@/lib/auth-client'
 import { CompanionPrintButton } from '@/components/ui/companion-print-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 interface TransactionItem {
@@ -45,9 +46,11 @@ const DISCOUNT_RATE = 0.2
 
 const History = () => {
   const { settings } = useReceiptSettings()
-  // currentCashier comes from SocketProvider which already has the authenticated user
-  const { printBoth, isConnected, companionStatus, userName: currentCashier } = useSocket()
-  console.log("[TxHistory] currentCashier from socket:", currentCashier)
+  const { data: sessionData } = useSession()
+  const { printBoth, isConnected, companionStatus, userName: socketUserName } = useSocket()
+  // Prefer the direct session (always available) over the socket provider (can be empty on first render)
+  const currentCashier = (sessionData?.user?.name ?? socketUserName ?? '').trim()
+  console.log("[TxHistory] cashier sources — session:", sessionData?.user?.name, "| socket:", socketUserName, "| resolved:", currentCashier)
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
