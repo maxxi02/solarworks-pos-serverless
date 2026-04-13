@@ -46,11 +46,13 @@ const DISCOUNT_RATE = 0.2
 
 const History = () => {
   const { settings } = useReceiptSettings()
+  // Primary source: socket context (always mounted now — layout fix ensures this)
+  // Fallback: direct session hook in case socket hasn't received the name yet
   const { data: sessionData } = useSession()
   const { printBoth, isConnected, companionStatus, userName: socketUserName } = useSocket()
-  // Prefer the direct session (always available) over the socket provider (can be empty on first render)
-  const currentCashier = (sessionData?.user?.name ?? socketUserName ?? '').trim()
-  console.log("[TxHistory] cashier sources — session:", sessionData?.user?.name, "| socket:", socketUserName, "| resolved:", currentCashier)
+  const currentCashier = (socketUserName || sessionData?.user?.name || '').trim()
+  // 🔍 Debug: visible on screen AND in console
+  console.log('[TxHistory] CASHIER DEBUG:', { socketUserName, sessionName: sessionData?.user?.name, resolved: currentCashier })
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -404,7 +406,9 @@ const History = () => {
               <Clock className="w-6 h-6" />Transaction History
             </h1>
             <p className="text-sm text-muted-foreground mt-1">View and manage all your sales transactions</p>
-            {currentCashier && <p className="text-sm mt-1 text-primary font-medium">Logged in as: {currentCashier}</p>}
+            <p className="text-xs mt-1 font-mono text-muted-foreground border border-dashed border-muted-foreground/30 px-2 py-0.5 rounded w-fit">
+              🔍 Cashier: <span className={currentCashier ? 'text-green-500 font-bold' : 'text-red-400'}>{currentCashier || 'Detecting…'}</span>
+            </p>
           </div>
           <div className="flex gap-2">
             <button onClick={fetchTransactions}

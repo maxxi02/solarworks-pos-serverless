@@ -19,28 +19,18 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const currentUser = session?.user as SessionUser | undefined;
 
-  const userId = currentUser?.id;
-
-  console.log("CURRENT USER ID:", JSON.stringify(userId));
-  // Don't render SocketProvider until we have a user
-  if (isPending || !currentUser) {
-    return (
-      <DashboardLayout>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </DashboardLayout>
-    );
-  }
-
+  // Always mount SocketProvider — pass empty strings while session is loading.
+  // The provider guards `if (!userId) return` internally, so no socket fires
+  // until the real userId arrives. This prevents useSocket() from returning
+  // the dead defaultContext (where userName is always "") on initial render.
   return (
     <SocketProvider
-      userId={currentUser.id}
-      userName={currentUser.name ?? ""}
-      userAvatar={currentUser.image ?? ""}
+      userId={currentUser?.id ?? ""}
+      userName={currentUser?.name ?? ""}
+      userAvatar={currentUser?.image ?? ""}
     >
       <DashboardLayout>
         <QueryClientProvider client={queryClient}>
