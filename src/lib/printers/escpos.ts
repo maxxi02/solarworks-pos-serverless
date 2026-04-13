@@ -181,6 +181,18 @@ export interface ReceiptBuildInput {
   businessPhone?: string;
   businessLogo?: string;
   receiptMessage?: string;
+  disclaimer?: string;
+  // Receipt sections config (controls header/footer/disabled per-section)
+  sections?: {
+    storeName?: { header: boolean; footer: boolean; disabled: boolean };
+    locationAddress?: { header: boolean; footer: boolean; disabled: boolean };
+    phoneNumber?: { header: boolean; footer: boolean; disabled: boolean };
+    message?: { header: boolean; footer: boolean; disabled: boolean };
+    disclaimer?: { header: boolean; footer: boolean; disabled: boolean };
+    orderType?: { header: boolean; footer: boolean; disabled: boolean };
+    customerInfo?: { header: boolean; footer: boolean; disabled: boolean };
+    orderNote?: { header: boolean; footer: boolean; disabled: boolean };
+  };
 }
 
 export function buildCustomerReceiptLines(

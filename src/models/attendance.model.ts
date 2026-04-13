@@ -3,15 +3,23 @@
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
 import type { Attendance, AttendanceStatus } from "@/types/attendance";
+import { computeOvertimeHours, DAILY_QUOTA_HOURS } from "@/lib/overtime";
 
 const COLLECTION_NAME = "attendance";
 const TEMP_COLLECTION_NAME = "attendance_temp";
 const REJECTED_COLLECTION_NAME = "attendance_rejected";
 
-// Helper function to get current shift
+// Helper functions for Manila Time (UTC+8)
+function getManilaDateString(): string {
+  const now = new Date();
+  const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
+  return manilaDate.toISOString().split("T")[0]; // YYYY-MM-DD
+}
+
 function getCurrentShift(): "morning" | "afternoon" {
   const now = new Date();
-  const hours = now.getHours();
+  const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
+  const hours = manilaDate.getUTCHours();
   // Morning shift: 12:00 AM - 11:59 AM (0-11)
   // Afternoon shift: 12:00 PM - 11:59 PM (12-23)
   return hours < 12 ? "morning" : "afternoon";
@@ -32,7 +40,7 @@ export class AttendanceModel {
 
   // Clock in a staff member (saves to temp collection)
   static async clockIn(userId: string): Promise<Attendance | null> {
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const today = getManilaDateString();
     const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
 
@@ -75,7 +83,7 @@ export class AttendanceModel {
 
   // Clock out a staff member (updates record in either temp or confirmed collection)
   static async clockOut(userId: string): Promise<Attendance | null> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getManilaDateString();
     const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
     const collection = this.getCollection();
@@ -143,7 +151,7 @@ export class AttendanceModel {
 
   // Get today's attendance for a user (check both temp and confirmed, current shift)
   static async getTodayAttendance(userId: string): Promise<Attendance | null> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getManilaDateString();
     const currentShift = getCurrentShift();
 
     // First check temp collection
@@ -174,7 +182,7 @@ export class AttendanceModel {
 
   // Get all attendance records for today (both shifts)
   static async getAllTodayAttendance(userId: string): Promise<Attendance[]> {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getManilaDateString();
     const tempCollection = this.getTempCollection();
     const collection = this.getCollection();
 
@@ -307,13 +315,13 @@ export class AttendanceModel {
     const collection = this.getCollection();
     const tempCollection = this.getTempCollection();
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .split("T")[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      .toISOString()
-      .split("T")[0];
+    const manilaDate = new Date(Date.now() + 8 * 3600 * 1000);
+    const year = manilaDate.getUTCFullYear();
+    const month = manilaDate.getUTCMonth();
+    
+    const startOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const endOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     // Get confirmed records
     const confirmedRecords = await collection
@@ -429,6 +437,14 @@ export class AttendanceModel {
   }
 }
 
+/**
+ * Calculate daily earnings for a single confirmed attendance record.
+ *
+ * OT rules (from @/lib/overtime):
+ *  - Regular hours capped at DAILY_QUOTA_HOURS (9h)
+ *  - OT = whole hours beyond the 10h threshold (9h quota + 1h buffer)
+ *  - 10h 59m → 0 OT; 11h → 1 OT; 12h → 2 OT
+ */
 export function calculateDailyEarnings(
   record: Attendance,
   hourlyRate: number = 56.25,
@@ -447,8 +463,10 @@ export function calculateDailyEarnings(
     return { total: 0, regular: 0, overtime: 0, otHours: 0 };
   }
 
-  const regularHours = Math.min(8, hours);
-  const otHours = Math.max(0, hours - 8);
+  // Regular hours capped at the 9-hour daily quota
+  const regularHours = Math.min(DAILY_QUOTA_HOURS, hours);
+  // OT = whole hours beyond 10h threshold (floor-based)
+  const otHours = computeOvertimeHours(hours);
 
   const regular = regularHours * hourlyRate;
   const overtime = otHours * hourlyRate * 1.25;

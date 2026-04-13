@@ -9,6 +9,12 @@ import { ObjectId } from "mongodb";
 import { scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import bcrypt from "bcryptjs";
+import {
+  computeOvertimeHours,
+  hasReachedOvertimeThreshold,
+  OT_THRESHOLD_HOURS,
+  DAILY_QUOTA_HOURS,
+} from "@/lib/overtime";
 
 const scryptAsync = promisify(scrypt);
 
@@ -139,21 +145,21 @@ export async function POST(req: NextRequest) {
         isClockedIn: true,
       });
     } else {
-      // Before clocking out, check if they've already hit 8 hours
-      // and haven't explicitly confirmed overtime yet
+      // Before clocking out, check if they've exceeded the OT threshold
+      // (9h quota + 1h buffer = 10h) and haven't explicitly confirmed overtime yet.
       const todayAttendance = await AttendanceModel.getTodayAttendance(userId);
       if (todayAttendance && !todayAttendance.clockOutTime && !confirmOvertime) {
         const elapsed =
           (Date.now() - new Date(todayAttendance.clockInTime).getTime()) /
           (1000 * 60 * 60);
-        if (elapsed >= 8) {
-          const otHours = Math.max(0, elapsed - 8);
+        if (hasReachedOvertimeThreshold(elapsed)) {
+          const otHours = computeOvertimeHours(elapsed);
           return NextResponse.json({
             success: false,
             overtimeReached: true,
             hoursWorked: Math.round(elapsed * 100) / 100,
-            overtimeHours: Math.round(otHours * 100) / 100,
-            message: `You have worked ${elapsed.toFixed(2)}h (${otHours.toFixed(2)}h overtime). Do you want to log overtime or clock out now?`,
+            overtimeHours: otHours, // whole hours only
+            message: `You have worked ${elapsed.toFixed(2)}h (${otHours}h overtime). Do you want to log overtime or clock out now?`,
           });
         }
       }
@@ -166,15 +172,15 @@ export async function POST(req: NextRequest) {
         });
       }
       console.log(`[staff-action] ${userName} clocked out`);
-      const otHours = Math.max(0, (attendance.hoursWorked ?? 0) - 8);
+      const otHours = computeOvertimeHours(attendance.hoursWorked ?? 0);
       return NextResponse.json({
         success: true,
         message: `${userName} clocked out. Hours worked: ${attendance.hoursWorked?.toFixed(2)}h${
-          otHours > 0 ? ` (incl. ${otHours.toFixed(2)}h overtime)` : ""
+          otHours > 0 ? ` (incl. ${otHours}h overtime)` : ""
         }`,
         attendance,
         hoursWorked: attendance.hoursWorked,
-        overtimeHours: otHours > 0 ? Math.round(otHours * 100) / 100 : 0,
+        overtimeHours: otHours,
         isClockedIn: false,
       });
     }

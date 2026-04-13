@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { MONGODB } from "@/config/db";
+import { computeOvertimeHours } from "@/lib/overtime";
 
 export interface DailyStaffStatus {
   staffId: string;
@@ -114,8 +115,9 @@ export async function GET(req: NextRequest) {
         (clockInHour === LATE_THRESHOLD_HOUR && clockInMinute > 0);
 
       const hoursWorked = record.hoursWorked ?? null;
+      // OT = whole hours beyond the 10h threshold (9h quota + 1h buffer)
       const overtimeHours =
-        hoursWorked != null ? Math.max(0, hoursWorked - 8) : 0;
+        hoursWorked != null ? computeOvertimeHours(hoursWorked) : 0;
 
       return {
         staffId: userId,

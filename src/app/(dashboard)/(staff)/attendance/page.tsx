@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import type { LeaveRequest } from "@/models/leave-request.model";
 import type { OvertimeRequest } from "@/models/overtime-request.model";
+import { DAILY_QUOTA_HOURS, OT_THRESHOLD_HOURS } from "@/lib/overtime";
 
 interface StaffEntry {
   id: string;
@@ -388,8 +389,9 @@ const AttendancePage = () => {
   };
 
   const getElapsedColor = (h: number) => {
-    if (h >= 8) return { bar: "bg-rose-500", text: "text-rose-600 dark:text-rose-400", bg: "bg-rose-500/10 border-rose-500/30" };
-    if (h >= 7) return { bar: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10 border-amber-500/30" };
+    // Red once past the 10h OT threshold, amber when approaching quota (>= 9h), green otherwise
+    if (h >= OT_THRESHOLD_HOURS) return { bar: "bg-rose-500", text: "text-rose-600 dark:text-rose-400", bg: "bg-rose-500/10 border-rose-500/30" };
+    if (h >= DAILY_QUOTA_HOURS) return { bar: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10 border-amber-500/30" };
     return { bar: "bg-green-500", text: "text-green-700 dark:text-green-400", bg: "bg-green-500/10 border-green-500/30" };
   };
 
@@ -409,7 +411,8 @@ const AttendancePage = () => {
   if (step === "pin") {
     const isClockingOut = selected?.isClockedIn;
     const elapsedColors = elapsedHours !== null ? getElapsedColor(elapsedHours) : null;
-    const progressPct = elapsedHours !== null ? Math.min((elapsedHours / 8) * 100, 100) : 0;
+    // Progress bar fills relative to the daily quota (9h); overflows red beyond OT threshold
+    const progressPct = elapsedHours !== null ? Math.min((elapsedHours / DAILY_QUOTA_HOURS) * 100, 100) : 0;
 
     return (
       <div className="min-h-screen flex items-start justify-center p-6 pt-16">
@@ -472,11 +475,13 @@ const AttendancePage = () => {
               </div>
               <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
                 <span>0h</span>
-                <span className={elapsedHours >= 8 ? elapsedColors!.text : ""}>
-                  {elapsedHours >= 8 ? `+${formatElapsed(elapsedHours - 8)} overtime` : "8h limit"}
+                <span className={elapsedHours >= OT_THRESHOLD_HOURS ? elapsedColors!.text : ""}>
+                  {elapsedHours >= OT_THRESHOLD_HOURS
+                    ? `+${formatElapsed(elapsedHours - OT_THRESHOLD_HOURS)} overtime`
+                    : `${DAILY_QUOTA_HOURS}h quota`}
                 </span>
               </div>
-              {elapsedHours >= 8 && (
+              {elapsedHours >= OT_THRESHOLD_HOURS && (
                 <p className={`text-xs font-semibold flex items-center gap-1 ${elapsedColors!.text}`}>
                   <AlertTriangle className="h-3.5 w-3.5" />
                   You've reached the 8-hour limit. You'll be asked about overtime.
@@ -587,7 +592,7 @@ const AttendancePage = () => {
                       <AlertTriangle className="h-5 w-5 text-amber-600" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-base">8-Hour Limit Reached</h3>
+                      <h3 className="font-bold text-base">{OT_THRESHOLD_HOURS}-Hour Limit Reached</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         You've worked <strong>{formatElapsed(overtimePrompt.hoursWorked)}</strong>
                       </p>
@@ -600,7 +605,7 @@ const AttendancePage = () => {
                   <div className="rounded-xl bg-muted/40 p-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Regular hours</span>
-                      <span className="font-semibold">8h 0m</span>
+                      <span className="font-semibold">{DAILY_QUOTA_HOURS}h 0m</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Overtime</span>

@@ -1,11 +1,20 @@
 // src/app/api/settings/portal/route.ts
-// GET  — returns featured product IDs + enriched product details
-// PUT  — admin-only, upserts the featured product IDs list
+// GET  — returns featured product IDs + enriched product details + branding
+// PUT  — admin-only, upserts featured products + branding settings
 
 import { NextRequest, NextResponse } from "next/server";
 import MONGODB from "@/config/db";
 import { auth } from "@/lib/auth";
 import { ObjectId } from "mongodb";
+
+// Default branding values (current hardcoded theme)
+const DEFAULT_BRANDING = {
+  primaryColor: "#E8621A", // orange brand colour
+  accentColor: "#8B3A00", // deep amber
+  logoText: "RENDEZVOUS CAFÉ", // text shown in the navbar
+  logoUrl: "", // optional custom image logo
+  logoFont: "Cardo", // Google Font family name for the logo
+};
 
 const COLLECTION = "portalSettings";
 const SETTINGS_KEY = "main"; // singleton document key
@@ -18,6 +27,12 @@ export async function GET() {
     });
 
     const featuredProductIds: string[] = settings?.featuredProductIds ?? [];
+
+    // Branding — merge stored values with defaults so new fields work immediately
+    const branding = {
+      ...DEFAULT_BRANDING,
+      ...(settings?.branding ?? {}),
+    };
 
     // Enrich with full product details if IDs exist
     let featuredProducts: object[] = [];
@@ -55,12 +70,16 @@ export async function GET() {
         .filter(Boolean);
     }
 
-    return NextResponse.json({ featuredProductIds, featuredProducts });
+    return NextResponse.json({
+      featuredProductIds,
+      featuredProducts,
+      branding,
+    });
   } catch (error) {
     console.error("❌ GET /api/settings/portal error:", error);
     return NextResponse.json(
       { error: "Failed to fetch portal settings" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -75,17 +94,17 @@ export async function PUT(request: NextRequest) {
     if (!session || role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden: admin access required" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
     const body = await request.json();
-    const { featuredProductIds } = body;
+    const { featuredProductIds, branding } = body;
 
     if (!Array.isArray(featuredProductIds)) {
       return NextResponse.json(
         { error: "featuredProductIds must be an array" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -102,25 +121,46 @@ export async function PUT(request: NextRequest) {
       })
       .slice(0, 5); // hard cap: 5 featured products max
 
+    // Sanitize branding — only allow known string fields
+    const safeBranding: Record<string, string> = {};
+    if (branding && typeof branding === "object") {
+      for (const key of [
+        "primaryColor",
+        "accentColor",
+        "logoText",
+        "logoUrl",
+        "logoFont",
+      ] as const) {
+        if (typeof branding[key] === "string") {
+          safeBranding[key] = branding[key];
+        }
+      }
+    }
+
     await MONGODB.collection(COLLECTION).updateOne(
       { key: SETTINGS_KEY },
       {
         $set: {
           key: SETTINGS_KEY,
           featuredProductIds: sanitized,
+          branding: safeBranding,
           updatedAt: new Date(),
           updatedBy: session.user.id,
         },
       },
-      { upsert: true }
+      { upsert: true },
     );
 
-    return NextResponse.json({ success: true, featuredProductIds: sanitized });
+    return NextResponse.json({
+      success: true,
+      featuredProductIds: sanitized,
+      branding: safeBranding,
+    });
   } catch (error) {
     console.error("❌ PUT /api/settings/portal error:", error);
     return NextResponse.json(
       { error: "Failed to save portal settings" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
