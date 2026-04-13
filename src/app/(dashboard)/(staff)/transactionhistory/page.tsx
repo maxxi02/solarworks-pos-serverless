@@ -12,6 +12,7 @@ import { useSocket } from '@/provider/socket-provider'
 import type { ReceiptBuildInput } from '@/provider/socket-provider'
 import { CompanionPrintButton } from '@/components/ui/companion-print-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useSession } from '@/lib/auth-client'
 interface TransactionItem {
   name: string
   quantity: number
@@ -45,6 +46,8 @@ const DISCOUNT_RATE = 0.2
 
 const History = () => {
   const { settings } = useReceiptSettings()
+  const { data: session } = useSession()
+  const currentCashier = session?.user?.name ?? ''
   const { printBoth, isConnected, companionStatus } = useSocket()
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -576,7 +579,14 @@ const History = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3">{getStatusBadge(t.status)}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{t.cashier}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          {t.cashier}
+                          {currentCashier && t.cashier === currentCashier && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary">You</span>
+                          )}
+                        </span>
+                      </td>
                     </tr>
                   )
                 })}
