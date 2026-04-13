@@ -12,7 +12,7 @@ import { useSocket } from '@/provider/socket-provider'
 import type { ReceiptBuildInput } from '@/provider/socket-provider'
 import { CompanionPrintButton } from '@/components/ui/companion-print-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useSession } from '@/lib/auth-client'
+import { useSession } from "@/lib/auth-client"
 interface TransactionItem {
   name: string
   quantity: number
@@ -47,7 +47,8 @@ const DISCOUNT_RATE = 0.2
 const History = () => {
   const { settings } = useReceiptSettings()
   const { data: session } = useSession()
-  const currentCashier = session?.user?.name ?? ''
+  const currentCashier = session?.user?.name || "Staff"
+  console.log('[TxHistory] session:', JSON.stringify(session), '| currentCashier:', currentCashier)
   const { printBoth, isConnected, companionStatus } = useSocket()
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -402,7 +403,7 @@ const History = () => {
               <Clock className="w-6 h-6" />Transaction History
             </h1>
             <p className="text-sm text-muted-foreground mt-1">View and manage all your sales transactions</p>
-            {currentCashier && (
+            {session?.user?.name && (
               <p className="text-sm mt-1 text-primary font-medium">Logged in as: {currentCashier}</p>
             )}
           </div>
