@@ -403,9 +403,7 @@ const History = () => {
               <Clock className="w-6 h-6" />Transaction History
             </h1>
             <p className="text-sm text-muted-foreground mt-1">View and manage all your sales transactions</p>
-            {session?.user?.name && (
-              <p className="text-sm mt-1 text-primary font-medium">Logged in as: {currentCashier}</p>
-            )}
+            <p className="text-sm mt-1 text-primary font-medium">Logged in as: {currentCashier} (raw: {JSON.stringify(session?.user?.name)})</p>
           </div>
           <div className="flex gap-2">
             <button onClick={fetchTransactions}
