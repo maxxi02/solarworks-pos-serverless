@@ -45,14 +45,9 @@ const DISCOUNT_RATE = 0.2
 
 const History = () => {
   const { settings } = useReceiptSettings()
-  const [currentCashier, setCurrentCashier] = useState("")
-  useEffect(() => {
-    fetch("/api/auth/get-session").then(r => r.json()).then(d => {
-      console.log("[TxHistory] auth session:", JSON.stringify(d))
-      setCurrentCashier(d?.user?.name || "")
-    })
-  }, [])
-  const { printBoth, isConnected, companionStatus } = useSocket()
+  // currentCashier comes from SocketProvider which already has the authenticated user
+  const { printBoth, isConnected, companionStatus, userName: currentCashier } = useSocket()
+  console.log("[TxHistory] currentCashier from socket:", currentCashier)
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)

@@ -150,6 +150,7 @@ interface SocketContextValue {
   socket: Socket | null;
   isConnected: boolean;
   isActive: boolean;
+  userName: string;
 
   // Presence
   emitOnline: () => void;
@@ -247,6 +248,7 @@ const defaultContext: SocketContextValue = {
   socket: null,
   isConnected: false,
   isActive: true,
+  userName: "",
   emitOnline: () => {},
   emitActivity: () => {},
   onStatusChanged: () => {},
@@ -659,6 +661,7 @@ export function SocketProvider({
       socket: socketRef.current,
       isConnected,
       isActive,
+      userName,
       emitOnline,
       emitActivity,
       onStatusChanged,
@@ -702,6 +705,7 @@ export function SocketProvider({
     [
       isConnected,
       isActive,
+      userName,
       onStatusChanged, // Memoized via useCallback elsewhere
       offStatusChanged,
       onActivityUpdated,
