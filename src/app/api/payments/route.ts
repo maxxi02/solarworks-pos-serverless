@@ -354,6 +354,12 @@ export async function GET(request: NextRequest) {
             refundReason: 1,
             timestamp: 1,
             splitPayment: 1,
+            cashier: 1,       // ← required for "You" badge & My Transactions filter
+            cashierId: 1,
+            amountPaid: 1,    // ← required for change calculation
+            change: 1,
+            seniorPwdIds: 1,
+            tableNumber: 1,
           },
         })
         .sort({ createdAt: -1 })
