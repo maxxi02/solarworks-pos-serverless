@@ -276,6 +276,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const noStats = searchParams.get("noStats") === "true";
+    const cashierFilter = searchParams.get("cashier");
 
     const paymentsCol = MONGODB.collection("payments");
     const ordersCol = MONGODB.collection("orders");
@@ -300,6 +301,7 @@ export async function GET(request: NextRequest) {
         { cashier: { $regex: search, $options: "i" } },
       ];
     }
+    if (cashierFilter) posFilter.cashier = { $regex: new RegExp(`^${cashierFilter}$`, "i") };
     if (startDate || endDate) {
       const df: Record<string, any> = {};
       if (startDate) df.$gte = new Date(startDate);

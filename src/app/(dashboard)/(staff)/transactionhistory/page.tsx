@@ -56,6 +56,7 @@ const History = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterPayment, setFilterPayment] = useState<string>('all')
+  const [mineOnly, setMineOnly] = useState(false)
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('today')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
@@ -82,6 +83,7 @@ const History = () => {
 
     if (filterStatus !== 'all') params.set('status', filterStatus)
     if (filterPayment !== 'all') params.set('paymentMethod', filterPayment)
+    if (mineOnly && currentCashier) params.set('cashier', currentCashier)
     if (searchTerm.trim()) params.set('search', searchTerm.trim())
 
     const now = new Date()
@@ -112,7 +114,7 @@ const History = () => {
     params.set('limit', String(itemsPerPage))
 
     return params
-  }, [filterStatus, filterPayment, searchTerm, dateRange, customStartDate, customEndDate, sortBy, sortOrder, currentPage, itemsPerPage])
+  }, [filterStatus, filterPayment, mineOnly, currentCashier, searchTerm, dateRange, customStartDate, customEndDate, sortBy, sortOrder, currentPage, itemsPerPage])
 
   // ── Fetch TODAY stats (always fixed, independent of filters) ─────────────
   const fetchTodayStats = useCallback(async () => {
@@ -183,7 +185,7 @@ const History = () => {
 
   // Reset to page 1 when filters change
   useEffect(() => { setCurrentPage(1) },
-    [filterStatus, filterPayment, searchTerm, dateRange, customStartDate, customEndDate, sortBy, sortOrder])
+    [filterStatus, filterPayment, mineOnly, searchTerm, dateRange, customStartDate, customEndDate, sortBy, sortOrder])
 
   // ── Derived values ────────────────────────────────────────────────────────
   const totalPages = Math.ceil(totalCount / itemsPerPage)
@@ -400,6 +402,9 @@ const History = () => {
               <Clock className="w-6 h-6" />Transaction History
             </h1>
             <p className="text-sm text-muted-foreground mt-1">View and manage all your sales transactions</p>
+            {currentCashier && (
+              <p className="text-sm mt-1 text-primary font-medium">Logged in as: {currentCashier}</p>
+            )}
           </div>
           <div className="flex gap-2">
             <button onClick={fetchTransactions}
@@ -466,6 +471,16 @@ const History = () => {
         {/* Filters */}
         <div className="bg-card rounded-lg border border-border p-4 mb-6">
           <div className="flex flex-wrap gap-4">
+            {currentCashier && (
+              <button
+                onClick={() => setMineOnly(p => !p)}
+                className={`px-3 py-2 text-sm rounded-lg border font-medium transition-colors ${
+                  mineOnly ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                {mineOnly ? `My Transactions (${currentCashier})` : 'All Cashiers'}
+              </button>
+            )}
             <div className="flex-1 min-w-52 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
               <input type="text" placeholder="Search by order #, customer, or cashier..."
