@@ -904,7 +904,7 @@ const History = () => {
                 </button>
                 <button
                   onClick={() => { setShowRefundConfirm(false); setAdminPin(''); }}
-                  className="flex-1 py-2.5 border border-border rounded-lg font-semibold text-sm hover:bg-muted/50 transition-colors"
+                  className="flex-1 py-2.5 border border-border rounded-lg  text-sm hover:bg-muted/50 transition-colors"
                 >
                   Cancel
                 </button>
