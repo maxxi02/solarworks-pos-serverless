@@ -16,6 +16,7 @@ interface SavedOrdersPanelProps {
   onReprint: (order: SavedOrder) => void;
   onDelete: (orderId: string) => void;
   onClearAll: () => void;
+  onRetry?: (order: SavedOrder) => void;
 }
 
 export const SavedOrdersPanel = ({
@@ -25,6 +26,7 @@ export const SavedOrdersPanel = ({
   onLoad,
   onReprint,
   onDelete,
+  onRetry,
 }: SavedOrdersPanelProps) => {
   return (
 
@@ -43,7 +45,14 @@ export const SavedOrdersPanel = ({
                   <p className="text-sm font-mono font-medium">{order.orderNumber}</p>
                   <p className="text-sm text-muted-foreground">{formatDate(order.timestamp)}</p>
                 </div>
-                <Badge variant="outline" className="text-xs px-2 py-1">{order.status}</Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant="outline" className="text-xs px-2 py-1">{order.status}</Badge>
+                  {order.pendingSync && (
+                    <Badge variant="destructive" className="bg-amber-500 hover:bg-amber-600 text-xs px-2 py-0.5 border-none">
+                      Sync Pending
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               <div className="text-sm">
@@ -60,15 +69,27 @@ export const SavedOrdersPanel = ({
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button
-                  size="default"
-                  variant="default"
-                  className="h-9 text-sm flex-1"
-                  onClick={() => onLoad(order)}
-                  disabled={isProcessing || isPrinting}
-                >
-                  Load
-                </Button>
+                {order.pendingSync && onRetry ? (
+                  <Button
+                    size="default"
+                    variant="default"
+                    className="h-9 text-sm flex-1 bg-amber-500 hover:bg-amber-600 text-white"
+                    onClick={() => onRetry(order)}
+                    disabled={isProcessing || isPrinting}
+                  >
+                    Retry Save
+                  </Button>
+                ) : (
+                  <Button
+                    size="default"
+                    variant="default"
+                    className="h-9 text-sm flex-1"
+                    onClick={() => onLoad(order)}
+                    disabled={isProcessing || isPrinting}
+                  >
+                    Load
+                  </Button>
+                )}
                 <Button size="default" variant="outline" className="h-9 w-9 p-0" onClick={() => onReprint(order)} disabled={isPrinting}>
                   <Printer className="h-4 w-4" />
                 </Button>

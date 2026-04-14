@@ -33,7 +33,13 @@ export function useAttendance(): UseAttendanceReturn {
 
       if (data.success) {
         setAttendance(data.attendance);
-        setIsClockedIn(data.isClockedIn);
+        // Double-check: if the record has a clockOutTime, the shift is over
+        // regardless of what the server's isClockedIn flag says.
+        const isActive =
+          !!data.attendance &&
+          !data.attendance.clockOutTime &&
+          data.isClockedIn;
+        setIsClockedIn(isActive);
       } else {
         setError(data.message || "Failed to fetch attendance status");
       }

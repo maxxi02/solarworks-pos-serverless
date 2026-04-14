@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
       if (!attendance) {
         return NextResponse.json({
           success: false,
-          message: "Already clocked in for this shift",
+          message: "Already clocked in — please clock out before starting a new shift",
           alreadyClockedIn: true,
         });
       }

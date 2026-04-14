@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (!attendance) {
       const response: ClockInResponse = {
         success: false,
-        message: "You have already clocked in today",
+        message: "Already clocked in — please clock out before starting a new shift",
         alreadyClockedIn: true,
       };
       return NextResponse.json(response, { status: 400 });

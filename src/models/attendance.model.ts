@@ -1,4 +1,4 @@
-// lib/models/attendance.model.ts - UPDATED with 12-hour shifts
+// lib/models/attendance.model.ts
 
 import { MONGODB } from "@/config/db";
 import { ObjectId } from "mongodb";
@@ -9,19 +9,18 @@ const COLLECTION_NAME = "attendance";
 const TEMP_COLLECTION_NAME = "attendance_temp";
 const REJECTED_COLLECTION_NAME = "attendance_rejected";
 
-// Helper functions for Manila Time (UTC+8)
+// Helper: Manila date string (UTC+8)
 function getManilaDateString(): string {
   const now = new Date();
   const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
   return manilaDate.toISOString().split("T")[0]; // YYYY-MM-DD
 }
 
-function getCurrentShift(): "morning" | "afternoon" {
+// Helper: label-only shift for reporting (NOT used as a gate)
+function getCurrentShiftLabel(): "morning" | "afternoon" {
   const now = new Date();
   const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
   const hours = manilaDate.getUTCHours();
-  // Morning shift: 12:00 AM - 11:59 AM (0-11)
-  // Afternoon shift: 12:00 PM - 11:59 PM (12-23)
   return hours < 12 ? "morning" : "afternoon";
 }
 
@@ -38,35 +37,42 @@ export class AttendanceModel {
     return MONGODB.collection(REJECTED_COLLECTION_NAME);
   }
 
-  // Clock in a staff member (saves to temp collection)
+  /**
+   * Clock in a staff member.
+   *
+   * IMPORTANT: We check for ANY active (not clocked-out) shift today,
+   * regardless of shift label. This prevents the "noon/midnight trick" where
+   * shifting from morning→afternoon used to make the system think no active
+   * shift existed, causing a second clock-in to be created.
+   */
   static async clockIn(userId: string): Promise<Attendance | null> {
     const today = getManilaDateString();
-    const currentShift = getCurrentShift();
+    const shiftLabel = getCurrentShiftLabel(); // for metadata only
     const tempCollection = this.getTempCollection();
-
-    // Check if already clocked in for THIS SHIFT today
-    const existingTemp = await tempCollection.findOne({
-      userId,
-      date: today,
-      shift: currentShift,
-    });
-
     const collection = this.getCollection();
-    const existingConfirmed = await collection.findOne({
+
+    // Block if ANY unclosed shift exists today (whole-day scope, not shift-scoped)
+    const activeTemp = await tempCollection.findOne({
       userId,
       date: today,
-      shift: currentShift,
+      clockOutTime: { $exists: false }, // still active
     });
 
-    if (existingTemp || existingConfirmed) {
-      return null; // Already clocked in for this shift
+    const activeConfirmed = await collection.findOne({
+      userId,
+      date: today,
+      clockOutTime: { $exists: false },
+    });
+
+    if (activeTemp || activeConfirmed) {
+      return null; // Already has an active shift — block the new clock-in
     }
 
     const now = new Date();
     const attendance: Omit<Attendance, "_id"> & { shift?: string } = {
       userId,
       date: today,
-      shift: currentShift, // Add shift field
+      shift: shiftLabel, // purely for admin reporting; not used as a gate
       clockInTime: now,
       status: "pending",
       createdAt: now,
@@ -81,18 +87,23 @@ export class AttendanceModel {
     } as Attendance;
   }
 
-  // Clock out a staff member (updates record in either temp or confirmed collection)
+  /**
+   * Clock out a staff member.
+   *
+   * Finds the most recent unclosed shift for today (whole-day scope) in either
+   * the temp or confirmed collection. No longer filters by shift label so clock-
+   * outs work correctly regardless of what time of day it is.
+   */
   static async clockOut(userId: string): Promise<Attendance | null> {
     const today = getManilaDateString();
-    const currentShift = getCurrentShift();
     const tempCollection = this.getTempCollection();
     const collection = this.getCollection();
 
-    // First check temp collection for current shift
+    // Find active (unclosed) shift in temp collection first
     let attendance = await tempCollection.findOne({
       userId,
       date: today,
-      shift: currentShift,
+      clockOutTime: { $exists: false },
     });
 
     let isInTempCollection = true;
@@ -102,7 +113,7 @@ export class AttendanceModel {
       attendance = await collection.findOne({
         userId,
         date: today,
-        shift: currentShift,
+        clockOutTime: { $exists: false },
       });
       isInTempCollection = false;
     }
@@ -149,27 +160,42 @@ export class AttendanceModel {
     }
   }
 
-  // Get today's attendance for a user (check both temp and confirmed, current shift)
+  /**
+   * Get today's active attendance for a user (whole-day scope).
+   *
+   * Returns the most recent unclosed shift. If no unclosed shift exists but a
+   * clocked-out shift does, returns that so the status API can correctly report
+   * isClockedIn=false. Returns null only if no record at all exists today.
+   */
   static async getTodayAttendance(userId: string): Promise<Attendance | null> {
     const today = getManilaDateString();
-    const currentShift = getCurrentShift();
-
-    // First check temp collection
     const tempCollection = this.getTempCollection();
-    let attendance = await tempCollection.findOne({
-      userId,
-      date: today,
-      shift: currentShift,
-    });
+    const collection = this.getCollection();
 
-    // If not in temp, check confirmed collection
+    // Priority 1: unclosed shift in temp collection
+    let attendance = await tempCollection.findOne(
+      { userId, date: today, clockOutTime: { $exists: false } },
+    );
+
+    // Priority 2: unclosed shift in confirmed collection
     if (!attendance) {
-      const collection = this.getCollection();
-      attendance = await collection.findOne({
-        userId,
-        date: today,
-        shift: currentShift,
-      });
+      attendance = await collection.findOne(
+        { userId, date: today, clockOutTime: { $exists: false } },
+      );
+    }
+
+    // Priority 3: most recent record of any kind today (already clocked out)
+    if (!attendance) {
+      attendance = await tempCollection.findOne(
+        { userId, date: today },
+        { sort: { clockInTime: -1 } },
+      );
+    }
+    if (!attendance) {
+      attendance = await collection.findOne(
+        { userId, date: today },
+        { sort: { clockInTime: -1 } },
+      );
     }
 
     if (!attendance) return null;

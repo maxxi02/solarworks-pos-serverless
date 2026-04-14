@@ -73,6 +73,7 @@ export interface SavedOrder {
   seniorPwdIds?: string[];
   amountPaid?: number;
   change?: number;
+  pendingSync?: boolean;
 }
 
 export interface StockAlert {

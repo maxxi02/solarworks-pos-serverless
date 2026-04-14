@@ -21,10 +21,13 @@ export async function GET(req: NextRequest) {
     const userId = session.user.id;
     const attendance = await AttendanceModel.getTodayAttendance(userId);
 
+    // isClockedIn is only true if we have a record with no clockOutTime
+    const isClockedIn = !!attendance && !attendance.clockOutTime;
+
     return NextResponse.json({
       success: true,
       attendance,
-      isClockedIn: !!attendance,
+      isClockedIn,
     });
   } catch (error) {
     console.error("Get status error:", error);

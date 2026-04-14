@@ -14,8 +14,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const today = new Date().toISOString().split("T")[0];
-    const currentShift = new Date().getHours() < 12 ? "morning" : "afternoon";
+    const now = new Date();
+    // Use Manila time (UTC+8) for date and shift label — must match attendance.model.ts
+    const manilaDate = new Date(now.getTime() + 8 * 3600 * 1000);
+    const today = manilaDate.toISOString().split("T")[0];
 
     // ── 4 parallel queries for efficiency ──────────
     const [staffList, tempRecords, confirmedRecords, shiftRecords] = await Promise.all([
@@ -26,11 +28,12 @@ export async function GET(req: NextRequest) {
         )
         .sort({ name: 1 })
         .toArray(),
+      // Whole-day scope: any unclosed shift today (no shift label filter)
       MONGODB.collection("attendance_temp")
-        .find({ date: today, shift: currentShift }, { projection: { userId: 1, clockInTime: 1, clockOutTime: 1 } })
+        .find({ date: today, clockOutTime: { $exists: false } }, { projection: { userId: 1, clockInTime: 1, clockOutTime: 1 } })
         .toArray(),
       MONGODB.collection("attendance")
-        .find({ date: today, shift: currentShift }, { projection: { userId: 1, clockInTime: 1, clockOutTime: 1 } })
+        .find({ date: today, clockOutTime: { $exists: false } }, { projection: { userId: 1, clockInTime: 1, clockOutTime: 1 } })
         .toArray(),
       MONGODB.collection("shift_schedules")
         .find({ date: today })

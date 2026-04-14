@@ -400,6 +400,19 @@ export default function OrdersPage() {
     preloadNotificationSounds();
   }, []);
 
+  // Unsaved cart warning on navigation
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (cart.length > 0) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved items in your cart. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [cart.length]);
+
   // Track recently notified orders
   const notifiedOrdersRef = useRef<Set<string>>(new Set());
 
@@ -548,11 +561,19 @@ export default function OrdersPage() {
         throw new Error(`Failed to save payment: ${response.status}`);
       return await response.json();
     },
+    onSuccess: (data, order) => {
+      if (order.pendingSync) {
+        // If it was a retried save, remove the failed entry from local storage
+        deleteOrder(order.id);
+        toast.success("Pending order successfully synced to database");
+      }
+    },
     onError: (error, order) => {
-      toast.warning("Order saved locally only (database unavailable)", {
-        description: error instanceof Error ? error.message : "Connection error",
+      toast.error("Database connection failed. Order saved locally.", {
+        description: "Click 'Saved Orders' and look for 'Sync Pending' to retry.",
+        duration: 8000,
       });
-      saveOrderToLocal(order);
+      saveOrderToLocal({ ...order, pendingSync: true, status: "pending" });
     },
   });
 
@@ -842,8 +863,7 @@ export default function OrdersPage() {
       });
 
       await saveOrderMutation.mutateAsync(completedOrder);
-      saveOrderToLocal(completedOrder);
-
+      
       // Separate cookable items for kitchen printing
       const cookableItems = cart.filter(item => item.isCookable);
       const hasKitchenItems = cookableItems.length > 0;
@@ -1132,7 +1152,7 @@ export default function OrdersPage() {
                 </div>
                 {startingFundError && (
                   <p className="mt-2 text-sm text-destructive flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                     {startingFundError}
                   </p>
                 )}
@@ -1197,7 +1217,7 @@ export default function OrdersPage() {
                 </div>
                 {startingFundError && (
                   <p className="mt-2 text-sm text-destructive flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                     {startingFundError}
                   </p>
                 )}
@@ -1704,6 +1724,7 @@ export default function OrdersPage() {
                 onReprint={handleReprintReceipt}
                 onDelete={(orderId) => setConfirmDeleteSavedOrder({ open: true, orderId })}
                 onClearAll={clearAllSavedOrders}
+                onRetry={(order) => saveOrderMutation.mutate(order)}
               />
             </DialogBody>
           </DialogContent>
