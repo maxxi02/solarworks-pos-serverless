@@ -6,13 +6,24 @@
  * frontend and computing everything in JS.
  *
  * Expected response time: <200ms with createdAt index in place.
+ *
+ * RBAC:
+ *  - Admin → full response (grossSales, netSales, totalDiscounts, totalRefunds, payment breakdown)
+ *  - Staff → restricted response (cashSales, totalCollected, transactionCount, hourlySales, topItems only)
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import MONGODB from "@/config/db";
+import { requireAuth } from "@/lib/api-auth";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    // ── Auth & RBAC ───────────────────────────────────────────────────────────
+    const auth = await requireAuth(request, ["admin", "staff"]);
+    if (!auth.authorized) return auth.response!;
+    const userRole = (auth.session!.user as any).role as string;
+    const isAdmin = userRole === "admin";
+
     const { searchParams } = new URL(request.url);
 
     const period = searchParams.get("period") || "today";
@@ -20,7 +31,11 @@ export async function GET(request: Request) {
 
     // ── Date range ────────────────────────────────────────────────────────────
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
 
     let periodStart: Date;
     if (period === "week") {
@@ -55,7 +70,9 @@ export async function GET(request: Request) {
                   _id: "$status",
                   count: { $sum: 1 },
                   totalAmount: { $sum: "$total" },
-                  subtotalAmount: { $sum: { $ifNull: ["$subtotal", "$total"] } },
+                  subtotalAmount: {
+                    $sum: { $ifNull: ["$subtotal", "$total"] },
+                  },
                   discountAmount: { $sum: { $ifNull: ["$discountTotal", 0] } },
                 },
               },
@@ -92,7 +109,9 @@ export async function GET(request: Request) {
               },
               {
                 $group: {
-                  _id: { $hour: { date: "$createdAt", timezone: "Asia/Manila" } },
+                  _id: {
+                    $hour: { date: "$createdAt", timezone: "Asia/Manila" },
+                  },
                   sales: { $sum: "$total" },
                 },
               },
@@ -125,13 +144,31 @@ export async function GET(request: Request) {
       .toArray();
 
     // ── Shape the response ────────────────────────────────────────────────────
-    const totalsMap: Record<string, { count: number; totalAmount: number; subtotalAmount: number; discountAmount: number }> = {};
+    const totalsMap: Record<
+      string,
+      {
+        count: number;
+        totalAmount: number;
+        subtotalAmount: number;
+        discountAmount: number;
+      }
+    > = {};
     for (const row of result.totals ?? []) {
       totalsMap[row._id] = row;
     }
 
-    const completed = totalsMap["completed"] ?? { count: 0, totalAmount: 0, subtotalAmount: 0, discountAmount: 0 };
-    const refunded = totalsMap["refunded"] ?? { count: 0, totalAmount: 0, subtotalAmount: 0, discountAmount: 0 };
+    const completed = totalsMap["completed"] ?? {
+      count: 0,
+      totalAmount: 0,
+      subtotalAmount: 0,
+      discountAmount: 0,
+    };
+    const refunded = totalsMap["refunded"] ?? {
+      count: 0,
+      totalAmount: 0,
+      subtotalAmount: 0,
+      discountAmount: 0,
+    };
 
     const methodMap: Record<string, { amount: number; count: number }> = {};
     for (const row of result.byMethod ?? []) {
@@ -147,17 +184,37 @@ export async function GET(request: Request) {
     const gcashSales = gcashSalesDirect + splitData.gcash;
     const splitSales = methodMap["split"]?.amount ?? 0;
 
-    const hourlySales = (result.hourly ?? []).map((h: { _id: number; sales: number }) => ({
-      hour: `${h._id}:00`,
-      sales: h.sales,
-    }));
+    const hourlySales = (result.hourly ?? []).map(
+      (h: { _id: number; sales: number }) => ({
+        hour: `${h._id}:00`,
+        sales: h.sales,
+      }),
+    );
 
-    const topItems = (result.topItems ?? []).map((i: { _id: string; qty: number; amount: number }) => ({
-      name: i._id,
-      qty: i.qty,
-      amount: i.amount,
-    }));
+    const topItems = (result.topItems ?? []).map(
+      (i: { _id: string; qty: number; amount: number }) => ({
+        name: i._id,
+        qty: i.qty,
+        amount: i.amount,
+      }),
+    );
 
+    // ── Role-based field filtering ─────────────────────────────────────────────
+    // Staff can only see operational cash-drawer data — not business financial metrics.
+    if (!isAdmin) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          cashSales,
+          totalCollected: cashSales + gcashSales,
+          transactionCount: completed.count + refunded.count,
+          hourlySales,
+          topItems,
+        },
+      });
+    }
+
+    // Admin gets the full response
     return NextResponse.json({
       success: true,
       data: {
@@ -172,7 +229,6 @@ export async function GET(request: Request) {
         splitSales,
         totalCollected: cashSales + gcashSales,
         transactionCount: completed.count + refunded.count,
-        // itemCount computed from topItems isn't reliable for total — keep a separate facet if needed
         hourlySales,
         topItems,
       },

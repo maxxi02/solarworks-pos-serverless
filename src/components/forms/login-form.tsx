@@ -24,7 +24,9 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
 
-  const [step, setStep] = React.useState<"login" | "verify-2fa" | "email-sent">("login");
+  const [step, setStep] = React.useState<"login" | "verify-2fa" | "email-sent">(
+    "login",
+  );
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [otpCode, setOtpCode] = React.useState("");
@@ -87,7 +89,7 @@ export function LoginForm({
             playError();
             setLoading(false);
           },
-        }
+        },
       );
 
       // ────────────────────────────────────────
@@ -142,7 +144,9 @@ export function LoginForm({
       });
 
       if (error) {
-        toast.error("Invalid code. Please check your authenticator app and try again.");
+        toast.error(
+          "Invalid code. Please check your authenticator app and try again.",
+        );
         playError();
         setOtpCode("");
         setLoading(false);
@@ -167,7 +171,7 @@ export function LoginForm({
       toast.success("Email verified successfully! You can now log in.");
       playSuccess();
       // Clean up URL
-      window.history.replaceState({}, "", "/login");
+      window.history.replaceState({}, "", "/");
     }
   }, []);
 
