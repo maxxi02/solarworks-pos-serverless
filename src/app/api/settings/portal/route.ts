@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Validate that all IDs are valid MongoDB ObjectId strings (max 5)
+    // Validate that all IDs are valid MongoDB ObjectId strings (min 3, max 10)
     const sanitized: string[] = featuredProductIds
       .filter((id: unknown) => {
         if (typeof id !== "string") return false;
@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest) {
           return false;
         }
       })
-      .slice(0, 5); // hard cap: 5 featured products max
+      .slice(0, 10); // hard cap: 10 featured products max
 
     // Sanitize branding — only allow known string fields
     const safeBranding: Record<string, string> = {};

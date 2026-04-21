@@ -1,5 +1,5 @@
 /**
- * GET /api/payments/summary?period=today|week|month&sessionStart=ISO_DATE
+ * GET /api/payments/summary?period=today|week|month|year&date=YYYY-MM-DD&sessionStart=ISO_DATE
  *
  * Returns aggregated stats for the Cash Management page in a single
  * MongoDB aggregate pipeline — no more fetching 500 documents to the
@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
 
     const period = searchParams.get("period") || "today";
     const sessionStartParam = searchParams.get("sessionStart");
+    // Specific calendar date requested by the admin (YYYY-MM-DD in local time)
+    const dateParam = searchParams.get("date");
 
     // ── Date range ────────────────────────────────────────────────────────────
     const now = new Date();
@@ -38,10 +40,19 @@ export async function GET(request: NextRequest) {
     );
 
     let periodStart: Date;
-    if (period === "week") {
+    let periodEnd: Date | null = null; // null = open-ended (up to now)
+
+    if (dateParam) {
+      // Specific date: midnight → next midnight in local time
+      const [y, m, d] = dateParam.split("-").map(Number);
+      periodStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+      periodEnd   = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+    } else if (period === "week") {
       periodStart = new Date(todayStart.getTime() - 7 * 86_400_000);
     } else if (period === "month") {
       periodStart = new Date(todayStart.getTime() - 30 * 86_400_000);
+    } else if (period === "year") {
+      periodStart = new Date(todayStart.getTime() - 365 * 86_400_000);
     } else {
       periodStart = todayStart;
     }
@@ -51,14 +62,28 @@ export async function GET(request: NextRequest) {
     const effectiveStart =
       sessionStart && sessionStart > periodStart ? sessionStart : periodStart;
 
+    const dateFilter: Record<string, unknown> = { $gte: effectiveStart };
+    if (periodEnd) dateFilter["$lt"] = periodEnd;
+
     const collection = MONGODB.collection("payments");
 
     // ── Single aggregate pipeline ─────────────────────────────────────────────
+    // For hourly breakdown: always show today's hours unless a specific date was picked
+    const hourlyDayStart = dateParam
+      ? (() => { const [y, m, d] = dateParam.split("-").map(Number); return new Date(y, m - 1, d); })()
+      : todayStart;
+    const hourlyDayEnd = dateParam
+      ? (() => { const [y, m, d] = dateParam.split("-").map(Number); return new Date(y, m - 1, d + 1); })()
+      : null;
+
+    const hourlyMatch: Record<string, unknown> = { status: "completed", createdAt: { $gte: hourlyDayStart } };
+    if (hourlyDayEnd) hourlyMatch["createdAt"] = { $gte: hourlyDayStart, $lt: hourlyDayEnd };
+
     const [result] = await collection
       .aggregate([
         {
           $match: {
-            createdAt: { $gte: effectiveStart },
+            createdAt: dateFilter,
           },
         },
         {
@@ -99,13 +124,10 @@ export async function GET(request: NextRequest) {
                 },
               },
             ],
-            // ── Hourly sales (completed, today only) ──
+            // ── Hourly sales (completed, for the specific date or today) ──
             hourly: [
               {
-                $match: {
-                  status: "completed",
-                  createdAt: { $gte: todayStart },
-                },
+                $match: hourlyMatch,
               },
               {
                 $group: {

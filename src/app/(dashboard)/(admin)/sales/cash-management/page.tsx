@@ -15,6 +15,8 @@ import {
   Clock,
   ShoppingCart,
   Shield,
+  CalendarDays,
+  X,
 } from "lucide-react";
 import { useSocket } from "@/provider/socket-provider";
 import { useSession } from "@/lib/auth-client";
@@ -52,6 +54,23 @@ const DEFAULT_SUMMARY: SummaryData = {
   topItems: [],
 };
 
+/** Format YYYY-MM-DD → "April 21, 2026" */
+function formatDateLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/** Today's date as YYYY-MM-DD (local time) */
+function todayIso(): string {
+  const dt = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
 export default function AdminCashManagementPage() {
   const { socket, isConnected: isLive } = useSocket();
   const { data: session, isPending } = useSession();
@@ -60,15 +79,24 @@ export default function AdminCashManagementPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<
-    "today" | "week" | "month"
+    "today" | "week" | "month" | "year"
   >("today");
+  // Specific calendar date (YYYY-MM-DD). When set, overrides selectedPeriod.
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [summary, setSummary] = useState<SummaryData>(DEFAULT_SUMMARY);
 
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const periodRef = useRef(selectedPeriod);
+  const dateRef = useRef(selectedDate);
+
   useEffect(() => {
     periodRef.current = selectedPeriod;
   }, [selectedPeriod]);
+
+  useEffect(() => {
+    dateRef.current = selectedDate;
+  }, [selectedDate]);
 
   // ── Role guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -87,7 +115,7 @@ export default function AdminCashManagementPage() {
     const debouncedRefresh = () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        loadSummary(periodRef.current);
+        loadSummary(periodRef.current, dateRef.current);
       }, 800);
     };
 
@@ -103,20 +131,20 @@ export default function AdminCashManagementPage() {
 
   // Initial load
   useEffect(() => {
-    loadSummary(selectedPeriod).finally(() => setLoading(false));
+    loadSummary(selectedPeriod, selectedDate).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload when period changes
+  // Reload when period or date changes
   useEffect(() => {
-    if (!loading) loadSummary(selectedPeriod);
+    if (!loading) loadSummary(selectedPeriod, selectedDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPeriod]);
+  }, [selectedPeriod, selectedDate]);
 
   // ── API ───────────────────────────────────────────────────────────────────
-  const loadSummary = useCallback(async (period: string) => {
+  const loadSummary = useCallback(async (period: string, date: string) => {
     try {
-      const params = new URLSearchParams({ period });
+      const params = new URLSearchParams(date ? { date } : { period });
       const res = await fetch(`/api/payments/summary?${params}`);
       const result = await res.json();
       if (result.success && result.data) {
@@ -129,10 +157,39 @@ export default function AdminCashManagementPage() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    loadSummary(selectedPeriod).finally(() => setIsRefreshing(false));
+    loadSummary(selectedPeriod, selectedDate).finally(() =>
+      setIsRefreshing(false)
+    );
   };
 
-  const fmt = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  /** Pick a quick-period preset; clears any specific date selection */
+  const handlePeriodClick = (p: "today" | "week" | "month" | "year") => {
+    setSelectedDate("");
+    setSelectedPeriod(p);
+  };
+
+  /** Open the hidden date <input> via showPicker() */
+  const openCalendar = () => {
+    // Temporarily make visible so showPicker works in all browsers
+    const el = dateInputRef.current;
+    if (!el) return;
+    el.style.pointerEvents = "auto";
+    el.style.opacity = "1";
+    el.style.position = "fixed";
+    el.style.top = "0";
+    el.style.left = "0";
+    el.showPicker?.();
+    setTimeout(() => {
+      el.style.pointerEvents = "none";
+      el.style.opacity = "0";
+      el.style.position = "absolute";
+    }, 200);
+  };
+
+  const clearDate = () => setSelectedDate("");
+
+  const fmt = (n: number) =>
+    n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fmtP = (n: number) => `₱${fmt(n)}`;
 
   if (loading || isPending) {
@@ -146,18 +203,26 @@ export default function AdminCashManagementPage() {
     );
   }
 
-  const periodLabel =
-    selectedPeriod === "today"
-      ? "Today"
-      : selectedPeriod === "week"
-        ? "Last 7 Days"
-        : "Last 30 Days";
+  const periodLabel = selectedDate
+    ? formatDateLabel(selectedDate)
+    : selectedPeriod === "today"
+    ? "Today"
+    : selectedPeriod === "week"
+    ? "Last 7 Days"
+    : selectedPeriod === "month"
+    ? "Last 30 Days"
+    : "Last 365 Days";
+
+  // Hourly chart shown when viewing a single day (today preset or a specific picked date)
+  const showHourly =
+    (selectedPeriod === "today" && !selectedDate) || !!selectedDate;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+
         {/* ── Header ── */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -173,15 +238,17 @@ export default function AdminCashManagementPage() {
               Store-wide financial overview · {periodLabel}
             </p>
           </div>
-          <div className="flex items-center gap-3 mt-1">
-            {/* Period selector */}
+
+          <div className="flex flex-wrap items-center gap-2">
+
+            {/* Period quick-select buttons */}
             <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
-              {(["today", "week", "month"] as const).map((p) => (
+              {(["today", "week", "month", "year"] as const).map((p) => (
                 <button
                   key={p}
-                  onClick={() => setSelectedPeriod(p)}
+                  onClick={() => handlePeriodClick(p)}
                   className={`px-3 py-2 transition-colors ${
-                    selectedPeriod === p
+                    selectedPeriod === p && !selectedDate
                       ? "bg-primary text-primary-foreground"
                       : "hover:bg-muted text-muted-foreground"
                   }`}
@@ -189,25 +256,80 @@ export default function AdminCashManagementPage() {
                   {p === "today"
                     ? "Today"
                     : p === "week"
-                      ? "7 Days"
-                      : "30 Days"}
+                    ? "7 Days"
+                    : p === "month"
+                    ? "30 Days"
+                    : "Year"}
                 </button>
               ))}
             </div>
+
+            {/* Calendar date picker */}
+            <div className="relative flex items-center gap-1">
+              {/* Hidden native date input — positioned off-screen */}
+              <input
+                ref={dateInputRef}
+                type="date"
+                max={todayIso()}
+                value={selectedDate}
+                onChange={(e) => {
+                  if (e.target.value) setSelectedDate(e.target.value);
+                }}
+                style={{
+                  position: "absolute",
+                  opacity: 0,
+                  pointerEvents: "none",
+                  top: 0,
+                  left: 0,
+                  width: 0,
+                  height: 0,
+                }}
+                tabIndex={-1}
+              />
+              <button
+                onClick={openCalendar}
+                title="Pick a specific date"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                  selectedDate
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-muted text-muted-foreground"
+                }`}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                {selectedDate ? formatDateLabel(selectedDate) : "Pick Date"}
+              </button>
+              {selectedDate && (
+                <button
+                  onClick={clearDate}
+                  title="Clear date filter"
+                  className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Live indicator */}
             <div className="flex items-center gap-1.5">
               <span
-                className={`w-2 h-2 rounded-full ${isLive ? "bg-green-500 animate-pulse" : "bg-gray-400"}`}
+                className={`w-2 h-2 rounded-full ${
+                  isLive ? "bg-green-500 animate-pulse" : "bg-gray-400"
+                }`}
               />
               <span className="text-xs text-muted-foreground">
                 {isLive ? "Live" : "Offline"}
               </span>
             </div>
+
+            {/* Refresh */}
             <button
               onClick={handleRefresh}
               className="p-2 border border-border rounded-lg hover:bg-muted transition-colors"
             >
               <RefreshCw
-                className={`h-4 w-4 text-muted-foreground ${isRefreshing ? "animate-spin" : ""}`}
+                className={`h-4 w-4 text-muted-foreground ${
+                  isRefreshing ? "animate-spin" : ""
+                }`}
               />
             </button>
           </div>
@@ -249,14 +371,9 @@ export default function AdminCashManagementPage() {
               bg: "bg-red-500/10",
             },
           ].map(({ label, value, sub, icon: Icon, color, bg }) => (
-            <div
-              key={label}
-              className="bg-card border border-border rounded-xl p-4"
-            >
+            <div key={label} className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-muted-foreground font-medium">
-                  {label}
-                </p>
+                <p className="text-xs text-muted-foreground font-medium">{label}</p>
                 <div className={`p-1.5 rounded-lg ${bg}`}>
                   <Icon className={`h-4 w-4 ${color}`} />
                 </div>
@@ -285,28 +402,20 @@ export default function AdminCashManagementPage() {
             </div>
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
               <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  Cash Direct
-                </p>
+                <p className="text-xs text-muted-foreground mb-0.5">Cash Direct</p>
                 <p className="text-sm font-bold text-green-600">
                   +{fmtP(summary.cashSalesDirect ?? summary.cashSales)}
                 </p>
               </div>
               <div className="text-center border-x border-border">
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  GCash Total
-                </p>
+                <p className="text-xs text-muted-foreground mb-0.5">GCash Total</p>
                 <p className="text-sm font-bold text-blue-500">
                   +{fmtP(summary.gcashSales)}
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-0.5">
-                  Total Collected
-                </p>
-                <p className="text-sm font-bold">
-                  {fmtP(summary.totalCollected)}
-                </p>
+                <p className="text-xs text-muted-foreground mb-0.5">Total Collected</p>
+                <p className="text-sm font-bold">{fmtP(summary.totalCollected)}</p>
               </div>
             </div>
           </div>
@@ -326,9 +435,7 @@ export default function AdminCashManagementPage() {
                 <ShoppingCart className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">
-                  Avg. Transaction
-                </p>
+                <p className="text-xs text-muted-foreground">Avg. Transaction</p>
                 <p className="text-xl font-bold">
                   {fmtP(
                     summary.transactionCount > 0
@@ -366,7 +473,9 @@ export default function AdminCashManagementPage() {
               },
             ].map(({ label, value, icon: Icon, color }) => {
               const pct =
-                summary.grossSales > 0 ? (value / summary.grossSales) * 100 : 0;
+                summary.grossSales > 0
+                  ? (value / summary.grossSales) * 100
+                  : 0;
               return (
                 <div key={label}>
                   <div className="flex items-center gap-2 mb-2">
@@ -407,18 +516,23 @@ export default function AdminCashManagementPage() {
           </div>
         )}
 
-        {/* ── Hourly Sales ── */}
-        {selectedPeriod === "today" && summary.hourlySales.length > 0 && (
+        {/* ── Hourly Sales (single day: today preset or specific picked date) ── */}
+        {showHourly && summary.hourlySales.length > 0 && (
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Hourly Sales</h3>
+              <h3 className="text-sm font-semibold">
+                Hourly Sales
+                {selectedDate && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    — {formatDateLabel(selectedDate)}
+                  </span>
+                )}
+              </h3>
             </div>
             <div className="space-y-2.5">
               {summary.hourlySales.map((hour) => {
-                const max = Math.max(
-                  ...summary.hourlySales.map((h) => h.sales),
-                );
+                const max = Math.max(...summary.hourlySales.map((h) => h.sales));
                 const pct = max > 0 ? (hour.sales / max) * 100 : 0;
                 return (
                   <div key={hour.hour} className="flex items-center gap-3">
@@ -454,9 +568,7 @@ export default function AdminCashManagementPage() {
                   <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">
                     {i + 1}
                   </span>
-                  <span className="flex-1 text-sm font-medium">
-                    {item.name}
-                  </span>
+                  <span className="flex-1 text-sm font-medium">{item.name}</span>
                   <span className="text-xs text-muted-foreground">
                     {item.qty} sold
                   </span>
@@ -466,6 +578,7 @@ export default function AdminCashManagementPage() {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
