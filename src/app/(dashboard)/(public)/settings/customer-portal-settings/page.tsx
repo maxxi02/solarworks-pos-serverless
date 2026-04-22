@@ -93,7 +93,8 @@ const COLOR_PRESETS = [
   { name: "Teal",            primary: "#0D9488", accent: "#04514B" },
 ];
 
-const MAX_FEATURED = 5;
+const MIN_FEATURED = 3;
+const MAX_FEATURED = 10;
 
 // ─── Section Card wrapper ─────────────────────────────────────────────────────
 function SectionCard({
@@ -287,7 +288,7 @@ export default function CustomerPortalSettingsPage() {
         next.delete(id);
       } else {
         if (next.size >= MAX_FEATURED) {
-          toast.warning(`You can only select up to ${MAX_FEATURED} featured products.`);
+          toast.warning(`You can only select up to ${MAX_FEATURED} carousel cards.`);
           return prev;
         }
         next.add(id);
@@ -312,6 +313,10 @@ export default function CustomerPortalSettingsPage() {
 
   // ── Save (featured + branding together) ──────────────────────────────────
   const handleSave = async () => {
+    if (selectedIds.size < MIN_FEATURED) {
+      toast.warning(`Please select at least ${MIN_FEATURED} carousel cards before saving.`);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/settings/portal", {
@@ -687,21 +692,37 @@ export default function CustomerPortalSettingsPage() {
       {/* ── Featured Products ─────────────────────────────────────────────── */}
       <SectionCard
         icon={<Star className="w-5 h-5" />}
-        title="Featured Products (Best Sellers)"
-        description={`Select up to ${MAX_FEATURED} products to highlight on the portal landing page.`}
+        title="Carousel Cards (Best Sellers)"
+        description={`Select between ${MIN_FEATURED} and ${MAX_FEATURED} products to display in the landing page carousel.`}
       >
         {/* Selection counter */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-            <Star className="w-4 h-4 text-primary fill-primary" />
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors ${
+              selectedIds.size < MIN_FEATURED
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-600"
+                : selectedIds.size >= MAX_FEATURED
+                ? "bg-primary/10 border-primary/20 text-primary"
+                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-600"
+            }`}
+          >
+            <Star className="w-4 h-4 fill-current" />
             <span className="text-sm font-semibold">
               {selectedIds.size} / {MAX_FEATURED} selected
             </span>
           </div>
+          <span className="text-xs text-muted-foreground">
+            Min {MIN_FEATURED} required
+          </span>
+          {selectedIds.size < MIN_FEATURED && (
+            <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+              ⚠ Select {MIN_FEATURED - selectedIds.size} more
+            </span>
+          )}
           {selectedIds.size > 0 && (
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="text-xs text-muted-foreground hover:text-destructive transition-colors underline underline-offset-2"
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors underline underline-offset-2 ml-auto"
             >
               Clear all
             </button>

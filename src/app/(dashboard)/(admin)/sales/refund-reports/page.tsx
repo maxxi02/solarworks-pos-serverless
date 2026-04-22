@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   AlertCircle,
   RefreshCw,
@@ -281,9 +281,8 @@ export default function RefundReportsPage() {
                   </thead>
                   <tbody>
                     {filtered.map(t => (
-                      <>
+                      <Fragment key={t._id}>
                         <tr
-                          key={t._id}
                           onClick={() => setExpandedId(expandedId === t._id ? null : t._id)}
                           className="border-b hover:bg-muted/40 cursor-pointer transition-colors"
                         >
@@ -345,7 +344,7 @@ export default function RefundReportsPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
