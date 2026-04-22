@@ -1320,9 +1320,9 @@ export default function OrdersPage() {
             </TabsList>
           </div>
 
-          <TabsContent value="pos" className="m-0 w-full overflow-hidden">
+          <TabsContent value="pos" className="m-0 w-full">
             {/* Main Layout */}
-            <div className="flex flex-col lg:flex-row gap-3 lg:gap-5 w-full overflow-hidden">
+            <div className="flex flex-col lg:flex-row gap-3 lg:gap-5 w-full">
               {/* Left — Products */}
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden h-full">
                 {/* Search Bar */}
@@ -1383,7 +1383,7 @@ export default function OrdersPage() {
                 <div
                   ref={productsContainerRef}
                   className="overflow-y-auto overflow-x-hidden pr-2 scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-gray-300 hover:scrollbar-thumb-gray-400 flex-1"
-                  style={{ minHeight: "400px", maxHeight: "696px" }}
+                  style={{ minHeight: "300px", maxHeight: "696px" }}
                 >
                   {productsLoading ? (
                     <div className="flex items-center justify-center h-64">
@@ -1410,7 +1410,7 @@ export default function OrdersPage() {
               </div>
 
               {/* Right — Cart */}
-              <div className="w-full lg:w-[300px] xl:w-[340px] shrink-0 min-w-0 max-h-[500px] lg:max-h-none overflow-y-auto">
+              <div className="w-full lg:w-[300px] xl:w-[340px] shrink-0 min-w-0">
                 <div
                   ref={cartDropZoneRef}
                   className="transition-all"

@@ -184,6 +184,20 @@ export function QueueOrderCard({ order, onPrintKitchenSlip }: QueueOrderCardProp
           {getElapsedTime(order.createdAt || order.timestamp)}
         </div>
         <div className="flex items-center gap-2">
+          {order.paymentMethod && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+              order.paymentMethod === "cash"
+                ? "bg-emerald-500/10 text-emerald-400"
+                : order.paymentMethod === "gcash" || order.paymentMethod === "qrph"
+                ? "bg-blue-500/10 text-blue-400"
+                : "bg-muted text-muted-foreground"
+            }`}>
+              {order.paymentMethod === "cash" ? "💵 Cash"
+                : order.paymentMethod === "gcash" ? "📱 GCash"
+                : order.paymentMethod === "qrph" ? "📱 QR Pay"
+                : order.paymentMethod}
+            </span>
+          )}
           <span className="font-bold text-foreground text-xs">
             ₱{order.total?.toFixed(0)}
           </span>
